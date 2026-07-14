@@ -25,6 +25,7 @@ import {
   Zap
 } from "lucide-react";
 import "./styles.css";
+import { getInterviewAgentClient } from "./apiClient";
 
 const quickPrompts = [
   "请开始一场 AI Agent 项目面试",
@@ -47,6 +48,8 @@ const fallbackIndustries = [
     recommended_focus_areas: []
   }
 ];
+
+const api = getInterviewAgentClient();
 
 const fallbackModels = [
   {
@@ -196,7 +199,7 @@ function App() {
   async function checkHealth() {
     setHealth({ status: "checking" });
     try {
-      const result = await window.interviewAgent.health();
+      const result = await api.health();
       setHealth({ status: "ok", ...result });
     } catch (error) {
       setHealth({ status: "error", error: error.message });
@@ -205,7 +208,7 @@ function App() {
 
   async function loadIndustryOptions(targetRole = profile.targetRole) {
     try {
-      const result = await window.interviewAgent.listIndustries(targetRole || "AI 应用工程师");
+      const result = await api.listIndustries(targetRole || "AI 应用工程师");
       const options = Array.isArray(result) && result.length ? result : fallbackIndustries;
       setIndustryOptions(options);
       if (!options.some((item) => item.value === profile.industry)) {
@@ -218,7 +221,7 @@ function App() {
 
   async function loadModelOptions() {
     try {
-      const result = await window.interviewAgent.listModels();
+      const result = await api.listModels();
       const options = Array.isArray(result) && result.length ? result : fallbackModels;
       setModelOptions(options);
       if (!options.some((item) => item.id === selectedModelId)) {
@@ -231,7 +234,7 @@ function App() {
 
   async function loadAccount() {
     try {
-      const result = await window.interviewAgent.getAccount();
+      const result = await api.getAccount();
       setAccount(result);
     } catch (_error) {
       setAccount(null);
@@ -250,9 +253,9 @@ function App() {
         platform: "desktop"
       };
       if (authState.mode === "register") {
-        await window.interviewAgent.register(payload);
+        await api.register(payload);
       } else {
-        await window.interviewAgent.login(payload);
+        await api.login(payload);
       }
       await loadAccount();
       await Promise.all([loadResumeLibrary(), loadSessionHistory()]);
@@ -266,7 +269,7 @@ function App() {
   async function useDevAccount() {
     setAuthState((current) => ({ ...current, status: "loading", error: "" }));
     try {
-      await window.interviewAgent.devLogin({
+      await api.devLogin({
         user_id: "desktop-dev-user",
         display_name: "桌面端开发用户",
         platform: "desktop"
@@ -281,7 +284,7 @@ function App() {
   }
 
   async function logout() {
-    await window.interviewAgent.logout();
+    await api.logout();
     setAccount(null);
     setSessionId("");
     setMessages([]);
@@ -294,7 +297,7 @@ function App() {
     if (!requireAccount("开发充值前需要先登录账号。")) return;
     setRechargeState({ status: "loading", amount: amountCredits });
     try {
-      const result = await window.interviewAgent.recharge({
+      const result = await api.recharge({
         amount_credits: amountCredits,
         payment_provider: "desktop-mock",
         external_order_id: `desktop-${Date.now()}`
@@ -311,7 +314,7 @@ function App() {
 
   async function loadResumeLibrary() {
     try {
-      const resumes = await window.interviewAgent.listResumes();
+      const resumes = await api.listResumes();
       setResumeLibrary(Array.isArray(resumes) ? resumes : []);
       if (!selectedResumeId && Array.isArray(resumes) && resumes.length > 0) {
         applyResume(resumes[0]);
@@ -353,7 +356,7 @@ function App() {
       return;
     }
     try {
-      const resume = await window.interviewAgent.getResume(resumeId);
+      const resume = await api.getResume(resumeId);
       applyResume(resume);
     } catch (error) {
       setResumeImport({ status: "error", error: `选择简历失败：${normalizeDesktopError(error.message)}` });
@@ -363,7 +366,7 @@ function App() {
   async function deleteSelectedResume() {
     if (!selectedResumeId || busy) return;
     try {
-      const result = await window.interviewAgent.deleteResume(selectedResumeId);
+      const result = await api.deleteResume(selectedResumeId);
       if (!result.deleted) {
         setResumeImport({ status: "error", error: "删除简历失败：未找到当前简历。" });
         return;
@@ -380,7 +383,7 @@ function App() {
 
   async function loadSessionHistory() {
     try {
-      const sessions = await window.interviewAgent.listSessions();
+      const sessions = await api.listSessions();
       setSessionHistory(Array.isArray(sessions) ? sessions : []);
       setHistoryState({ status: "idle" });
     } catch (error) {
@@ -394,7 +397,7 @@ function App() {
     if (!requireAccount("恢复历史会话前需要先登录账号。")) return;
     setBusy(true);
     try {
-      const detail = await window.interviewAgent.getSession(targetSessionId);
+      const detail = await api.getSession(targetSessionId);
       setSessionId(detail.id);
       setCompleted(detail.status === "completed");
       setMessages(turnsToMessages(detail.turns || []));
@@ -410,7 +413,7 @@ function App() {
     if (!targetSessionId || busy) return;
     if (!requireAccount("管理历史会话前需要先登录账号。")) return;
     try {
-      const result = await window.interviewAgent.deleteSession(targetSessionId);
+      const result = await api.deleteSession(targetSessionId);
       if (result.deleted) {
         setSessionHistory((current) => current.filter((item) => item.id !== targetSessionId));
         if (sessionId === targetSessionId) {
@@ -432,7 +435,7 @@ function App() {
     setCompleted(false);
     setMessages([]);
     try {
-      const response = await window.interviewAgent.createSession({
+      const response = await api.createSession({
         offline,
         web_search: webSearch,
         mode: profile.mode,
@@ -467,7 +470,7 @@ function App() {
     if (!requireAccount("上传和保存简历前需要先登录账号。")) return;
     setResumeImport({ status: "loading" });
     try {
-      const result = await window.interviewAgent.importResume();
+      const result = await api.importResume();
       if (result.canceled) {
         setResumeImport({ status: "idle" });
         return;
@@ -502,7 +505,7 @@ function App() {
     appendMessage("user", text);
     setBusy(true);
     try {
-      const response = await window.interviewAgent.sendMessage({
+      const response = await api.sendMessage({
         sessionId: activeSessionId,
         message: text
       });
