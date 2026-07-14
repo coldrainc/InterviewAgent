@@ -1,0 +1,185 @@
+.page {
+  min-height: 100vh;
+  padding: 28rpx;
+  box-sizing: border-box;
+  background: #edf1f7;
+}
+
+.header,
+.card,
+.notice {
+  border: 1rpx solid #dce3ed;
+  border-radius: 16rpx;
+  background: #ffffff;
+  padding: 24rpx;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.eyebrow,
+.label,
+.meta {
+  display: block;
+  color: #687386;
+  font-size: 24rpx;
+}
+
+.title {
+  display: block;
+  margin-top: 6rpx;
+  color: #162033;
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.refresh,
+.secondary {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+button {
+  border-radius: 14rpx;
+  font-size: 28rpx;
+}
+
+button::after {
+  border: 0;
+}
+
+.notice {
+  margin-bottom: 20rpx;
+}
+
+.notice.error {
+  color: #991b1b;
+  background: #fff7f7;
+}
+
+.card {
+  margin-bottom: 18rpx;
+  display: grid;
+  gap: 8rpx;
+}
+
+.profile-card {
+  margin-bottom: 18rpx;
+  border: 1rpx solid #dce3ed;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  background: #ffffff;
+}
+
+.profile-card.signed {
+  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #ffffff;
+  background: linear-gradient(145deg, #172554, #2563eb 62%, #0891b2);
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.profile-main {
+  min-width: 0;
+  display: grid;
+  gap: 8rpx;
+}
+
+.profile-main .value,
+.profile-main .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  color: #162033;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.quota-card {
+  gap: 20rpx;
+}
+
+.quota-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.quota-grid > view {
+  border: 1rpx solid #dbe3ef;
+  border-radius: 14rpx;
+  padding: 20rpx;
+  background: #f8fafc;
+}
+
+.quota-value {
+  display: block;
+  margin-top: 8rpx;
+  color: #0f4d63;
+  font-size: 42rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.recharge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.recharge {
+  min-height: 74rpx;
+  padding: 0 12rpx;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-weight: 700;
+}
+
+.success {
+  color: #166534;
+  font-size: 24rpx;
+}
+
+.actions {
+  display: grid;
+  gap: 16rpx;
+  padding-bottom: 32rpx;
+}
+
+.primary {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.danger {
+  color: #b91c1c;
+  background: #fff7f7;
+}
+
+@media (max-width: 360px) {
+  .quota-grid,
+  .recharge-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,42 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [[ "${1:-}" != "--help" && "${1:-}" != "-h" ]]; then
+  print -P "%F{cyan}正在加载面试 Agent 命令入口...%f"
+fi
+
+if [[ -z "${GATEWAY_API_KEY:-}" && -f "$HOME/.zshrc" ]]; then
+  key_line="$(grep -E '^[[:space:]]*export[[:space:]]+GATEWAY_API_KEY=' "$HOME/.zshrc" | tail -n 1 || true)"
+  if [[ -n "$key_line" ]]; then
+    eval "$key_line"
+  fi
+fi
+
+if [[ "${1:-}" == "index" ]]; then
+  shift
+  exec .venv/bin/interview-agent index "$@"
+fi
+
+if [[ "${1:-}" == "embedding-service" ]]; then
+  shift
+  exec .venv/bin/interview-agent embedding-service "$@"
+fi
+
+if [[ "${1:-}" == "doctor" ]]; then
+  shift
+  exec .venv/bin/interview-agent doctor "$@"
+fi
+
+if [[ "${1:-}" == "eval-rag" ]]; then
+  shift
+  exec .venv/bin/interview-agent eval-rag "$@"
+fi
+
+if [[ "${1:-}" == "api" ]]; then
+  shift
+  exec .venv/bin/interview-agent api "$@"
+fi
+
+exec .venv/bin/interview-agent run --config backend/examples/interview_config.json "$@"

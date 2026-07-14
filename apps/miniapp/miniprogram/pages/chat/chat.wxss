@@ -1,0 +1,148 @@
+.page {
+  min-height: 100vh;
+  padding: 28rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.header,
+.panel,
+.composer {
+  border: 1rpx solid #dce3ed;
+  border-radius: 16rpx;
+  background: #ffffff;
+  padding: 24rpx;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow,
+.label,
+.role {
+  display: block;
+  color: #687386;
+  font-size: 24rpx;
+}
+
+.title {
+  display: block;
+  margin-top: 6rpx;
+  color: #162033;
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.status {
+  color: #2563eb;
+  font-size: 24rpx;
+}
+
+.panel {
+  display: grid;
+  gap: 16rpx;
+}
+
+.field {
+  display: grid;
+  gap: 10rpx;
+}
+
+.picker {
+  min-height: 76rpx;
+  border: 1rpx solid #dce3ed;
+  border-radius: 12rpx;
+  padding: 18rpx;
+  color: #162033;
+  background: #f7f9fc;
+}
+
+.primary,
+.send,
+.secondary {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.secondary {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 160rpx minmax(0, 1fr);
+  gap: 14rpx;
+}
+
+.resume-strip {
+  border: 1rpx solid #dce3ed;
+  border-radius: 12rpx;
+  padding: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  background: #f7f9fc;
+}
+
+.resume-name {
+  display: block;
+  margin-top: 8rpx;
+  color: #162033;
+  font-size: 28rpx;
+}
+
+.link {
+  color: #2563eb;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.messages {
+  min-height: 0;
+  flex: 1;
+}
+
+.message {
+  margin-bottom: 18rpx;
+}
+
+.bubble {
+  display: block;
+  margin-top: 8rpx;
+  border-radius: 16rpx;
+  padding: 18rpx;
+  color: #162033;
+  background: #ffffff;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.message.user .bubble {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.message.system .bubble {
+  color: #92400e;
+  background: #fffbeb;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128rpx;
+  gap: 14rpx;
+  align-items: end;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 72rpx;
+  max-height: 220rpx;
+}

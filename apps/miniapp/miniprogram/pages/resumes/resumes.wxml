@@ -1,0 +1,33 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <text class="eyebrow">Resume Library</text>
+      <text class="title">简历库</text>
+    </view>
+    <button class="upload" loading="{{loading}}" bindtap="uploadResume">上传</button>
+  </view>
+
+  <view wx:if="{{error}}" class="notice error">{{error}}</view>
+
+  <view wx:if="{{!resumes.length && !loading}}" class="empty">
+    <text class="empty-title">还没有历史简历</text>
+    <text class="empty-text">支持从微信聊天文件中选择 PDF / Markdown，上传后会保存到后端简历库。</text>
+    <button class="primary" bindtap="uploadResume">上传第一份简历</button>
+  </view>
+
+  <view class="list">
+    <block wx:for="{{resumes}}" wx:key="id">
+      <view class="resume-card {{item.id === selectedResumeId ? 'active' : ''}}">
+        <view bindtap="selectResume" data-id="{{item.id}}">
+          <view class="card-head">
+            <text class="name">{{item.filename}}</text>
+            <text wx:if="{{item.id === selectedResumeId}}" class="badge">当前使用</text>
+          </view>
+          <text class="meta">{{item.file_type}} · {{item.createdLabel}}</text>
+          <text class="summary">{{item.summaryShort}}</text>
+        </view>
+        <button class="danger" data-id="{{item.id}}" bindtap="deleteResume">删除</button>
+      </view>
+    </block>
+  </view>
+</view>

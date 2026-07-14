@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <text class="eyebrow">Interview Agent</text>
+      <text class="title">AI 技术面试</text>
+    </view>
+    <text class="status">{{healthText}}</text>
+  </view>
+
+  <view class="panel">
+    <view class="field">
+      <text class="label">模式</text>
+      <picker mode="selector" range="{{modeOptions}}" range-key="label" bindchange="onModeChange">
+        <view class="picker">{{selectedModeLabel}}</view>
+      </picker>
+    </view>
+
+    <view class="resume-strip" bindtap="openResumePage">
+      <view>
+        <text class="label">当前简历</text>
+        <text class="resume-name">{{selectedResumeName || '未选择简历，点击上传或选择'}}</text>
+      </view>
+      <text class="link">管理</text>
+    </view>
+
+    <text class="label">行业</text>
+    <picker mode="selector" range="{{industries}}" range-key="label" bindchange="onIndustryChange">
+      <view class="picker">
+        {{selectedIndustryLabel}}
+      </view>
+    </picker>
+    <view class="actions">
+      <button class="secondary" bindtap="openHistoryPage">历史</button>
+      <button class="primary" loading="{{busy}}" bindtap="startInterview">开始面试</button>
+    </view>
+  </view>
+
+  <scroll-view class="messages" scroll-y>
+    <block wx:for="{{messages}}" wx:key="index">
+      <view class="message {{item.role}}">
+        <text class="role">{{item.role === 'user' ? '我' : item.role === 'agent' ? '面试官' : '系统'}}</text>
+        <text class="bubble">{{item.text}}</text>
+      </view>
+    </block>
+  </scroll-view>
+
+  <view class="composer">
+    <textarea value="{{input}}" placeholder="输入你的回答" auto-height bindinput="onInput" />
+    <button class="send" disabled="{{!sessionId || busy || !input}}" bindtap="send">发送</button>
+  </view>
+</view>

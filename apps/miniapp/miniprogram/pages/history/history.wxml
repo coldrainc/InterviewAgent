@@ -1,0 +1,29 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <text class="eyebrow">Interview History</text>
+      <text class="title">历史会话</text>
+    </view>
+    <button class="refresh" loading="{{loading}}" bindtap="loadSessions">刷新</button>
+  </view>
+
+  <view wx:if="{{error}}" class="notice error">{{error}}</view>
+
+  <view wx:if="{{!sessions.length && !loading}}" class="empty">
+    <text class="empty-title">还没有面试记录</text>
+    <text class="empty-text">开始一次面试后，会自动保存到历史会话。</text>
+  </view>
+
+  <view class="list">
+    <block wx:for="{{sessions}}" wx:key="id">
+      <view class="session-card">
+        <view bindtap="openSession" data-id="{{item.id}}">
+          <text class="name">{{item.target_role || 'AI 技术面试'}}</text>
+          <text class="meta">{{item.modeLabel}} · {{item.industry}} · {{item.updatedLabel}}</text>
+          <text class="status">{{item.status}}</text>
+        </view>
+        <button class="danger" data-id="{{item.id}}" bindtap="deleteSession">删除</button>
+      </view>
+    </block>
+  </view>
+</view>

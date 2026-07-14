@@ -1,0 +1,67 @@
+[
+  {
+    "query": "RAG 系统怎么做检索增强生成和召回优化？",
+    "expected_sources": ["03-rag-system"],
+    "must_contain": ["RAG"]
+  },
+  {
+    "query": "AgentLoop 面试系统如何维护状态和终止条件？",
+    "expected_sources": [],
+    "must_contain": ["Agent"]
+  },
+  {
+    "query": "Harness 护栏需要覆盖哪些安全和评估能力？",
+    "expected_sources": [],
+    "must_contain": ["Harness"]
+  },
+  {
+    "query": "企业知识库 RAG 项目真实面试会追问哪些召回率排查问题？",
+    "expected_sources": ["real-ai-project-interview-questions/rag-project-questions.md"],
+    "must_contain": ["召回率"]
+  },
+  {
+    "query": "真实 Agent 项目面试会追问如何避免死循环、重复工具调用、设计终止条件？",
+    "expected_sources": ["real-ai-project-interview-questions/agent-project-questions.md"],
+    "must_contain": ["终止条件"]
+  },
+  {
+    "query": "真实 AI 项目面试题 上线前 评测 灰度 观测 回滚",
+    "expected_sources": [],
+    "must_contain": ["灰度"]
+  },
+  {
+    "query": "真实 AI 项目面试题 Prompt Injection 权限泄漏 敏感数据",
+    "expected_sources": [],
+    "must_contain": ["Prompt Injection"]
+  },
+  {
+    "query": "生产级 LLMOps 架构需要哪些模块，如何做模型路由、prompt 版本和发布回滚？",
+    "expected_sources": ["industry-ai-engineering-requirements"],
+    "must_contain": ["模型路由"]
+  },
+  {
+    "query": "AI 项目如何建立评测体系，包含 RAG、Agent、LLM-as-Judge 和质量门禁？",
+    "expected_sources": ["industry-ai-engineering-requirements"],
+    "must_contain": ["质量门禁"]
+  },
+  {
+    "query": "生产级 RAG 需要满足哪些数据 schema、权限、多租户、增量更新和幻觉控制要求？",
+    "expected_sources": ["industry-ai-engineering-requirements"],
+    "must_contain": ["权限"]
+  },
+  {
+    "query": "Agent 工程现在行业要求如何设计工具 schema、MCP 权限、记忆和多 Agent 协作？",
+    "expected_sources": ["industry-ai-engineering-requirements"],
+    "must_contain": ["工具"]
+  },
+  {
+    "query": "AI 系统如何做 NIST 风险治理、OWASP LLM 安全、数据分类和审计合规？",
+    "expected_sources": ["industry-ai-engineering-requirements"],
+    "must_contain": ["Prompt Injection"]
+  },
+  {
+    "query": "AI 应用如何做 OpenTelemetry 风格 trace、成本归因、可靠性降级和事故复盘？",
+    "expected_sources": ["industry-ai-engineering-requirements"],
+    "must_contain": ["trace"]
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "candidate": {
+    "name": "Alex Chen",
+    "target_role": "AI 应用工程师",
+    "seniority": "高级",
+    "resume_summary": "负责过生产级 LLM 应用、检索流水线和评估看板建设。",
+    "resume_text": "可粘贴完整简历：工作经历、项目经历、技术栈、业务结果。",
+    "project_experience": "示例：主导 RAG 知识库问答，从文档解析、chunk、embedding、hybrid retrieval、rerank 到评测、灰度和监控。",
+    "interview_goal": "基于简历和真实项目进行 AI 工程面试，重点深挖 RAG、Agent、评测、上线、安全和复盘。"
+  },
+  "focus_areas": [
+    "AgentLoop 设计",
+    "LangChain 工具编排",
+    "LLM 评估 Harness",
+    "行为协作能力"
+  ],
+  "max_turns": 6,
+  "questions_per_area": 1,
+  "max_followups_per_focus": 3,
+  "rubric": {
+    "agent_architecture": "能解释循环状态、终止条件、重试机制和工具边界。",
+    "langchain_practice": "能有意识地使用 LangChain 原语，而不是隐藏关键控制流。",
+    "evaluation": "能定义可复现的评分、测试夹具和回归检查。",
+    "communication": "能清晰解释取舍，并根据反馈调整表达。"
+  }
+}

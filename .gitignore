@@ -1,0 +1,52 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Node / Electron
+node_modules/
+npm-debug.log*
+out/
+release/
+dist-electron/
+apps/desktop/dist/
+
+# Native app build output
+.build/
+.gradle/
+**/.gradle/
+**/build/
+DerivedData/
+
+# Python packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Interview Agent local runtime data
+.interview_agent/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store

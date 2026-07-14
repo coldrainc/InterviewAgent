@@ -1,0 +1,26 @@
+{
+  "name": "interview-agent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop chat UI for Interview Agent",
+  "main": "src/main.js",
+  "scripts": {
+    "desktop": "electron .",
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "api": "../../interview api",
+    "test:python": "cd ../../backend && ../.venv/bin/python -m pytest"
+  },
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "lucide-react": "^0.562.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.2",
+    "electron": "^39.2.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}

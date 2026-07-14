@@ -1,0 +1,12 @@
+{
+  "appid": "touristappid",
+  "projectname": "InterviewAgentMiniapp",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/"
+}

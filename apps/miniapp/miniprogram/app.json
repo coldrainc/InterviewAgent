@@ -1,0 +1,41 @@
+{
+  "pages": [
+    "pages/chat/chat",
+    "pages/resumes/resumes",
+    "pages/history/history",
+    "pages/profile/profile",
+    "pages/privacy/privacy"
+  ],
+  "window": {
+    "navigationBarTitleText": "Interview Agent",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#edf1f7"
+  },
+  "tabBar": {
+    "color": "#687386",
+    "selectedColor": "#2563eb",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/chat/chat",
+        "text": "面试"
+      },
+      {
+        "pagePath": "pages/resumes/resumes",
+        "text": "简历"
+      },
+      {
+        "pagePath": "pages/history/history",
+        "text": "历史"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

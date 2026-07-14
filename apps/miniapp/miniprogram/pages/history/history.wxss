@@ -1,0 +1,93 @@
+.page {
+  min-height: 100vh;
+  padding: 28rpx;
+  box-sizing: border-box;
+  background: #edf1f7;
+}
+
+.header,
+.session-card,
+.empty,
+.notice {
+  border: 1rpx solid #dce3ed;
+  border-radius: 16rpx;
+  background: #ffffff;
+  padding: 24rpx;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.eyebrow,
+.meta,
+.status {
+  display: block;
+  color: #687386;
+  font-size: 24rpx;
+}
+
+.title {
+  display: block;
+  margin-top: 6rpx;
+  color: #162033;
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.refresh {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.notice {
+  margin-bottom: 20rpx;
+}
+
+.notice.error {
+  color: #991b1b;
+  background: #fff7f7;
+}
+
+.empty {
+  display: grid;
+  gap: 12rpx;
+}
+
+.empty-title,
+.name {
+  color: #162033;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.empty-text {
+  color: #687386;
+  font-size: 26rpx;
+}
+
+.list {
+  display: grid;
+  gap: 18rpx;
+}
+
+.session-card {
+  display: grid;
+  gap: 16rpx;
+}
+
+.meta {
+  margin-top: 10rpx;
+}
+
+.status {
+  margin-top: 8rpx;
+}
+
+.danger {
+  color: #b91c1c;
+  background: #fff7f7;
+}

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "interview-agent"
+version = "0.1.0"
+description = "A LangChain-powered interview agent with an explicit AgentLoop harness."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "alembic>=1.13",
+    "asyncpg>=0.29",
+    "langchain>=0.2.0",
+    "langchain-anthropic>=0.1.23",
+    "langchain-core>=0.2.0",
+    "langchain-openai>=0.1.8",
+    "minio>=7.2",
+    "numpy>=1.26",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+    "pypdf>=4.0",
+    "requests>=2.31",
+    "sqlalchemy[asyncio]>=2.0",
+    "tomli>=2.0; python_version<'3.11'",
+    "typer>=0.12",
+    "rich>=13.7",
+    "sentence-transformers>=3.0",
+    "qdrant-client>=1.10",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "aiosqlite>=0.20",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+interview-agent = "interview_agent.interfaces.cli:app"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

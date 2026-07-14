@@ -1,0 +1,9 @@
+{
+  "name": "interview-agent-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WeChat Mini Program shell for Interview Agent",
+  "scripts": {
+    "check": "node scripts/check-structure.js"
+  }
+}

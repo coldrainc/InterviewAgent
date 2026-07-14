@@ -1,0 +1,1 @@
+"""Core interview domain logic."""

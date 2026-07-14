@@ -1,0 +1,16 @@
+{
+  "name": "interview-agent-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interview Agent multi-platform workspace",
+  "workspaces": [
+    "apps/desktop",
+    "apps/miniapp",
+    "packages/*"
+  ],
+  "scripts": {
+    "desktop:build": "npm --prefix apps/desktop run build",
+    "desktop:start": "npm --prefix apps/desktop run desktop",
+    "backend:test": "cd backend && ../.venv/bin/python -m pytest"
+  }
+}
