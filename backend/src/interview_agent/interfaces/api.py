@@ -55,6 +55,11 @@ from interview_agent.infrastructure.security import (
 )
 from interview_agent.infrastructure.settings import load_settings
 from interview_agent.infrastructure.web_search import WebSearchClient
+from interview_agent.interfaces.error_codes import (
+    ApiErrorCode,
+    error_code_for_detail,
+    error_code_for_status,
+)
 from interview_agent.services.billing_service import (
     BillingError,
     BillingService,
@@ -341,41 +346,17 @@ def _api_error(
     status_code: int,
     message: str,
     request_id: str,
-    error: str | None = None,
+    error: ApiErrorCode | str | None = None,
 ) -> dict:
+    code = error or error_code_for_status(status_code)
+    code_value = code.value if isinstance(code, ApiErrorCode) else str(code)
     return {
         "code": status_code,
-        "error": error or _error_code_for_status(status_code),
+        "error": code_value,
         "message": message,
         "data": None,
         "request_id": request_id,
     }
-
-
-def _error_code_for_status(status_code: int) -> str:
-    if status_code == 400:
-        return "BAD_REQUEST"
-    if status_code == 401:
-        return "AUTH_UNAUTHORIZED"
-    if status_code == 402:
-        return "BILLING_REQUIRED"
-    if status_code == 403:
-        return "AUTH_FORBIDDEN"
-    if status_code == 404:
-        return "NOT_FOUND"
-    if status_code == 413:
-        return "PAYLOAD_TOO_LARGE"
-    if status_code == 422:
-        return "VALIDATION_ERROR"
-    if status_code == 429:
-        return "RATE_LIMITED"
-    if status_code == 501:
-        return "NOT_IMPLEMENTED"
-    if status_code == 503:
-        return "SERVICE_UNAVAILABLE"
-    if status_code >= 500:
-        return "INTERNAL_SERVER_ERROR"
-    return "REQUEST_FAILED"
 
 
 def _public_error_message(status_code: int, detail) -> str:
@@ -438,6 +419,10 @@ async def _wrap_json_response(request: Request, response):
             status_code=response.status_code,
             message=_public_error_message(response.status_code, payload.get("detail") if isinstance(payload, dict) else None),
             request_id=_request_id(request),
+            error=error_code_for_detail(
+                response.status_code,
+                payload.get("detail") if isinstance(payload, dict) else None,
+            ),
         )
     headers = {
         key: value
@@ -497,6 +482,7 @@ def create_app(
                 status_code=exc.status_code,
                 message=_public_error_message(exc.status_code, exc.detail),
                 request_id=request_id,
+                error=error_code_for_detail(exc.status_code, exc.detail),
             ),
         )
 
@@ -507,7 +493,7 @@ def create_app(
             status_code=422,
             content=_api_error(
                 status_code=422,
-                error="VALIDATION_ERROR",
+                error=ApiErrorCode.VALIDATION_ERROR,
                 message="请求参数格式不正确。",
                 request_id=request_id,
             ),
@@ -528,7 +514,7 @@ def create_app(
             status_code=500,
             content=_api_error(
                 status_code=500,
-                error="INTERNAL_SERVER_ERROR",
+                error=ApiErrorCode.INTERNAL_SERVER_ERROR,
                 message="服务暂时不可用，请稍后重试。",
                 request_id=request_id,
             ),

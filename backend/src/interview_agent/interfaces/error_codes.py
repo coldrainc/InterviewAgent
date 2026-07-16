@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from enum import Enum
+
+
+class ApiErrorCode(str, Enum):
+    REQUEST_FAILED = "REQUEST_FAILED"
+    BAD_REQUEST = "BAD_REQUEST"
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    AUTH_UNAUTHORIZED = "AUTH_UNAUTHORIZED"
+    AUTH_FORBIDDEN = "AUTH_FORBIDDEN"
+    AUTH_RATE_LIMITED = "AUTH_RATE_LIMITED"
+    BILLING_REQUIRED = "BILLING_REQUIRED"
+    NOT_FOUND = "NOT_FOUND"
+    PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
+    RATE_LIMITED = "RATE_LIMITED"
+    PAYMENT_SIGNATURE_MISSING = "PAYMENT_SIGNATURE_MISSING"
+    PAYMENT_SIGNATURE_INVALID = "PAYMENT_SIGNATURE_INVALID"
+    PAYMENT_WEBHOOK_NOT_CONFIGURED = "PAYMENT_WEBHOOK_NOT_CONFIGURED"
+    PAYMENT_ORDER_INVALID = "PAYMENT_ORDER_INVALID"
+    RESUME_NOT_FOUND = "RESUME_NOT_FOUND"
+    RESUME_PARSE_FAILED = "RESUME_PARSE_FAILED"
+    RESUME_STORAGE_UNAVAILABLE = "RESUME_STORAGE_UNAVAILABLE"
+    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
+    SESSION_PERSISTENCE_FAILED = "SESSION_PERSISTENCE_FAILED"
+    MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+    NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+    INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+
+
+STATUS_ERROR_CODES = {
+    400: ApiErrorCode.BAD_REQUEST,
+    401: ApiErrorCode.AUTH_UNAUTHORIZED,
+    402: ApiErrorCode.BILLING_REQUIRED,
+    403: ApiErrorCode.AUTH_FORBIDDEN,
+    404: ApiErrorCode.NOT_FOUND,
+    413: ApiErrorCode.PAYLOAD_TOO_LARGE,
+    422: ApiErrorCode.VALIDATION_ERROR,
+    429: ApiErrorCode.RATE_LIMITED,
+    501: ApiErrorCode.NOT_IMPLEMENTED,
+    503: ApiErrorCode.SERVICE_UNAVAILABLE,
+}
+
+
+DETAIL_ERROR_CODES = {
+    "resume not found": ApiErrorCode.RESUME_NOT_FOUND,
+    "session not found": ApiErrorCode.SESSION_NOT_FOUND,
+    "缺少支付回调签名。": ApiErrorCode.PAYMENT_SIGNATURE_MISSING,
+    "支付回调签名无效。": ApiErrorCode.PAYMENT_SIGNATURE_INVALID,
+    "支付回调密钥未配置。": ApiErrorCode.PAYMENT_WEBHOOK_NOT_CONFIGURED,
+    "支付订单号无效。": ApiErrorCode.PAYMENT_ORDER_INVALID,
+    "请求过于频繁，请稍后再试。": ApiErrorCode.RATE_LIMITED,
+}
+
+
+def error_code_for_status(status_code: int) -> ApiErrorCode:
+    if status_code >= 500:
+        return ApiErrorCode.INTERNAL_SERVER_ERROR
+    return STATUS_ERROR_CODES.get(status_code, ApiErrorCode.REQUEST_FAILED)
+
+
+def error_code_for_detail(status_code: int, detail) -> ApiErrorCode:
+    if isinstance(detail, str):
+        mapped = DETAIL_ERROR_CODES.get(detail)
+        if mapped:
+            return mapped
+    return error_code_for_status(status_code)
