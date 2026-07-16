@@ -1,6 +1,8 @@
 const DEFAULT_API_BASE_URL = "/api";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
 const REQUEST_TIMEOUT_MS = 15000;
+const LONG_REQUEST_TIMEOUT_MS = 180000;
+const UPLOAD_TIMEOUT_MS = 60000;
 const MAX_CONCURRENT_REQUESTS = 2;
 const JSON_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 let activeRequests = 0;
@@ -120,9 +122,10 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
   const method = (options.method || "GET").toUpperCase();
   const hasJsonBody = JSON_METHODS.has(method) && options.body !== undefined;
   const url = `${apiBaseUrl()}${normalizeRoute(route)}`;
+  const timeoutMs = options.timeoutMs || REQUEST_TIMEOUT_MS;
 
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       method,
@@ -143,7 +146,7 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
       return executeJsonRequest(route, options, attempt + 1);
     }
     if (error.name === "AbortError") {
-      throw new Error("请求超时，请检查网络或稍后重试。");
+      throw new Error("请求处理时间较长，模型可能仍在生成。请稍后重试，或检查后端服务日志。");
     }
     if (error instanceof TypeError) {
       throw new Error(`无法连接 API 服务：${apiBaseUrl()}。请检查网络、HTTPS、CSP 或 Nginx 限流配置。`);
@@ -184,6 +187,7 @@ async function importResumeFromBrowser() {
   const contentBase64 = await fileToBase64(file);
   const stored = await requestJson("/resumes", {
     method: "POST",
+    timeoutMs: UPLOAD_TIMEOUT_MS,
     body: JSON.stringify({
       filename: file.name,
       content_base64: contentBase64
@@ -244,11 +248,13 @@ const browserClient = {
   createSession: (payload) =>
     requestJson("/sessions", {
       method: "POST",
+      timeoutMs: LONG_REQUEST_TIMEOUT_MS,
       body: JSON.stringify(payload || {})
     }),
   sendMessage: (payload) =>
     requestJson(`/sessions/${payload.sessionId}/messages`, {
       method: "POST",
+      timeoutMs: LONG_REQUEST_TIMEOUT_MS,
       body: JSON.stringify({ message: payload.message })
     })
 };
