@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "https://api.aivago.cn";
+const DEFAULT_API_BASE_URL = "/api";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
 const REQUEST_TIMEOUT_MS = 15000;
 const MAX_CONCURRENT_REQUESTS = 2;

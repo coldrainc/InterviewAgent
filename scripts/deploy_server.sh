@@ -3,7 +3,8 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/aivago/InterviewAgent}"
 API_SERVICE="${API_SERVICE:-interview-agent-api}"
-WEB_API_URL="${WEB_API_URL:-https://api.aivago.cn}"
+WEB_API_URL="${WEB_API_URL:-/api}"
+WEB_HEALTH_URL="${WEB_HEALTH_URL:-https://www.aivago.cn/api/health}"
 SKIP_GIT_PULL="${SKIP_GIT_PULL:-0}"
 
 cd "$APP_DIR"
@@ -68,10 +69,22 @@ deploy_frontend() {
   cd "$APP_DIR"
 }
 
+configure_nginx() {
+  log "配置 Nginx Web 同源代理"
+  sudo \
+    APP_DIR="$APP_DIR" \
+    WEB_DOMAIN="${WEB_DOMAIN:-www.aivago.cn}" \
+    WEB_ROOT="${WEB_ROOT:-$APP_DIR/apps/desktop/dist}" \
+    API_UPSTREAM="${API_UPSTREAM:-http://127.0.0.1:8020}" \
+    AUTO_DISABLE_DEFAULT_WWW="${AUTO_DISABLE_DEFAULT_WWW:-0}" \
+    "$APP_DIR/scripts/configure_nginx_web.sh"
+}
+
 deploy_all() {
   run_git_pull
   deploy_backend
   deploy_frontend
+  configure_nginx
 }
 
 show_status() {
@@ -80,18 +93,19 @@ show_status() {
   log "Nginx 配置检查"
   sudo nginx -t
   log "健康检查"
-  curl -fsS "$WEB_API_URL/health" || true
+  curl -fsS "$WEB_HEALTH_URL" || true
   printf '\n'
 }
 
 choose_action() {
   cat <<'MENU'
 请选择部署操作：
-  1) 全部：git pull + 后端依赖/迁移/重启 + 前端构建/Nginx reload
+  1) 全部：git pull + 后端依赖/迁移/重启 + 前端构建 + Nginx 配置/reload
   2) 只更新后端：依赖 + 迁移 + 重启服务
   3) 只更新前端：npm install + build + Nginx reload
-  4) 只 git pull
-  5) 查看状态
+  4) 配置 Nginx：www.aivago.cn + /api 同源代理
+  5) 只 git pull
+  6) 查看状态
   0) 退出
 MENU
   read -r -p "输入选项: " choice
@@ -99,8 +113,9 @@ MENU
     1) deploy_all ;;
     2) run_git_pull; deploy_backend ;;
     3) run_git_pull; deploy_frontend ;;
-    4) run_git_pull ;;
-    5) show_status ;;
+    4) configure_nginx ;;
+    5) run_git_pull ;;
+    6) show_status ;;
     0) exit 0 ;;
     *) echo "未知选项：$choice" >&2; exit 2 ;;
   esac
@@ -111,6 +126,7 @@ case "${1:-menu}" in
   all) deploy_all ;;
   backend) run_git_pull; deploy_backend ;;
   frontend) run_git_pull; deploy_frontend ;;
+  nginx) configure_nginx ;;
   pull) run_git_pull ;;
   status) show_status ;;
   *)
@@ -120,16 +136,18 @@ case "${1:-menu}" in
   $0 all        # 全量部署
   $0 backend    # 更新并重启后端
   $0 frontend   # 更新并构建前端
+  $0 nginx      # 配置 Nginx Web 同源代理
   $0 pull       # 只拉代码
   $0 status     # 查看状态
 
 可选环境变量：
   APP_DIR=/opt/aivago/InterviewAgent
   API_SERVICE=interview-agent-api
-  WEB_API_URL=https://api.aivago.cn
+  WEB_API_URL=/api
+  WEB_HEALTH_URL=https://www.aivago.cn/api/health
+  AUTO_DISABLE_DEFAULT_WWW=1
   SKIP_GIT_PULL=1
 USAGE
     exit 2
     ;;
 esac
-
