@@ -150,14 +150,7 @@ function App() {
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    checkHealth();
-    loadIndustryOptions();
-    loadModelOptions();
-    if (api.hasToken?.()) {
-      loadAccount();
-      loadResumeLibrary();
-      loadSessionHistory();
-    }
+    bootstrap();
   }, []);
 
   useEffect(() => {
@@ -192,6 +185,17 @@ function App() {
     }
     return { label: "检查中", tone: "checking", detail: "正在连接本地服务" };
   }, [health]);
+
+  async function bootstrap() {
+    await checkHealth();
+    await loadIndustryOptions();
+    await loadModelOptions();
+    if (api.hasToken?.()) {
+      await loadAccount();
+      await loadResumeLibrary();
+      await loadSessionHistory();
+    }
+  }
 
   async function checkHealth() {
     setHealth({ status: "checking" });

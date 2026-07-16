@@ -1,7 +1,10 @@
 const DEFAULT_API_BASE_URL = "https://api.aivago.cn";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
 const REQUEST_TIMEOUT_MS = 15000;
+const MAX_CONCURRENT_REQUESTS = 2;
 const JSON_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+let activeRequests = 0;
+const requestQueue = [];
 
 function apiBaseUrl() {
   return (import.meta.env.VITE_INTERVIEW_AGENT_API_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -88,7 +91,32 @@ function unwrapApiResponse(payload, response) {
   return payload;
 }
 
+function enqueueRequest(task) {
+  return new Promise((resolve, reject) => {
+    requestQueue.push({ task, resolve, reject });
+    drainRequestQueue();
+  });
+}
+
+function drainRequestQueue() {
+  while (activeRequests < MAX_CONCURRENT_REQUESTS && requestQueue.length) {
+    const item = requestQueue.shift();
+    activeRequests += 1;
+    item.task()
+      .then(item.resolve)
+      .catch(item.reject)
+      .finally(() => {
+        activeRequests -= 1;
+        drainRequestQueue();
+      });
+  }
+}
+
 async function requestJson(route, options = {}, attempt = 0) {
+  return enqueueRequest(() => executeJsonRequest(route, options, attempt));
+}
+
+async function executeJsonRequest(route, options = {}, attempt = 0) {
   const method = (options.method || "GET").toUpperCase();
   const hasJsonBody = JSON_METHODS.has(method) && options.body !== undefined;
   const url = `${apiBaseUrl()}${normalizeRoute(route)}`;
@@ -112,7 +140,7 @@ async function requestJson(route, options = {}, attempt = 0) {
     return unwrapApiResponse(data, response);
   } catch (error) {
     if (attempt === 0 && method === "GET") {
-      return requestJson(route, options, attempt + 1);
+      return executeJsonRequest(route, options, attempt + 1);
     }
     if (error.name === "AbortError") {
       throw new Error("请求超时，请检查网络或稍后重试。");
