@@ -4,7 +4,9 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal
@@ -47,6 +49,7 @@ from interview_agent.domain.resume import stored_resume_to_payload
 from interview_agent.infrastructure.security import (
     RequestContext,
     issue_client_token,
+    rate_limiter,
     request_context,
     validate_production_security,
 )
@@ -317,6 +320,7 @@ class ApiSession:
 
 
 sessions: dict[str, ApiSession] = {}
+logger = logging.getLogger("interview_agent.api")
 
 
 def _request_id(request: Request) -> str:
@@ -468,15 +472,19 @@ def create_app(
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
         request_id = _request_id(request)
+        started = time.perf_counter()
         response = await call_next(request)
         if settings.is_production:
             response = await _wrap_json_response(request, response)
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
         response.headers["X-Request-ID"] = request_id
+        response.headers["Server-Timing"] = f"app;dur={duration_ms}"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Cache-Control"] = "no-store"
+        _log_access(request, response.status_code, duration_ms, request_id)
         return response
 
     @app.exception_handler(HTTPException)
@@ -508,6 +516,14 @@ def create_app(
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         request_id = _request_id(request)
+        logger.exception(
+            "unhandled_api_error",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "method": request.method,
+            },
+        )
         return JSONResponse(
             status_code=500,
             content=_api_error(
@@ -571,7 +587,8 @@ def create_app(
         )
 
     @app.post("/auth/register", response_model=AuthTokenResponse)
-    async def register(request: RegisterRequest) -> AuthTokenResponse:
+    async def register(request: RegisterRequest, http_request: Request) -> AuthTokenResponse:
+        _check_auth_rate_limit(http_request, "register", request.email)
         tenant_id = request.tenant_id or settings.default_tenant_id
         try:
             async with session_scope() as db:
@@ -592,7 +609,8 @@ def create_app(
         )
 
     @app.post("/auth/login", response_model=AuthTokenResponse)
-    async def password_login(request: PasswordLoginRequest) -> AuthTokenResponse:
+    async def password_login(request: PasswordLoginRequest, http_request: Request) -> AuthTokenResponse:
+        _check_auth_rate_limit(http_request, "login", request.email)
         tenant_id = request.tenant_id or settings.default_tenant_id
         async with session_scope() as db:
             account = await _billing_service(db).authenticate_password(
@@ -610,7 +628,8 @@ def create_app(
         )
 
     @app.post("/auth/wechat/login", response_model=AuthTokenResponse)
-    async def wechat_login(request: ProviderLoginRequest) -> AuthTokenResponse:
+    async def wechat_login(request: ProviderLoginRequest, http_request: Request) -> AuthTokenResponse:
+        _check_auth_rate_limit(http_request, "wechat-login", request.code[:32])
         if settings.wechat_app_id and settings.wechat_app_secret:
             try:
                 session = await asyncio.to_thread(exchange_wechat_code, settings, request.code)
@@ -641,7 +660,8 @@ def create_app(
         )
 
     @app.post("/auth/apple/login", response_model=AuthTokenResponse)
-    async def apple_login(request: ProviderLoginRequest) -> AuthTokenResponse:
+    async def apple_login(request: ProviderLoginRequest, http_request: Request) -> AuthTokenResponse:
+        _check_auth_rate_limit(http_request, "apple-login", request.code[:32])
         if not settings.auth_mock_provider_login_enabled:
             raise HTTPException(status_code=501, detail="Apple 登录需要接入 identityToken 校验后启用。")
         return await _issue_auth_response(
@@ -652,7 +672,8 @@ def create_app(
         )
 
     @app.post("/auth/phone/login", response_model=AuthTokenResponse)
-    async def phone_login(request: PhoneLoginRequest) -> AuthTokenResponse:
+    async def phone_login(request: PhoneLoginRequest, http_request: Request) -> AuthTokenResponse:
+        _check_auth_rate_limit(http_request, "phone-login", request.phone)
         if not settings.auth_mock_provider_login_enabled:
             raise HTTPException(status_code=501, detail="手机号登录需要接入短信验证码服务后启用。")
         if not request.verification_code:
@@ -1447,6 +1468,72 @@ def _check_session_request(request: SessionRequest, max_chars: int) -> None:
     for value in values:
         if value and len(value) > max_chars:
             raise HTTPException(status_code=413, detail=f"请求内容过长，单字段最大允许 {max_chars} 个字符。")
+
+
+def _client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()[:64] or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+def _client_user_agent(request: Request) -> str:
+    return request.headers.get("User-Agent", "")[:256]
+
+
+def _auth_limit(settings, action: str) -> int:
+    if settings.rate_limit_per_minute <= 0:
+        return 0
+    if action == "login":
+        return min(settings.rate_limit_per_minute, 8)
+    if action == "register":
+        return min(settings.rate_limit_per_minute, 4)
+    return min(settings.rate_limit_per_minute, 6)
+
+
+def _check_auth_rate_limit(request: Request, action: str, subject: str) -> None:
+    settings = load_settings()
+    limit = _auth_limit(settings, action)
+    if limit <= 0:
+        return
+    ip = _client_ip(request)
+    normalized_subject = hashlib.sha256(subject.strip().lower().encode("utf-8")).hexdigest()[:16]
+    ip_key = f"auth:{action}:ip:{ip}"
+    subject_key = f"auth:{action}:subject:{normalized_subject}"
+    if not rate_limiter.check(ip_key, limit) or not rate_limiter.check(subject_key, limit):
+        logger.warning(
+            json.dumps(
+                {
+                    "event": "auth_rate_limited",
+                    "action": action,
+                    "client_ip": ip,
+                    "user_agent": _client_user_agent(request),
+                    "request_id": _request_id(request),
+                },
+                ensure_ascii=False,
+            )
+        )
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试。")
+
+
+def _log_access(request: Request, status_code: int, duration_ms: float, request_id: str) -> None:
+    level = logging.WARNING if status_code >= 400 else logging.INFO
+    logger.log(
+        level,
+        json.dumps(
+            {
+                "event": "http_request",
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+                "client_ip": _client_ip(request),
+                "user_agent": _client_user_agent(request),
+            },
+            ensure_ascii=False,
+        ),
+    )
 
 
 def _response(
