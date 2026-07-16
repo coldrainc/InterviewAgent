@@ -5,8 +5,6 @@ import {
   Bot,
   BrainCircuit,
   Coins,
-  CheckCircle2,
-  Database,
   Globe2,
   Loader2,
   MessageSquarePlus,
@@ -20,9 +18,7 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
-  WifiOff,
-  X,
-  Zap
+  X
 } from "lucide-react";
 import "./styles.css";
 import { getInterviewAgentClient } from "./apiClient";
@@ -139,7 +135,6 @@ function App() {
   const [account, setAccount] = useState(null);
   const [authState, setAuthState] = useState({ mode: "login", email: "", password: "", displayName: "", status: "idle" });
   const [authDialog, setAuthDialog] = useState({ open: false, reason: "" });
-  const [rechargeState, setRechargeState] = useState({ status: "idle" });
   const [profile, setProfile] = useState({
     mode: "interviewer",
     industry: "internet",
@@ -293,25 +288,6 @@ function App() {
     setResumeLibrary([]);
     setSessionHistory([]);
     setScreen("chat");
-  }
-
-  async function recharge(amountCredits = "10") {
-    if (!requireAccount("开发充值前需要先登录账号。")) return;
-    setRechargeState({ status: "loading", amount: amountCredits });
-    try {
-      const result = await api.recharge({
-        amount_credits: amountCredits,
-        payment_provider: "desktop-mock",
-        external_order_id: `desktop-${Date.now()}`
-      });
-      setAccount(result);
-      setRechargeState({ status: "success", message: `已开发充值 ${amountCredits} 积分。` });
-    } catch (error) {
-      setRechargeState({
-        status: "error",
-        error: `开发充值失败：${normalizeDesktopError(error.message)}；生产环境请走支付订单和签名回调。`
-      });
-    }
   }
 
   async function loadResumeLibrary() {
@@ -569,8 +545,6 @@ function App() {
     <main className="app-shell">
       <Sidebar
         screen={screen}
-        status={status}
-        health={health}
         offline={offline}
         webSearch={webSearch}
         profile={profile}
@@ -585,7 +559,6 @@ function App() {
         historyState={historyState}
         activeSessionId={sessionId}
         busy={busy}
-        onHealthRefresh={checkHealth}
         onNewSession={() => createSession()}
         onImportResume={importResume}
         onSelectResume={selectResume}
@@ -620,14 +593,12 @@ function App() {
           <AccountCenter
             account={account}
             authState={authState}
-            rechargeState={rechargeState}
             modelOptions={modelOptions}
             selectedModelId={selectedModelId}
             onAuthChange={setAuthState}
             onAuthSubmit={submitAuth}
             onDevLogin={useDevAccount}
             onLogout={logout}
-            onRecharge={recharge}
             onSelectModel={setSelectedModelId}
             onBack={() => setScreen("chat")}
           />
@@ -679,8 +650,6 @@ function App() {
 
 function Sidebar({
   screen,
-  status,
-  health,
   offline,
   webSearch,
   profile,
@@ -695,7 +664,6 @@ function Sidebar({
   historyState,
   activeSessionId,
   busy,
-  onHealthRefresh,
   onNewSession,
   onImportResume,
   onSelectResume,
@@ -856,26 +824,6 @@ function Sidebar({
 
       <section className="panel">
         <div className="panel-heading">
-          <span>运行状态</span>
-          <button className="icon-button" onClick={onHealthRefresh} aria-label="刷新服务状态">
-            <RefreshCw size={15} />
-          </button>
-        </div>
-        <div className={`health-card ${status.tone}`}>
-          <div className="health-title">
-            {status.tone === "fail" ? <WifiOff size={18} /> : <CheckCircle2 size={18} />}
-            <div>
-              <strong>{status.label}</strong>
-              <p>{status.detail}</p>
-            </div>
-          </div>
-          <ServiceRow icon={<Zap size={15} />} label="Embedding" value={health.embedding_service_url || "-"} />
-          <ServiceRow icon={<Database size={15} />} label="Qdrant" value={health.qdrant_url || "-"} />
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
           <span>会话选项</span>
         </div>
         <Toggle
@@ -1021,18 +969,6 @@ function SegmentedControl({ value, options, onChange }) {
   );
 }
 
-function ServiceRow({ icon, label, value }) {
-  return (
-    <div className="service-row">
-      <span>
-        {icon}
-        {label}
-      </span>
-      <small>{value}</small>
-    </div>
-  );
-}
-
 function Toggle({ icon, label, checked, onChange }) {
   return (
     <label className="toggle-row">
@@ -1101,14 +1037,12 @@ function AccountEntry({ account, active, onOpen }) {
 function AccountCenter({
   account,
   authState,
-  rechargeState,
   modelOptions,
   selectedModelId,
   onAuthChange,
   onAuthSubmit,
   onDevLogin,
   onLogout,
-  onRecharge,
   onSelectModel,
   onBack
 }) {
@@ -1145,20 +1079,7 @@ function AccountCenter({
                 <b>{formatCredits(account.credit_balance)}</b>
               </div>
             </div>
-            <div className="recharge-actions large">
-              <button type="button" disabled={rechargeState.status === "loading"} onClick={() => onRecharge("10")}>
-                开发充 10
-              </button>
-              <button type="button" disabled={rechargeState.status === "loading"} onClick={() => onRecharge("50")}>
-                开发充 50
-              </button>
-              <button type="button" disabled={rechargeState.status === "loading"} onClick={() => onRecharge("100")}>
-                开发充 100
-              </button>
-            </div>
             <p className="resume-hint">生产环境充值会由支付平台创建订单，支付成功后通过服务端签名回调入账。</p>
-            {rechargeState.status === "success" && <p className="resume-hint success">{rechargeState.message}</p>}
-            {rechargeState.status === "error" && <p className="resume-hint error">{rechargeState.error}</p>}
           </section>
 
           <section className="account-block">
