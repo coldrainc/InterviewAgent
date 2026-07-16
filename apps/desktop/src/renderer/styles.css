@@ -39,7 +39,8 @@ body {
 
 button,
 textarea,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -53,10 +54,11 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 372px minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 372px) minmax(0, 1fr);
   gap: 14px;
   height: 100vh;
   padding: 14px;
+  min-width: 0;
 }
 
 .sidebar,
@@ -867,6 +869,10 @@ button {
   justify-content: space-between;
 }
 
+.topbar > div:first-child {
+  min-width: 0;
+}
+
 .eyebrow {
   color: var(--cyan);
   font-size: 12px;
@@ -878,6 +884,7 @@ button {
 .topbar h2 {
   margin-top: 4px;
   font-size: 22px;
+  overflow-wrap: anywhere;
 }
 
 .topbar-actions {
@@ -1224,6 +1231,7 @@ button {
   gap: 12px;
   align-items: flex-start;
   max-width: 900px;
+  min-width: 0;
 }
 
 .message-row.user {
@@ -1261,6 +1269,7 @@ button {
   display: grid;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .message-meta {
@@ -1290,6 +1299,7 @@ button {
   line-height: 1.72;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   box-shadow: 0 7px 20px rgba(15, 23, 42, 0.07);
 }
 
@@ -1397,6 +1407,20 @@ button {
   background: linear-gradient(135deg, #1d4ed8, #0891b2);
 }
 
+@media (max-width: 1180px) {
+  .app-shell {
+    grid-template-columns: minmax(300px, 336px) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 14px;
+  }
+
+  .messages {
+    padding-inline: clamp(18px, 3vw, 42px);
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1412,15 +1436,16 @@ button {
     grid-template-columns: 1fr;
     height: auto;
     min-height: 100vh;
-    padding: 10px;
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
 
   .sidebar {
-    order: 2;
+    order: 1;
     overflow: visible;
   }
 
   .workspace {
+    order: 2;
     min-height: 80vh;
   }
 
@@ -1465,8 +1490,112 @@ button {
 }
 
 @media (max-width: 640px) {
+  :root {
+    --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    --soft-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);
+  }
+
+  .app-shell {
+    gap: 10px;
+    padding: 8px;
+  }
+
+  .sidebar,
+  .topbar,
+  .chat-panel,
+  .account-center {
+    border-radius: 8px;
+  }
+
+  .sidebar {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .brand {
+    min-height: 42px;
+  }
+
+  .brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .brand h1 {
+    font-size: 16px;
+  }
+
+  .primary-action {
+    min-height: 46px;
+    height: auto;
+    padding: 9px 12px;
+    text-align: center;
+  }
+
+  .mode-panel,
+  .resume-panel,
+  .panel.compact,
+  .account-block {
+    padding: 10px;
+  }
+
+  .segmented-control {
+    grid-template-columns: 1fr;
+  }
+
   .field-grid.two {
     grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    padding: 14px;
+  }
+
+  .topbar h2 {
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    gap: 7px;
+  }
+
+  .status-chip,
+  .session-chip,
+  .mode-chip,
+  .topbar-button {
+    max-width: 100%;
+    min-height: 30px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .chat-panel {
+    min-height: 68vh;
+  }
+
+  .messages {
+    padding: 18px 12px;
+    gap: 14px;
+  }
+
+  .empty-state {
+    gap: 12px;
+  }
+
+  .empty-mark {
+    width: 54px;
+    height: 54px;
+  }
+
+  .empty-state h3 {
+    font-size: 21px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+    line-height: 1.6;
   }
 
   .quick-grid {
@@ -1476,5 +1605,62 @@ button {
   .message-row,
   .message-row.user {
     max-width: 100%;
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+  }
+
+  .message-bubble {
+    padding: 11px 12px;
+    line-height: 1.62;
+    font-size: 14px;
+  }
+
+  .message-meta {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .composer {
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 7px;
+    margin: 0 10px max(12px, env(safe-area-inset-bottom));
+    padding: 7px;
+  }
+
+  .composer textarea {
+    min-height: 42px;
+    padding: 10px;
+    font-size: 16px;
+  }
+
+  .composer button {
+    width: 42px;
+    height: 40px;
+  }
+
+  .account-center {
+    padding: 14px;
+  }
+
+  .account-avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .account-hero h3 {
+    font-size: 21px;
+  }
+
+  .account-auth-copy h3 {
+    font-size: 26px;
+  }
+
+  .credit-grid {
+    grid-template-columns: 1fr;
   }
 }
