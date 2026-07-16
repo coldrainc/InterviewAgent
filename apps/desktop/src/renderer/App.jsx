@@ -158,9 +158,11 @@ function App() {
     checkHealth();
     loadIndustryOptions();
     loadModelOptions();
-    loadAccount();
-    loadResumeLibrary();
-    loadSessionHistory();
+    if (api.hasToken?.()) {
+      loadAccount();
+      loadResumeLibrary();
+      loadSessionHistory();
+    }
   }, []);
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 const DEFAULT_API_BASE_URL = "https://api.aivago.cn";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
+const REQUEST_TIMEOUT_MS = 15000;
 
 function apiBaseUrl() {
   return (import.meta.env.VITE_INTERVIEW_AGENT_API_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -29,23 +30,42 @@ function setStoredToken(token) {
   }
 }
 
-async function requestJson(route, options = {}) {
+async function requestJson(route, options = {}, attempt = 0) {
   const token = getStoredToken();
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${apiBaseUrl()}${route}`, {
-    ...options,
-    headers
-  });
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!response.ok) {
-    throw new Error(data.detail || `HTTP ${response.status}`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${apiBaseUrl()}${route}`, {
+      ...options,
+      headers,
+      signal: controller.signal
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+    if (!response.ok) {
+      throw new Error(data.detail || `HTTP ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    const method = (options.method || "GET").toUpperCase();
+    if (attempt === 0 && method === "GET") {
+      return requestJson(route, options, attempt + 1);
+    }
+    if (error.name === "AbortError") {
+      throw new Error("请求超时，请检查网络或稍后重试。");
+    }
+    if (error instanceof TypeError) {
+      throw new Error(`无法连接 API 服务：${apiBaseUrl()}。请检查网络、HTTPS 或浏览器安全策略。`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return data;
 }
 
 function chooseResumeFile() {
@@ -87,6 +107,7 @@ async function importResumeFromBrowser() {
 }
 
 const browserClient = {
+  hasToken: () => Boolean(getStoredToken()),
   health: () => requestJson("/health"),
   listIndustries: (targetRole) => {
     const query = targetRole ? `?target_role=${encodeURIComponent(targetRole)}` : "";
@@ -147,6 +168,10 @@ const browserClient = {
 };
 
 export function getInterviewAgentClient() {
-  return electronBridge() || browserClient;
+  const bridge = electronBridge();
+  if (!bridge) return browserClient;
+  return {
+    hasToken: () => true,
+    ...bridge
+  };
 }
-
