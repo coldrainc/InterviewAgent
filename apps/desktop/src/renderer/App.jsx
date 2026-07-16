@@ -180,7 +180,7 @@ function App() {
       return {
         label: "已连接",
         tone: "ok",
-        detail: `API 已连接，数据存储：${health.storage_backend || "database"}，文件存储：${health.object_storage_backend || "minio"}`
+        detail: "服务在线，可以开始面试"
       };
     }
     if (health.status === "error") {

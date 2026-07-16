@@ -339,6 +339,19 @@ def create_app(
 
     app = FastAPI(title="Interview Agent API", lifespan=lifespan)
     allowed_origins = [item.strip() for item in settings.allowed_origins.split(",") if item.strip()]
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        request_id = request.headers.get("X-Request-ID") or str(uuid4())
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     if allowed_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -356,6 +369,11 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict:
+        if settings.is_production:
+            return {
+                "status": "ok",
+                "auth_required": settings.api_auth_required,
+            }
         return {
             "status": "ok",
             "qdrant_url": settings.qdrant_url,
