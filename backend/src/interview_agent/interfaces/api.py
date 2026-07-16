@@ -12,8 +12,9 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from interview_agent.core.agent_loop import AgentLoop
@@ -318,6 +319,130 @@ class ApiSession:
 sessions: dict[str, ApiSession] = {}
 
 
+def _request_id(request: Request) -> str:
+    return request.headers.get("X-Request-ID") or str(uuid4())
+
+
+def _api_success(data, *, request_id: str) -> dict:
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": data,
+        "request_id": request_id,
+    }
+
+
+def _api_error(
+    *,
+    status_code: int,
+    message: str,
+    request_id: str,
+    error: str | None = None,
+) -> dict:
+    return {
+        "code": status_code,
+        "error": error or _error_code_for_status(status_code),
+        "message": message,
+        "data": None,
+        "request_id": request_id,
+    }
+
+
+def _error_code_for_status(status_code: int) -> str:
+    if status_code == 400:
+        return "BAD_REQUEST"
+    if status_code == 401:
+        return "AUTH_UNAUTHORIZED"
+    if status_code == 402:
+        return "BILLING_REQUIRED"
+    if status_code == 403:
+        return "AUTH_FORBIDDEN"
+    if status_code == 404:
+        return "NOT_FOUND"
+    if status_code == 413:
+        return "PAYLOAD_TOO_LARGE"
+    if status_code == 422:
+        return "VALIDATION_ERROR"
+    if status_code == 429:
+        return "RATE_LIMITED"
+    if status_code == 501:
+        return "NOT_IMPLEMENTED"
+    if status_code == 503:
+        return "SERVICE_UNAVAILABLE"
+    if status_code >= 500:
+        return "INTERNAL_SERVER_ERROR"
+    return "REQUEST_FAILED"
+
+
+def _public_error_message(status_code: int, detail) -> str:
+    if isinstance(detail, str) and detail:
+        return detail
+    if status_code == 401:
+        return "请先登录后再继续。"
+    if status_code == 403:
+        return "当前账号无权执行该操作。"
+    if status_code == 404:
+        return "请求的资源不存在。"
+    if status_code == 413:
+        return "请求内容过大。"
+    if status_code == 422:
+        return "请求参数格式不正确。"
+    if status_code >= 500:
+        return "服务暂时不可用，请稍后重试。"
+    return "请求处理失败。"
+
+
+def _is_api_envelope(payload) -> bool:
+    return (
+        isinstance(payload, dict)
+        and "code" in payload
+        and "message" in payload
+        and "data" in payload
+    )
+
+
+def _should_wrap_json(request: Request, response) -> bool:
+    if request.url.path in {"/openapi.json"} or request.url.path.startswith(("/docs", "/redoc")):
+        return False
+    if response.status_code == 204:
+        return False
+    content_type = response.headers.get("content-type", "")
+    return "application/json" in content_type
+
+
+async def _wrap_json_response(request: Request, response):
+    if not _should_wrap_json(request, response):
+        return response
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+    try:
+        payload = json.loads(body.decode("utf-8")) if body else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=response.media_type,
+        )
+    if _is_api_envelope(payload):
+        content = payload
+    elif response.status_code < 400:
+        content = _api_success(payload, request_id=_request_id(request))
+    else:
+        content = _api_error(
+            status_code=response.status_code,
+            message=_public_error_message(response.status_code, payload.get("detail") if isinstance(payload, dict) else None),
+            request_id=_request_id(request),
+        )
+    headers = {
+        key: value
+        for key, value in response.headers.items()
+        if key.lower() not in {"content-length", "content-type"}
+    }
+    return JSONResponse(content=content, status_code=response.status_code, headers=headers)
+
+
 def create_app(
     *,
     object_storage: ObjectStorage | None = None,
@@ -342,8 +467,10 @@ def create_app(
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
+        request_id = _request_id(request)
         response = await call_next(request)
-        request_id = request.headers.get("X-Request-ID") or str(uuid4())
+        if settings.is_production:
+            response = await _wrap_json_response(request, response)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -351,6 +478,45 @@ def create_app(
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        request_id = _request_id(request)
+        return JSONResponse(
+            status_code=exc.status_code,
+            headers=exc.headers,
+            content=_api_error(
+                status_code=exc.status_code,
+                message=_public_error_message(exc.status_code, exc.detail),
+                request_id=request_id,
+            ),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        request_id = _request_id(request)
+        return JSONResponse(
+            status_code=422,
+            content=_api_error(
+                status_code=422,
+                error="VALIDATION_ERROR",
+                message="请求参数格式不正确。",
+                request_id=request_id,
+            ),
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        request_id = _request_id(request)
+        return JSONResponse(
+            status_code=500,
+            content=_api_error(
+                status_code=500,
+                error="INTERNAL_SERVER_ERROR",
+                message="服务暂时不可用，请稍后重试。",
+                request_id=request_id,
+            ),
+        )
 
     if allowed_origins:
         app.add_middleware(

@@ -69,6 +69,25 @@ function normalizeJson(text) {
   }
 }
 
+function unwrapApiResponse(payload, response) {
+  if (
+    payload
+    && typeof payload === "object"
+    && Object.prototype.hasOwnProperty.call(payload, "code")
+    && Object.prototype.hasOwnProperty.call(payload, "data")
+  ) {
+    if (payload.code === 0) {
+      return payload.data;
+    }
+    const message = payload.message || payload.error || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  if (!response.ok) {
+    throw new Error(payload?.detail || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
 async function requestJson(route, options = {}, attempt = 0) {
   const method = (options.method || "GET").toUpperCase();
   const hasJsonBody = JSON_METHODS.has(method) && options.body !== undefined;
@@ -90,10 +109,7 @@ async function requestJson(route, options = {}, attempt = 0) {
     });
     const text = await response.text();
     const data = normalizeJson(text);
-    if (!response.ok) {
-      throw new Error(data.detail || `HTTP ${response.status}`);
-    }
-    return data;
+    return unwrapApiResponse(data, response);
   } catch (error) {
     if (attempt === 0 && method === "GET") {
       return requestJson(route, options, attempt + 1);
