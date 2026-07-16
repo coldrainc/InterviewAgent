@@ -55,6 +55,8 @@ class AppSettings:
     store_upload_source_path: bool = False
     rag_top_k: int = 4
     rag_max_chars: int = 6000
+    deepseek_thinking_enabled: bool = True
+    deepseek_reasoning_effort: str = "high"
 
     @property
     def is_production(self) -> bool:
@@ -121,6 +123,8 @@ def load_settings() -> AppSettings:
         store_upload_source_path=_env_bool("INTERVIEW_STORE_UPLOAD_SOURCE_PATH", False),
         rag_top_k=int(os.getenv("RAG_TOP_K", "4")),
         rag_max_chars=int(os.getenv("RAG_MAX_CHARS", "6000")),
+        deepseek_thinking_enabled=_env_bool("DEEPSEEK_THINKING_ENABLED", True),
+        deepseek_reasoning_effort=os.getenv("DEEPSEEK_REASONING_EFFORT", "high"),
     )
 
 

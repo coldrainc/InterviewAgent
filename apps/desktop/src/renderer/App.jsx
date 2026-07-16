@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { getInterviewAgentClient } from "./apiClient";
-import { fallbackIndustries, fallbackModels } from "./constants/interview";
+import { fallbackIndustries, fallbackModels, llmModes } from "./constants/interview";
 import Sidebar from "./components/sidebar/Sidebar";
 import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
 import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
@@ -35,7 +35,8 @@ function App() {
   const [historyState, setHistoryState] = useState({ status: "idle" });
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
-  const [selectedModelId, setSelectedModelId] = useState("gpt-5.5");
+  const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
+  const [selectedLlmMode, setSelectedLlmMode] = useState("standard");
   const [account, setAccount] = useState(null);
   const [authState, setAuthState] = useState({ mode: "login", email: "", password: "", displayName: "", status: "idle" });
   const [authDialog, setAuthDialog] = useState({ open: false, reason: "" });
@@ -335,7 +336,9 @@ function App() {
         interview_goal: buildInterviewGoal(profile, seedMessage),
         focus_areas: buildFocusAreas(profile, seedMessage, industryOptions),
         resume_id: selectedResumeId || undefined,
-        model_id: selectedModelId
+        model_id: selectedModelId,
+        thinking_enabled: currentLlmMode()?.thinkingEnabled,
+        reasoning_effort: currentLlmMode()?.reasoningEffort
       });
       setSessionId(response.session_id);
       appendMessage("agent", response.message, response);
@@ -389,13 +392,42 @@ function App() {
 
     setInput("");
     appendMessage("user", text);
+    const agentMessageId = appendMessage("agent", "正在分析回答，DeepSeek 思考中...");
     setBusy(true);
     try {
-      const response = await api.sendMessage({
-        sessionId: activeSessionId,
-        message: text
+      const response = api.streamMessage
+        ? await api.streamMessage(
+            {
+              sessionId: activeSessionId,
+              message: text
+            },
+            (event) => {
+              if (event.event === "tool.notice" && event.data?.message) {
+                updateMessage(agentMessageId, { text: event.data.message });
+              }
+              if (event.event === "guardrail.notice" && event.data?.message) {
+                appendMessage("system", `Harness 护栏：${event.data.message}`);
+              }
+              if (event.event === "message.done") {
+                updateMessage(agentMessageId, {
+                  text: event.data?.message || "",
+                  fallback: Boolean(event.data?.fallback_used),
+                  usage: event.data?.usage || null,
+                  modelId: event.data?.model_id || ""
+                });
+              }
+            }
+          )
+        : await api.sendMessage({
+            sessionId: activeSessionId,
+            message: text
+          });
+      updateMessage(agentMessageId, {
+        text: response.message || response.data?.message || "",
+        fallback: Boolean(response.fallback_used),
+        usage: response.usage || null,
+        modelId: response.model_id || ""
       });
-      appendMessage("agent", response.message, response);
       setCompleted(Boolean(response.completed));
       await loadAccount();
       loadSessionHistory();
@@ -407,6 +439,7 @@ function App() {
   }
 
   function appendMessage(role, text, response = {}) {
+    const id = crypto.randomUUID();
     const guardrails =
       role === "agent" && response.guardrails?.length
         ? [{ role: "system", text: `Harness 护栏：${response.guardrails.join("；")}` }]
@@ -414,7 +447,7 @@ function App() {
     setMessages((current) => [
       ...current,
       {
-        id: crypto.randomUUID(),
+        id,
         role,
         text,
         fallback: Boolean(response.fallback_used),
@@ -429,6 +462,13 @@ function App() {
         ...item
       }))
     ]);
+    return id;
+  }
+
+  function updateMessage(id, patch) {
+    setMessages((current) =>
+      current.map((message) => (message.id === id ? { ...message, ...patch } : message))
+    );
   }
 
   function handleSubmit(event) {
@@ -449,6 +489,16 @@ function App() {
     return false;
   }
 
+  function currentLlmMode() {
+    return llmModes.find((mode) => mode.value === selectedLlmMode) || llmModes[1];
+  }
+
+  function selectLlmMode(value) {
+    const mode = llmModes.find((item) => item.value === value) || llmModes[1];
+    setSelectedLlmMode(mode.value);
+    setSelectedModelId(mode.modelId);
+  }
+
   return (
     <main className="app-shell">
       <Sidebar
@@ -459,6 +509,7 @@ function App() {
         account={account}
         modelOptions={modelOptions}
         selectedModelId={selectedModelId}
+        selectedLlmMode={selectedLlmMode}
         industryOptions={industryOptions}
         resumeImport={resumeImport}
         resumeLibrary={resumeLibrary}
@@ -480,6 +531,7 @@ function App() {
         onWebSearchChange={setWebSearch}
         onProfileChange={setProfile}
         onSelectModel={setSelectedModelId}
+        onSelectLlmMode={selectLlmMode}
       />
 
       <section className="workspace">

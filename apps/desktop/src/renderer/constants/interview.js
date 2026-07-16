@@ -10,6 +10,33 @@ export const interviewModes = [
   { value: "candidate", label: "Agent 回答我" }
 ];
 
+export const llmModes = [
+  {
+    value: "fast",
+    label: "快速",
+    description: "DeepSeek V4 Flash，不开启思考，适合高频追问。",
+    modelId: "deepseek-v4-flash",
+    thinkingEnabled: false,
+    reasoningEffort: "low"
+  },
+  {
+    value: "standard",
+    label: "标准思考",
+    description: "DeepSeek V4 Pro，开启 high 思考，适合默认面试。",
+    modelId: "deepseek-v4-pro",
+    thinkingEnabled: true,
+    reasoningEffort: "high"
+  },
+  {
+    value: "deep",
+    label: "深度思考",
+    description: "DeepSeek V4 Pro，开启 max 思考，适合复杂系统设计和最终评价。",
+    modelId: "deepseek-v4-pro",
+    thinkingEnabled: true,
+    reasoningEffort: "max"
+  }
+];
+
 export const fallbackIndustries = [
   {
     value: "internet",

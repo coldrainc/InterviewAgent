@@ -118,6 +118,10 @@ async function requestJson(route, options = {}, attempt = 0) {
   return enqueueRequest(() => executeJsonRequest(route, options, attempt));
 }
 
+async function requestEventStream(route, options = {}, onEvent) {
+  return enqueueRequest(() => executeEventStreamRequest(route, options, onEvent));
+}
+
 async function executeJsonRequest(route, options = {}, attempt = 0) {
   const method = (options.method || "GET").toUpperCase();
   const hasJsonBody = JSON_METHODS.has(method) && options.body !== undefined;
@@ -154,6 +158,94 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
     throw error;
   } finally {
     window.clearTimeout(timeout);
+  }
+}
+
+async function executeEventStreamRequest(route, options = {}, onEvent) {
+  const method = (options.method || "POST").toUpperCase();
+  const hasJsonBody = JSON_METHODS.has(method) && options.body !== undefined;
+  const url = `${apiBaseUrl()}${normalizeRoute(route)}`;
+  const timeoutMs = options.timeoutMs || LONG_REQUEST_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method,
+      body: options.body,
+      headers: buildHeaders({ hasJsonBody, auth: options.auth !== false }),
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "follow",
+      referrerPolicy: "strict-origin-when-cross-origin",
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      const data = normalizeJson(text);
+      return unwrapApiResponse(data, response);
+    }
+    if (!response.body) {
+      throw new Error("浏览器不支持流式响应。");
+    }
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let buffer = "";
+    let finalPayload = null;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() || "";
+      for (const chunk of chunks) {
+        const event = parseSseChunk(chunk);
+        if (!event) continue;
+        onEvent?.(event);
+        if (event.event === "message.done") {
+          finalPayload = event.data;
+        }
+      }
+    }
+    if (buffer.trim()) {
+      const event = parseSseChunk(buffer);
+      if (event) {
+        onEvent?.(event);
+        if (event.event === "message.done") {
+          finalPayload = event.data;
+        }
+      }
+    }
+    return finalPayload || {};
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("请求处理时间较长，模型可能仍在生成。请稍后重试，或检查后端服务日志。");
+    }
+    if (error instanceof TypeError) {
+      throw new Error(`无法连接 API 服务：${apiBaseUrl()}。请检查网络、HTTPS、CSP 或 Nginx 限流配置。`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function parseSseChunk(chunk) {
+  let event = "message";
+  const dataLines = [];
+  for (const line of chunk.split("\n")) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+  if (!dataLines.length) return null;
+  const rawData = dataLines.join("\n");
+  try {
+    return { event, data: JSON.parse(rawData) };
+  } catch (_error) {
+    return { event, data: { message: rawData } };
   }
 }
 
@@ -256,7 +348,17 @@ const browserClient = {
       method: "POST",
       timeoutMs: LONG_REQUEST_TIMEOUT_MS,
       body: JSON.stringify({ message: payload.message })
-    })
+    }),
+  streamMessage: (payload, onEvent) =>
+    requestEventStream(
+      `/sessions/${payload.sessionId}/stream`,
+      {
+        method: "POST",
+        timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+        body: JSON.stringify({ message: payload.message })
+      },
+      onEvent
+    )
 };
 
 export function getInterviewAgentClient() {

@@ -75,6 +75,8 @@ class LangChainInterviewHarness(BaseInterviewHarness):
         api_key: str | None = None,
         wire_api: str | None = None,
         temperature: float = 0.4,
+        thinking_enabled: bool | None = None,
+        reasoning_effort: str | None = None,
         guardrails: HarnessGuardrails | None = None,
     ) -> None:
         super().__init__(config, guardrails=guardrails)
@@ -85,6 +87,13 @@ class LangChainInterviewHarness(BaseInterviewHarness):
             llm_kwargs["api_key"] = api_key
         if wire_api == "responses":
             llm_kwargs["use_responses_api"] = True
+        if provider.lower() == "deepseek" and thinking_enabled is not None:
+            extra_body: dict[str, Any] = {
+                "thinking": {"type": "enabled" if thinking_enabled else "disabled"}
+            }
+            if thinking_enabled and reasoning_effort:
+                extra_body["reasoning_effort"] = reasoning_effort
+            llm_kwargs["extra_body"] = extra_body
         self.llm = llm or _create_chat_model(provider=provider, **llm_kwargs)
         self.knowledge_base = knowledge_base
         self.web_search = web_search

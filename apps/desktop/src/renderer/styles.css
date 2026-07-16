@@ -586,6 +586,11 @@ button {
   line-height: 1.45;
 }
 
+.model-selector-stack {
+  display: grid;
+  gap: 10px;
+}
+
 .industry-brief {
   border: 1px solid #dbe3ef;
   border-radius: 8px;

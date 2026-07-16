@@ -86,6 +86,8 @@ class SessionRequest(BaseModel):
     focus_areas: list[str] | None = None
     resume_id: str | None = None
     model_id: str | None = None
+    thinking_enabled: bool | None = None
+    reasoning_effort: str | None = Field(default=None, pattern="^(low|medium|high|max)$")
 
 
 class MessageRequest(BaseModel):
@@ -965,6 +967,8 @@ def create_app(
             offline=request.offline,
             web_search_enabled=request.web_search,
             model_id=model_id,
+            thinking_enabled=request.thinking_enabled,
+            reasoning_effort=request.reasoning_effort,
         )
         loop = AgentLoop(config, harness)
         result = loop.start()
@@ -1404,6 +1408,8 @@ def _create_harness(
     offline: bool,
     web_search_enabled: bool,
     model_id: str,
+    thinking_enabled: bool | None = None,
+    reasoning_effort: str | None = None,
 ):
     from interview_agent.core.harness import LangChainInterviewHarness, ScriptedInterviewHarness
 
@@ -1413,6 +1419,13 @@ def _create_harness(
     vector_store = load_vector_store_for_run(default_vector_path())
     kb = load_knowledge_base(None, embedding_client=embedding_client, vector_store=vector_store)
     web_search = WebSearchClient() if web_search_enabled else None
+    settings = load_settings()
+    resolved_thinking_enabled = (
+        thinking_enabled
+        if thinking_enabled is not None
+        else settings.deepseek_thinking_enabled
+    )
+    resolved_reasoning_effort = reasoning_effort or settings.deepseek_reasoning_effort or "high"
     supported = is_openai_compatible_provider(runtime.provider) or is_supported_native_provider(runtime.provider)
     if offline or not runtime.api_key or not supported:
         return ScriptedInterviewHarness(config, knowledge_base=kb)
@@ -1426,6 +1439,8 @@ def _create_harness(
             base_url=runtime.base_url,
             api_key=runtime.api_key,
             wire_api=runtime.wire_api,
+            thinking_enabled=resolved_thinking_enabled,
+            reasoning_effort=resolved_reasoning_effort,
         )
     except RuntimeError:
         return ScriptedInterviewHarness(config, knowledge_base=kb)

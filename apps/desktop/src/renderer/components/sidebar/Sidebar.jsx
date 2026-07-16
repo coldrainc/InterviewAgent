@@ -1,5 +1,5 @@
 import { Activity, BrainCircuit, Globe2, Loader2, MessageSquarePlus, Moon, RefreshCw, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
-import { interviewModes } from "../../constants/interview";
+import { interviewModes, llmModes } from "../../constants/interview";
 import { currentIndustry, formatDateTime } from "../../utils/interview";
 import { AccountEntry } from "../account/AccountCenter";
 import { ModelSelector } from "../common/ModelSelector";
@@ -12,6 +12,7 @@ export default function Sidebar({
   account,
   modelOptions,
   selectedModelId,
+  selectedLlmMode,
   industryOptions,
   resumeImport,
   resumeLibrary,
@@ -32,7 +33,8 @@ export default function Sidebar({
   onOfflineChange,
   onWebSearchChange,
   onProfileChange,
-  onSelectModel
+  onSelectModel,
+  onSelectLlmMode
 }) {
   const updateProfile = (key, value) => {
     onProfileChange((current) => ({ ...current, [key]: value }));
@@ -85,6 +87,9 @@ export default function Sidebar({
           models={modelOptions}
           selectedModelId={selectedModelId}
           onSelectModel={onSelectModel}
+          llmModes={llmModes}
+          selectedLlmMode={selectedLlmMode}
+          onSelectLlmMode={onSelectLlmMode}
         />
       </section>
 
