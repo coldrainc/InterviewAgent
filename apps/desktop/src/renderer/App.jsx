@@ -17,6 +17,27 @@ import {
 } from "./utils/interview";
 
 const api = getInterviewAgentClient();
+const LAST_SESSION_STORAGE_KEY = "interview-agent-last-session-id";
+
+function getLastSessionId() {
+  try {
+    return window.localStorage.getItem(LAST_SESSION_STORAGE_KEY) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function setLastSessionId(value) {
+  try {
+    if (value) {
+      window.localStorage.setItem(LAST_SESSION_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+    }
+  } catch (_error) {
+    // Ignore storage failures so private browsing modes still work.
+  }
+}
 
 function App() {
   const [screen, setScreen] = useState("chat");
@@ -100,6 +121,7 @@ function App() {
       await loadAccount();
       await loadResumeLibrary();
       await loadSessionHistory();
+      await restoreLastSession();
     }
   }
 
@@ -192,6 +214,7 @@ function App() {
 
   async function logout() {
     await api.logout();
+    setLastSessionId("");
     setAccount(null);
     setSessionId("");
     setMessages([]);
@@ -285,16 +308,32 @@ function App() {
     if (!requireAccount("恢复历史会话前需要先登录账号。")) return;
     setBusy(true);
     try {
-      const detail = await api.getSession(targetSessionId);
-      setSessionId(detail.id);
-      setCompleted(detail.status === "completed");
-      setMessages(turnsToMessages(detail.turns || []));
+      const detail = await restoreSessionById(targetSessionId);
       setHistoryState({ status: "success", message: `已恢复会话 ${detail.id.slice(0, 8)}` });
     } catch (error) {
       setHistoryState({ status: "error", error: `恢复会话失败：${normalizeDesktopError(error.message)}` });
     } finally {
       setBusy(false);
     }
+  }
+
+  async function restoreLastSession() {
+    const lastSessionId = getLastSessionId();
+    if (!lastSessionId) return;
+    try {
+      await restoreSessionById(lastSessionId);
+    } catch (_error) {
+      setLastSessionId("");
+    }
+  }
+
+  async function restoreSessionById(targetSessionId) {
+    const detail = await api.getSession(targetSessionId);
+    setSessionId(detail.id);
+    setLastSessionId(detail.id);
+    setCompleted(detail.status === "completed");
+    setMessages(turnsToMessages(detail.turns || []));
+    return detail;
   }
 
   async function deleteSession(targetSessionId) {
@@ -305,6 +344,7 @@ function App() {
       if (result.deleted) {
         setSessionHistory((current) => current.filter((item) => item.id !== targetSessionId));
         if (sessionId === targetSessionId) {
+          setLastSessionId("");
           setSessionId("");
           setMessages([]);
           setCompleted(false);
@@ -342,6 +382,7 @@ function App() {
         reasoning_effort: currentLlmMode()?.reasoningEffort
       });
       setSessionId(response.session_id);
+      setLastSessionId(response.session_id);
       appendMessage("agent", response.message, response);
       await loadAccount();
       loadSessionHistory();
