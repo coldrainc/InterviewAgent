@@ -18,6 +18,7 @@ import {
 
 const api = getInterviewAgentClient();
 const LAST_SESSION_STORAGE_KEY = "interview-agent-last-session-id";
+const SESSION_MESSAGES_STORAGE_PREFIX = "interview-agent-session-messages:";
 
 function getLastSessionId() {
   try {
@@ -33,6 +34,41 @@ function setLastSessionId(value) {
       window.localStorage.setItem(LAST_SESSION_STORAGE_KEY, value);
     } else {
       window.localStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+    }
+  } catch (_error) {
+    // Ignore storage failures so private browsing modes still work.
+  }
+}
+
+function getCachedSessionMessages(sessionId) {
+  if (!sessionId) return [];
+  try {
+    const raw = window.localStorage.getItem(`${SESSION_MESSAGES_STORAGE_PREFIX}${sessionId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function setCachedSessionMessages(sessionId, value) {
+  if (!sessionId) return;
+  try {
+    if (Array.isArray(value) && value.length) {
+      window.localStorage.setItem(
+        `${SESSION_MESSAGES_STORAGE_PREFIX}${sessionId}`,
+        JSON.stringify(value.map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.text,
+          fallback: Boolean(message.fallback),
+          usage: message.usage || null,
+          modelId: message.modelId || "",
+          time: message.time || ""
+        })))
+      );
+    } else {
+      window.localStorage.removeItem(`${SESSION_MESSAGES_STORAGE_PREFIX}${sessionId}`);
     }
   } catch (_error) {
     // Ignore storage failures so private browsing modes still work.
@@ -87,6 +123,12 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, busy]);
+
+  useEffect(() => {
+    if (sessionId && messages.length) {
+      setCachedSessionMessages(sessionId, messages);
+    }
+  }, [sessionId, messages]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -320,6 +362,11 @@ function App() {
   async function restoreLastSession() {
     const lastSessionId = getLastSessionId();
     if (!lastSessionId) return;
+    const cachedMessages = getCachedSessionMessages(lastSessionId);
+    if (cachedMessages.length) {
+      setSessionId(lastSessionId);
+      setMessages(cachedMessages);
+    }
     try {
       await restoreSessionById(lastSessionId);
     } catch (_error) {
@@ -329,10 +376,12 @@ function App() {
 
   async function restoreSessionById(targetSessionId) {
     const detail = await api.getSession(targetSessionId);
+    const restoredMessages = turnsToMessages(detail.turns || []);
+    const cachedMessages = getCachedSessionMessages(detail.id);
     setSessionId(detail.id);
     setLastSessionId(detail.id);
     setCompleted(detail.status === "completed");
-    setMessages(turnsToMessages(detail.turns || []));
+    setMessages(cachedMessages.length > restoredMessages.length ? cachedMessages : restoredMessages);
     return detail;
   }
 
@@ -345,6 +394,7 @@ function App() {
         setSessionHistory((current) => current.filter((item) => item.id !== targetSessionId));
         if (sessionId === targetSessionId) {
           setLastSessionId("");
+          setCachedSessionMessages(targetSessionId, []);
           setSessionId("");
           setMessages([]);
           setCompleted(false);

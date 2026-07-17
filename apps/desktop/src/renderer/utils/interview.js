@@ -20,15 +20,6 @@ export function formatDateTime(value) {
 export function turnsToMessages(turns) {
   const restored = [];
   turns.forEach((turn) => {
-    if (turn.interviewer) {
-      restored.push({
-        id: crypto.randomUUID(),
-        role: "agent",
-        text: turn.interviewer,
-        fallback: Boolean(turn.fallback_used),
-        time: formatDateTime(turn.created_at)
-      });
-    }
     if (turn.candidate) {
       restored.push({
         id: crypto.randomUUID(),
@@ -36,6 +27,15 @@ export function turnsToMessages(turns) {
         text: turn.candidate,
         fallback: false,
         time: formatDateTime(turn.updated_at)
+      });
+    }
+    if (turn.interviewer) {
+      restored.push({
+        id: crypto.randomUUID(),
+        role: "agent",
+        text: turn.interviewer,
+        fallback: Boolean(turn.fallback_used),
+        time: formatDateTime(turn.created_at)
       });
     }
   });
