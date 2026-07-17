@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   logout: () => ipcRenderer.invoke("auth:logout"),
   getAccount: () => ipcRenderer.invoke("account:get"),
   recharge: (payload) => ipcRenderer.invoke("account:recharge", payload),
+  createPaymentOrder: (payload) => ipcRenderer.invoke("payments:create-order", payload),
+  getPaymentOrder: (orderId) => ipcRenderer.invoke("payments:get-order", orderId),
   listResumes: () => ipcRenderer.invoke("resumes:list"),
   getResume: (resumeId) => ipcRenderer.invoke("resumes:get", resumeId),
   deleteResume: (resumeId) => ipcRenderer.invoke("resumes:delete", resumeId),

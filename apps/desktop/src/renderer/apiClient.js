@@ -330,6 +330,12 @@ const browserClient = {
       method: "POST",
       body: JSON.stringify(payload || {})
     }),
+  createPaymentOrder: (payload) =>
+    requestJson("/payments/orders", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  getPaymentOrder: (orderId) => requestJson(`/payments/orders/${encodeURIComponent(orderId)}`),
   listResumes: () => requestJson("/resumes"),
   getResume: (resumeId) => requestJson(`/resumes/${resumeId}`),
   deleteResume: (resumeId) => requestJson(`/resumes/${resumeId}`, { method: "DELETE" }),

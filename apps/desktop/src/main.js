@@ -98,6 +98,17 @@ ipcMain.handle("account:recharge", async (_event, payload) => {
   });
 });
 
+ipcMain.handle("payments:create-order", async (_event, payload) => {
+  return requestJson("/payments/orders", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("payments:get-order", async (_event, orderId) => {
+  return requestJson(`/payments/orders/${encodeURIComponent(orderId)}`);
+});
+
 ipcMain.handle("resumes:list", async () => {
   return requestJson("/resumes");
 });

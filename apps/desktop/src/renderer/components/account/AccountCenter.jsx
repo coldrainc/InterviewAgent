@@ -1,5 +1,6 @@
-import { CheckCircle2, Coins, Database, Settings, ShieldCheck, UserRound, X } from "lucide-react";
+import { CheckCircle2, Coins, CreditCard, Database, QrCode, Settings, ShieldCheck, UserRound, X } from "lucide-react";
 import { ModelSelector } from "../common/ModelSelector";
+import { QRCodeImage } from "../common/QRCodeImage";
 import { formatCredits } from "../../utils/interview";
 
 export function AccountEntry({ account, active, onOpen }) {
@@ -31,8 +32,12 @@ export function AccountCenter({
   onDevLogin,
   onLogout,
   onSelectModel,
+  paymentState,
+  onPaymentStateChange,
+  onCreatePayment,
   onBack
 }) {
+  const rechargeOptions = ["10", "50", "100"];
   if (account) {
     return (
       <section className="account-center">
@@ -67,6 +72,41 @@ export function AccountCenter({
               </div>
             </div>
             <p className="resume-hint">生产环境充值会由支付平台创建订单，支付成功后通过服务端签名回调入账。</p>
+            <div className="payment-panel">
+              <div className="payment-options" role="group" aria-label="充值金额">
+                {rechargeOptions.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    className={paymentState?.amount === amount ? "active" : ""}
+                    onClick={() => onPaymentStateChange?.((current) => ({ ...current, amount }))}
+                  >
+                    {amount} 积分
+                  </button>
+                ))}
+              </div>
+              <div className="payment-actions">
+                <button
+                  type="button"
+                  className="secondary-action inline"
+                  disabled={paymentState?.status === "loading"}
+                  onClick={() => onCreatePayment?.("alipay", paymentState?.amount || "10")}
+                >
+                  <CreditCard size={15} />
+                  支付宝
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action inline"
+                  disabled={paymentState?.status === "loading"}
+                  onClick={() => onCreatePayment?.("wechat", paymentState?.amount || "10")}
+                >
+                  <QrCode size={15} />
+                  微信
+                </button>
+              </div>
+              <PaymentStatus state={paymentState} />
+            </div>
           </section>
 
           <section className="account-block">
@@ -140,6 +180,39 @@ export function AccountCenter({
       </div>
     </section>
   );
+}
+
+function PaymentStatus({ state }) {
+  if (!state || state.status === "idle") {
+    return <p className="resume-hint">选择金额后使用支付宝或微信完成充值。</p>;
+  }
+  if (state.status === "loading") {
+    return <p className="resume-hint active">正在创建支付订单...</p>;
+  }
+  if (state.status === "error") {
+    return <p className="resume-hint error">{state.error}</p>;
+  }
+  if (state.status === "paid") {
+    return <p className="resume-hint success">支付成功，积分已入账。</p>;
+  }
+  const order = state.order || {};
+  if (state.provider === "wechat" && order.code_url) {
+    return (
+      <div className="payment-result">
+        <QRCodeImage value={order.code_url} alt="微信支付二维码" />
+        <p className="resume-hint active">请使用微信扫码支付，支付成功后会自动刷新积分。</p>
+        <code>{order.external_order_id}</code>
+      </div>
+    );
+  }
+  if (state.provider === "alipay" && order.pay_url) {
+    return (
+      <p className="resume-hint active">
+        已打开支付宝收银台。支付完成后本页会自动刷新积分。
+      </p>
+    );
+  }
+  return <p className="resume-hint active">订单已创建，等待支付回调。</p>;
 }
 
 export function AuthDialog({ reason, authState, onAuthChange, onAuthSubmit, onDevLogin, onClose }) {

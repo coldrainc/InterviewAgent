@@ -21,6 +21,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "pypdf>=4.0",
     "requests>=2.31",
+    "cryptography>=42.0",
     "sqlalchemy[asyncio]>=2.0",
     "tomli>=2.0; python_version<'3.11'",
     "typer>=0.12",

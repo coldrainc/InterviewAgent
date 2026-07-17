@@ -38,6 +38,7 @@ function App() {
   const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
   const [selectedLlmMode, setSelectedLlmMode] = useState("standard");
   const [account, setAccount] = useState(null);
+  const [paymentState, setPaymentState] = useState({ status: "idle", amount: "10", provider: "alipay" });
   const [authState, setAuthState] = useState({ mode: "login", email: "", password: "", displayName: "", status: "idle" });
   const [authDialog, setAuthDialog] = useState({ open: false, reason: "" });
   const [profile, setProfile] = useState({
@@ -438,6 +439,42 @@ function App() {
     }
   }
 
+  async function createPayment(provider, amountCredits = paymentState.amount) {
+    if (!requireAccount("充值积分前需要先登录账号。")) return;
+    setPaymentState({ status: "loading", provider, amount: amountCredits });
+    try {
+      const order = await api.createPaymentOrder({
+        amount_credits: amountCredits,
+        payment_provider: provider,
+        metadata: { source: "web_account_center" }
+      });
+      setPaymentState({ status: "pending", provider, amount: amountCredits, order });
+      if (provider === "alipay" && order.pay_url) {
+        window.open(order.pay_url, "_blank", "noopener,noreferrer");
+      }
+      pollPaymentOrder(order.external_order_id);
+    } catch (error) {
+      setPaymentState({ status: "error", provider, amount: amountCredits, error: normalizeDesktopError(error.message) });
+    }
+  }
+
+  async function pollPaymentOrder(orderId, attempt = 0) {
+    if (!orderId || attempt > 60) return;
+    window.setTimeout(async () => {
+      try {
+        const order = await api.getPaymentOrder(orderId);
+        setPaymentState((current) => ({ ...current, order, status: order.status === "paid" ? "paid" : current.status }));
+        if (order.status === "paid") {
+          await loadAccount();
+          return;
+        }
+        pollPaymentOrder(orderId, attempt + 1);
+      } catch (_error) {
+        pollPaymentOrder(orderId, attempt + 1);
+      }
+    }, 3000);
+  }
+
   function appendMessage(role, text, response = {}) {
     const id = crypto.randomUUID();
     const guardrails =
@@ -560,6 +597,9 @@ function App() {
             onDevLogin={useDevAccount}
             onLogout={logout}
             onSelectModel={setSelectedModelId}
+            paymentState={paymentState}
+            onPaymentStateChange={setPaymentState}
+            onCreatePayment={createPayment}
             onBack={() => setScreen("chat")}
           />
         ) : (

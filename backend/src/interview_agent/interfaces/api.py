@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal
+from urllib.parse import parse_qs
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -44,6 +45,14 @@ from interview_agent.infrastructure.model_runtime import (
     resolve_model_runtime,
 )
 from interview_agent.infrastructure.object_storage import ObjectStorage, create_object_storage
+from interview_agent.infrastructure.payments import (
+    PaymentProviderError,
+    create_alipay_page_pay,
+    create_wechat_native_pay,
+    decrypt_wechat_resource,
+    verify_alipay_notify,
+    verify_wechat_notify,
+)
 from interview_agent.infrastructure.resume_parser import ResumeParseError, parse_resume_base64
 from interview_agent.domain.resume import stored_resume_to_payload
 from interview_agent.infrastructure.security import (
@@ -198,6 +207,9 @@ class PaymentOrderResponse(BaseModel):
     external_order_id: str
     status: str
     created: bool
+    pay_url: str | None = None
+    code_url: str | None = None
+    metadata: dict = Field(default_factory=dict)
 
 
 class PaymentWebhookResponse(BaseModel):
@@ -390,6 +402,8 @@ def _is_api_envelope(payload) -> bool:
 
 def _should_wrap_json(request: Request, response) -> bool:
     if request.url.path in {"/openapi.json"} or request.url.path.startswith(("/docs", "/redoc")):
+        return False
+    if request.url.path in {"/payments/alipay/notify", "/payments/wechat/notify"}:
         return False
     if response.status_code == 204:
         return False
@@ -745,7 +759,8 @@ def create_app(
         try:
             validate_recharge_amount(request.amount_credits, settings.max_recharge_credits)
             async with session_scope() as db:
-                order = await _billing_service(db).create_payment_order(
+                billing = _billing_service(db)
+                order = await billing.create_payment_order(
                     tenant_id=context.tenant_id,
                     user_id=context.user_id,
                     amount_credits=request.amount_credits,
@@ -757,18 +772,63 @@ def create_app(
                         **request.metadata,
                     },
                 )
+                if provider == "alipay":
+                    initiated = await asyncio.to_thread(
+                        create_alipay_page_pay,
+                        settings,
+                        external_order_id=order.external_order_id,
+                        amount_credits=request.amount_credits,
+                        subject=f"Interview Agent 积分充值 {request.amount_credits}",
+                    )
+                    order = await billing.update_payment_order_metadata(
+                        tenant_id=context.tenant_id,
+                        user_id=context.user_id,
+                        external_order_id=order.external_order_id,
+                        status=initiated.status,
+                        metadata={
+                            "pay_url": initiated.pay_url,
+                            "provider_payload": initiated.raw or {},
+                        },
+                    )
+                elif provider == "wechat":
+                    initiated = await asyncio.to_thread(
+                        create_wechat_native_pay,
+                        settings,
+                        external_order_id=order.external_order_id,
+                        amount_credits=request.amount_credits,
+                        description=f"Interview Agent 积分充值 {request.amount_credits}",
+                    )
+                    order = await billing.update_payment_order_metadata(
+                        tenant_id=context.tenant_id,
+                        user_id=context.user_id,
+                        external_order_id=order.external_order_id,
+                        status=initiated.status,
+                        metadata={
+                            "code_url": initiated.code_url,
+                            "provider_payload": initiated.raw or {},
+                        },
+                    )
         except BillingError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return PaymentOrderResponse(
-            tenant_id=order.tenant_id,
-            user_id=order.user_id,
-            amount_credits=str(micros_to_credits(order.amount_micros)),
-            amount_micros=order.amount_micros,
-            payment_provider=order.payment_provider,
-            external_order_id=order.external_order_id,
-            status=order.status,
-            created=order.created,
-        )
+        except PaymentProviderError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return _payment_order_response(order)
+
+    @app.get("/payments/orders/{external_order_id}", response_model=PaymentOrderResponse)
+    async def get_payment_order(
+        external_order_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> PaymentOrderResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            order = await _billing_service(db).get_payment_order(
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                external_order_id=external_order_id,
+            )
+        if not order:
+            raise HTTPException(status_code=404, detail="payment order not found")
+        return _payment_order_response(order)
 
     @app.post("/payments/webhook", response_model=PaymentWebhookResponse)
     async def payment_webhook(request: Request) -> PaymentWebhookResponse:
@@ -816,6 +876,86 @@ def create_app(
             external_order_id=payload.external_order_id,
             account=_account_response(recharge_result.account),
         )
+
+    @app.post("/payments/alipay/notify")
+    async def alipay_notify(request: Request) -> Response:
+        body = await request.body()
+        params = {
+            key: values[-1]
+            for key, values in parse_qs(body.decode("utf-8"), keep_blank_values=True).items()
+            if values
+        }
+        if not settings.alipay_public_key:
+            raise HTTPException(status_code=503, detail="ALIPAY_PUBLIC_KEY 未配置。")
+        if not verify_alipay_notify(params, settings.alipay_public_key):
+            raise HTTPException(status_code=400, detail="支付宝回调验签失败。")
+        trade_status = params.get("trade_status", "")
+        if trade_status not in {"TRADE_SUCCESS", "TRADE_FINISHED"}:
+            return Response("success", media_type="text/plain")
+        external_order_id = params.get("out_trade_no", "")
+        amount = Decimal(params.get("total_amount", "0"))
+        try:
+            async with session_scope() as db:
+                order = await _find_payment_order_for_webhook(db, external_order_id)
+                if not order:
+                    raise HTTPException(status_code=404, detail="支付订单不存在。")
+                await _billing_service(db).apply_paid_order(
+                    tenant_id=order.tenant_id,
+                    user_id=order.user_id,
+                    amount_credits=amount,
+                    payment_provider="alipay",
+                    external_order_id=external_order_id,
+                    metadata={
+                        "trade_no": params.get("trade_no", ""),
+                        "buyer_logon_id": params.get("buyer_logon_id", ""),
+                        "source": "alipay_notify",
+                    },
+                )
+        except BillingError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return Response("success", media_type="text/plain")
+
+    @app.post("/payments/wechat/notify")
+    async def wechat_notify(request: Request) -> JSONResponse:
+        if not settings.wechat_pay_api_v3_key:
+            raise HTTPException(status_code=503, detail="WECHAT_PAY_API_V3_KEY 未配置。")
+        if not settings.wechat_pay_platform_cert_pem:
+            raise HTTPException(status_code=503, detail="WECHAT_PAY_PLATFORM_CERT_PEM 未配置。")
+        body = await request.body()
+        if not verify_wechat_notify(request.headers, body, settings.wechat_pay_platform_cert_pem):
+            raise HTTPException(status_code=400, detail="微信支付回调验签失败。")
+        payload = json.loads(body.decode("utf-8"))
+        resource = payload.get("resource")
+        if not isinstance(resource, dict):
+            raise HTTPException(status_code=400, detail="微信支付回调 resource 无效。")
+        try:
+            transaction = decrypt_wechat_resource(resource, settings.wechat_pay_api_v3_key)
+        except PaymentProviderError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if transaction.get("trade_state") != "SUCCESS":
+            return JSONResponse({"code": "SUCCESS", "message": "成功"})
+        external_order_id = transaction.get("out_trade_no", "")
+        amount = Decimal(str(transaction.get("amount", {}).get("total", 0))) / Decimal("100")
+        try:
+            async with session_scope() as db:
+                order = await _find_payment_order_for_webhook(db, external_order_id)
+                if not order:
+                    raise HTTPException(status_code=404, detail="支付订单不存在。")
+                await _billing_service(db).apply_paid_order(
+                    tenant_id=order.tenant_id,
+                    user_id=order.user_id,
+                    amount_credits=amount,
+                    payment_provider="wechat",
+                    external_order_id=external_order_id,
+                    metadata={
+                        "transaction_id": transaction.get("transaction_id", ""),
+                        "trade_state": transaction.get("trade_state", ""),
+                        "source": "wechat_notify",
+                    },
+                )
+        except BillingError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse({"code": "SUCCESS", "message": "成功"})
 
     @app.get("/metadata/models", response_model=list[ModelOptionResponse])
     async def models() -> list[ModelOptionResponse]:
@@ -1621,6 +1761,35 @@ def _account_response(snapshot) -> AccountResponse:
         trial_uses_remaining=snapshot.trial_uses_remaining,
         credit_balance=str(snapshot.credit_balance),
         credit_balance_micros=snapshot.credit_balance_micros,
+    )
+
+
+def _payment_order_response(order) -> PaymentOrderResponse:
+    metadata = order.metadata or {}
+    return PaymentOrderResponse(
+        tenant_id=order.tenant_id,
+        user_id=order.user_id,
+        amount_credits=str(micros_to_credits(order.amount_micros)),
+        amount_micros=order.amount_micros,
+        payment_provider=order.payment_provider,
+        external_order_id=order.external_order_id,
+        status=order.status,
+        created=order.created,
+        pay_url=metadata.get("pay_url"),
+        code_url=metadata.get("code_url"),
+        metadata={
+            key: value
+            for key, value in metadata.items()
+            if key not in {"pay_url", "code_url"}
+        },
+    )
+
+
+async def _find_payment_order_for_webhook(db, external_order_id: str):
+    if not external_order_id:
+        return None
+    return await _billing_service(db).find_payment_order_by_external_id(
+        external_order_id=external_order_id
     )
 
 

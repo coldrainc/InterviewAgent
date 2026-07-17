@@ -76,6 +76,7 @@ class PaymentOrderResult:
     external_order_id: str
     status: str
     created: bool
+    metadata: dict | None = None
 
 
 class BillingService:
@@ -257,6 +258,7 @@ class BillingService:
                 external_order_id=existing_order.external_order_id,
                 status=existing_order.status,
                 created=False,
+                metadata=existing_order.metadata_json or {},
             )
         account = await self.get_or_create_account(tenant_id=tenant_id, user_id=user_id, for_update=True)
         self.session.add(
@@ -280,6 +282,96 @@ class BillingService:
             external_order_id=order_id,
             status="pending",
             created=True,
+            metadata=metadata or {},
+        )
+
+    async def get_payment_order(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        external_order_id: str,
+    ) -> PaymentOrderResult | None:
+        order_id = _clean_order_id(external_order_id)
+        result = await self.session.execute(
+            select(RechargeOrderModel).where(
+                RechargeOrderModel.tenant_id == tenant_id,
+                RechargeOrderModel.user_id == user_id,
+                RechargeOrderModel.external_order_id == order_id,
+            )
+        )
+        order = result.scalar_one_or_none()
+        if order is None:
+            return None
+        return PaymentOrderResult(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            amount_micros=order.amount_micros,
+            payment_provider=order.payment_provider,
+            external_order_id=order.external_order_id,
+            status=order.status,
+            created=False,
+            metadata=order.metadata_json or {},
+        )
+
+    async def find_payment_order_by_external_id(
+        self,
+        *,
+        external_order_id: str,
+    ) -> PaymentOrderResult | None:
+        order_id = _clean_order_id(external_order_id)
+        result = await self.session.execute(
+            select(RechargeOrderModel).where(RechargeOrderModel.external_order_id == order_id)
+        )
+        order = result.scalar_one_or_none()
+        if order is None:
+            return None
+        return PaymentOrderResult(
+            tenant_id=order.tenant_id,
+            user_id=order.user_id,
+            amount_micros=order.amount_micros,
+            payment_provider=order.payment_provider,
+            external_order_id=order.external_order_id,
+            status=order.status,
+            created=False,
+            metadata=order.metadata_json or {},
+        )
+
+    async def update_payment_order_metadata(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        external_order_id: str,
+        status: str | None = None,
+        metadata: dict | None = None,
+    ) -> PaymentOrderResult:
+        order_id = _clean_order_id(external_order_id)
+        result = await self.session.execute(
+            select(RechargeOrderModel)
+            .where(
+                RechargeOrderModel.tenant_id == tenant_id,
+                RechargeOrderModel.user_id == user_id,
+                RechargeOrderModel.external_order_id == order_id,
+            )
+            .with_for_update()
+        )
+        order = result.scalar_one_or_none()
+        if order is None:
+            raise BillingError("支付订单不存在。")
+        if status:
+            order.status = status
+        order.metadata_json = {**(order.metadata_json or {}), **(metadata or {})}
+        await self.session.flush()
+        return PaymentOrderResult(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            amount_micros=order.amount_micros,
+            payment_provider=order.payment_provider,
+            external_order_id=order.external_order_id,
+            status=order.status,
+            created=False,
+            metadata=order.metadata_json or {},
         )
 
     async def apply_paid_order(

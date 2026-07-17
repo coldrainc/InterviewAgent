@@ -175,13 +175,23 @@ model_pricing
 生产用户充值必须走支付平台回调：
 
 - 前端调用 `POST /payments/orders` 创建 `pending` 订单，拿到 `external_order_id`。
-- 客户端用 `external_order_id` 接入微信支付、支付宝、Stripe、Apple IAP 等支付 SDK。
-- 支付平台完成支付后回调后端，后端把订单置为 `paid` 并入账。
-- 后端使用 `INTERVIEW_PAYMENT_WEBHOOK_SECRET` 校验 `X-Payment-Signature`，签名算法为 `HMAC-SHA256(raw_body)`，可传纯 hex 或 `sha256=<hex>`。
+- `payment_provider=alipay` 时，后端返回支付宝网页支付 `pay_url`，前端打开收银台。
+- `payment_provider=wechat` 时，后端返回微信 Native 支付 `code_url`，前端在本地生成二维码。
+- 支付平台完成支付后回调后端，后端验签/解密后把订单置为 `paid` 并入账。
+- 通用支付回调 `/payments/webhook` 使用 `INTERVIEW_PAYMENT_WEBHOOK_SECRET` 校验 `X-Payment-Signature`，签名算法为 `HMAC-SHA256(raw_body)`，可传纯 hex 或 `sha256=<hex>`。
+- 支付宝回调使用 `ALIPAY_PUBLIC_KEY` 验签；微信支付回调使用 `WECHAT_PAY_PLATFORM_CERT_PEM` 验签，并使用 `WECHAT_PAY_API_V3_KEY` 解密资源。
 - 后端校验租户、用户、金额上限、订单状态、支付渠道和订单号格式。
 - `recharge_orders(tenant_id, external_order_id)` 保证重复回调不会重复加余额。
 - 只有支付成功的回调或管理员 token 能写 `recharge_orders` 和 `credit_ledger`。
 - 客户端不能直接调用“加余额”的接口。
+
+正式接入支付宝和微信支付前，需要分别在开放平台创建应用、完成商户进件，并配置 HTTPS 回调地址：
+
+```text
+支付宝异步通知：https://api.aivago.cn/payments/alipay/notify
+支付宝同步返回：https://www.aivago.cn/
+微信支付通知：https://api.aivago.cn/payments/wechat/notify
+```
 
 生产环境必须设置：
 
@@ -194,7 +204,35 @@ INTERVIEW_ALLOW_MOCK_RECHARGE=false
 INTERVIEW_PAYMENT_WEBHOOK_SECRET=<至少 24 字符强随机密钥>
 INTERVIEW_AUTH_TOKEN_SECRET=<至少 32 字符强随机密钥>
 INTERVIEW_ALLOWED_ORIGINS=https://your-domain.example
+PUBLIC_WEB_BASE_URL=https://www.aivago.cn
+PUBLIC_API_BASE_URL=https://api.aivago.cn
+
+ALIPAY_APP_ID=<支付宝应用 app_id>
+ALIPAY_PRIVATE_KEY=<应用私钥，支持 PEM 或去掉头尾后的 base64 文本>
+ALIPAY_PUBLIC_KEY=<支付宝公钥，支持 PEM 或去掉头尾后的 base64 文本>
+ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
+ALIPAY_NOTIFY_URL=https://api.aivago.cn/payments/alipay/notify
+ALIPAY_RETURN_URL=https://www.aivago.cn/
+
+WECHAT_PAY_APP_ID=<微信支付 appid>
+WECHAT_PAY_MCH_ID=<微信支付商户号>
+WECHAT_PAY_API_V3_KEY=<API v3 密钥，32 字节>
+WECHAT_PAY_PRIVATE_KEY=<商户 API 证书私钥，支持 PEM 或去掉头尾后的 base64 文本>
+WECHAT_PAY_CERT_SERIAL_NO=<商户 API 证书序列号>
+WECHAT_PAY_PLATFORM_CERT_PEM=<微信支付平台证书 PEM，支持把换行写成 \n>
+WECHAT_PAY_NOTIFY_URL=https://api.aivago.cn/payments/wechat/notify
 ```
+
+部署后验证：
+
+```bash
+cd /opt/aivago/InterviewAgent
+git pull
+./scripts/deploy_server.sh all
+curl https://www.aivago.cn/api/health
+```
+
+登录网页后进入账户中心，点击“支付宝”会打开收银台，点击“微信”会显示扫码二维码。支付完成后前端轮询 `GET /payments/orders/{external_order_id}`，订单变为 `paid` 后自动刷新积分。
 
 ## 扣费幂等
 
