@@ -8,6 +8,7 @@ API_UPSTREAM="${API_UPSTREAM:-http://127.0.0.1:8020}"
 CONFIG_NAME="${CONFIG_NAME:-aivago-web}"
 SITES_AVAILABLE="${SITES_AVAILABLE:-/etc/nginx/sites-available}"
 SITES_ENABLED="${SITES_ENABLED:-/etc/nginx/sites-enabled}"
+SITES_DISABLED="${SITES_DISABLED:-/etc/nginx/sites-disabled}"
 CERT_DIR="${CERT_DIR:-/etc/letsencrypt/live/$WEB_DOMAIN}"
 AUTO_DISABLE_DEFAULT_WWW="${AUTO_DISABLE_DEFAULT_WWW:-0}"
 
@@ -115,7 +116,8 @@ maybe_disable_default_conflict() {
   fi
 
   if [[ "$AUTO_DISABLE_DEFAULT_WWW" == "1" ]]; then
-    local backup="$DEFAULT_ENABLED.disabled.$(date +%Y%m%d%H%M%S)"
+    mkdir -p "$SITES_DISABLED"
+    local backup="$SITES_DISABLED/default.disabled.$(date +%Y%m%d%H%M%S)"
     mv "$DEFAULT_ENABLED" "$backup"
     echo "已禁用冲突的 default 配置：$backup"
     return
