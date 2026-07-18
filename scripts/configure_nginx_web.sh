@@ -15,6 +15,7 @@ AUTO_DISABLE_DEFAULT_WWW="${AUTO_DISABLE_DEFAULT_WWW:-0}"
 CONFIG_PATH="$SITES_AVAILABLE/$CONFIG_NAME"
 ENABLED_PATH="$SITES_ENABLED/$CONFIG_NAME"
 DEFAULT_ENABLED="$SITES_ENABLED/default"
+CONFIG_CHANGED=0
 
 log() {
   printf '\n\033[1;36m==> %s\033[0m\n' "$1"
@@ -45,8 +46,9 @@ backup_existing_config() {
   fi
 }
 
-write_config() {
-  cat > "$CONFIG_PATH" <<NGINX
+render_config() {
+  local target="$1"
+  cat > "$target" <<NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -102,8 +104,30 @@ server {
 NGINX
 }
 
+write_config_if_changed() {
+  local tmp_config
+  tmp_config="$(mktemp)"
+  render_config "$tmp_config"
+
+  if [[ -f "$CONFIG_PATH" ]] && cmp -s "$tmp_config" "$CONFIG_PATH"; then
+    rm -f "$tmp_config"
+    echo "Nginx Web 配置未变更，跳过写入和备份。"
+    return
+  fi
+
+  backup_existing_config
+  mv "$tmp_config" "$CONFIG_PATH"
+  chmod 644 "$CONFIG_PATH"
+  CONFIG_CHANGED=1
+  echo "已写入 Nginx Web 配置：$CONFIG_PATH"
+}
+
 enable_config() {
+  if [[ -L "$ENABLED_PATH" ]] && [[ "$(readlink "$ENABLED_PATH")" == "$CONFIG_PATH" ]]; then
+    return
+  fi
   ln -sfn "$CONFIG_PATH" "$ENABLED_PATH"
+  CONFIG_CHANGED=1
 }
 
 maybe_disable_default_conflict() {
@@ -119,6 +143,7 @@ maybe_disable_default_conflict() {
     mkdir -p "$SITES_DISABLED"
     local backup="$SITES_DISABLED/default.disabled.$(date +%Y%m%d%H%M%S)"
     mv "$DEFAULT_ENABLED" "$backup"
+    CONFIG_CHANGED=1
     echo "已禁用冲突的 default 配置：$backup"
     return
   fi
@@ -141,6 +166,10 @@ show_conflicts() {
 }
 
 reload_nginx() {
+  if [[ "$CONFIG_CHANGED" != "1" ]]; then
+    log "Nginx 配置未变更，跳过检查和重载"
+    return
+  fi
   log "检查 Nginx 配置"
   nginx -t
   log "重载 Nginx"
@@ -156,9 +185,8 @@ verify() {
 main() {
   require_root
   check_inputs
-  log "写入 $WEB_DOMAIN 的 Web + /api 同源代理配置"
-  backup_existing_config
-  write_config
+  log "检查 $WEB_DOMAIN 的 Web + /api 同源代理配置"
+  write_config_if_changed
   enable_config
   maybe_disable_default_conflict
   show_conflicts
