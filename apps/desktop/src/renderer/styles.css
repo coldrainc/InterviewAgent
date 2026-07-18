@@ -323,6 +323,68 @@ button {
   font-size: 12px;
 }
 
+.sidebar-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-button {
+  width: 100%;
+  min-height: 64px;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.nav-button:hover,
+.nav-button.active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+}
+
+.nav-button-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.nav-button strong,
+.nav-button small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-button strong {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.nav-button small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .account-panel {
   border: 1px solid rgba(203, 213, 225, 0.72);
   border-radius: 8px;
@@ -713,6 +775,12 @@ button {
   text-transform: uppercase;
 }
 
+.panel-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .icon-button {
   width: 28px;
   height: 28px;
@@ -968,7 +1036,8 @@ button {
 }
 
 .account-center,
-.settings-center {
+.settings-center,
+.setup-center {
   min-height: 0;
   border: 1px solid rgba(226, 232, 240, 0.88);
   border-radius: 10px;
@@ -980,12 +1049,17 @@ button {
 }
 
 .account-hero,
-.settings-hero {
+.settings-hero,
+.setup-hero {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.setup-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .account-avatar {
@@ -1000,6 +1074,7 @@ button {
 
 .account-hero h3,
 .settings-hero h3,
+.setup-hero h3,
 .account-auth-copy h3,
 .auth-dialog h3 {
   margin: 4px 0 0;
@@ -1007,12 +1082,14 @@ button {
 }
 
 .account-hero h3,
-.settings-hero h3 {
+.settings-hero h3,
+.setup-hero h3 {
   font-size: 25px;
 }
 
 .account-hero p,
 .settings-hero p,
+.setup-hero p,
 .account-auth-copy p,
 .auth-dialog p {
   margin: 5px 0 0;
@@ -1020,33 +1097,47 @@ button {
   line-height: 1.55;
 }
 
-.account-hero-actions {
+.account-hero-actions,
+.setup-hero-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.secondary-action.inline {
+.secondary-action.inline,
+.primary-action.inline {
   width: auto;
   min-height: 38px;
   padding: 0 12px;
 }
 
 .account-grid,
-.settings-grid {
+.settings-grid,
+.setup-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
 .account-block,
-.settings-block {
+.settings-block,
+.setup-block {
   border: 1px solid rgba(203, 213, 225, 0.72);
   border-radius: 8px;
   padding: 14px;
   display: grid;
   gap: 12px;
   background: rgba(248, 250, 252, 0.76);
+}
+
+.setup-block.wide {
+  grid-column: 1 / -1;
+}
+
+.setup-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .settings-mode-grid {
@@ -1606,16 +1697,19 @@ button {
 
   .account-hero,
   .settings-hero,
+  .setup-hero,
   .account-auth-layout {
     grid-template-columns: 1fr;
     align-items: stretch;
   }
 
-  .account-hero {
+  .account-hero,
+  .setup-hero {
     gap: 12px;
   }
 
-  .account-hero-actions {
+  .account-hero-actions,
+  .setup-hero-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
@@ -1625,6 +1719,7 @@ button {
   }
 
   .settings-grid,
+  .setup-grid,
   .settings-mode-grid {
     grid-template-columns: 1fr;
   }
@@ -1645,7 +1740,8 @@ button {
   .topbar,
   .chat-panel,
   .account-center,
-  .settings-center {
+  .settings-center,
+  .setup-center {
     border-radius: 8px;
   }
 
@@ -1678,11 +1774,13 @@ button {
   .resume-panel,
   .panel.compact,
   .account-block,
-  .settings-block {
+  .settings-block,
+  .setup-block {
     padding: 10px;
   }
 
-  .segmented-control {
+  .segmented-control,
+  .setup-toggles {
     grid-template-columns: 1fr;
   }
 
@@ -1788,7 +1886,8 @@ button {
   }
 
   .account-center,
-  .settings-center {
+  .settings-center,
+  .setup-center {
     padding: 14px;
   }
 
@@ -1797,7 +1896,8 @@ button {
     height: 48px;
   }
 
-  .account-hero h3 {
+  .account-hero h3,
+  .setup-hero h3 {
     font-size: 21px;
   }
 

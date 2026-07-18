@@ -4,11 +4,14 @@ import { formatCredits } from "../../utils/interview";
 
 export function Topbar({ sessionId, offline, webSearch, completed, status, profile, model, account, screen, onOpenAccount, onOpenChat }) {
   const mode = completed ? "已完成" : offline ? "离线模式" : "模型模式";
+  const auxiliaryScreen = screen === "account" || screen === "settings" || screen === "setup";
   const title =
     screen === "account"
       ? "账户中心"
       : screen === "settings"
       ? "设置"
+      : screen === "setup"
+      ? "面试配置"
       : profile.mode === "candidate"
       ? `${profile.targetRole || "AI 工程师"}候选人答题`
       : profile.targetRole
@@ -23,7 +26,7 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
         <h2>{title}</h2>
       </div>
       <div className="topbar-actions">
-        {screen === "account" || screen === "settings" ? (
+        {auxiliaryScreen ? (
           <button type="button" className="topbar-button" onClick={onOpenChat}>
             <MessageSquarePlus size={14} />
             面试工作台
@@ -35,7 +38,7 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
           </button>
         )}
         <span className={`status-chip ${status.tone}`}>{status.label}</span>
-        {screen !== "account" && screen !== "settings" && (
+        {!auxiliaryScreen && (
           <>
             <span className="session-chip">{sessionId ? `会话 ${sessionId.slice(0, 8)}` : "未开始"}</span>
             <span className="mode-chip">{profile.mode === "candidate" ? "Agent 候选人" : "Agent 面试官"}</span>

@@ -6,6 +6,7 @@ import { fallbackIndustries, fallbackModels, llmModes } from "./constants/interv
 import Sidebar from "./components/sidebar/Sidebar";
 import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
 import { SettingsCenter } from "./components/settings/SettingsCenter";
+import { SetupCenter } from "./components/setup/SetupCenter";
 import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
 import {
   buildFocusAreas,
@@ -690,36 +691,17 @@ function App() {
     <main className="app-shell">
       <Sidebar
         screen={screen}
-        offline={offline}
-        webSearch={webSearch}
         profile={profile}
         account={account}
-        modelOptions={modelOptions}
-        selectedModelId={selectedModelId}
-        selectedLlmMode={selectedLlmMode}
-        industryOptions={industryOptions}
-        resumeImport={resumeImport}
-        resumeLibrary={resumeLibrary}
-        selectedResumeId={selectedResumeId}
         sessionHistory={sessionHistory}
         historyState={historyState}
         activeSessionId={sessionId}
         busy={busy}
         onNewSession={() => createSession()}
-        onImportResume={importResume}
-        onSelectResume={selectResume}
-        onDeleteResume={deleteSelectedResume}
-        onReloadResumes={loadResumeLibrary}
         onReloadSessions={loadSessionHistory}
         onRestoreSession={restoreSession}
         onDeleteSession={deleteSession}
         onScreenChange={setScreen}
-        onOfflineChange={setOffline}
-        onWebSearchChange={setWebSearch}
-        onProfileChange={setProfile}
-        onDefaultModeChange={changeDefaultMode}
-        onSelectModel={setSelectedModelId}
-        onSelectLlmMode={selectLlmMode}
       />
 
       <section className="workspace">
@@ -759,6 +741,32 @@ function App() {
             profile={profile}
             settingsState={settingsState}
             onModeChange={changeDefaultMode}
+            onBack={() => setScreen("chat")}
+          />
+        ) : screen === "setup" ? (
+          <SetupCenter
+            profile={profile}
+            offline={offline}
+            webSearch={webSearch}
+            modelOptions={modelOptions}
+            selectedModelId={selectedModelId}
+            selectedLlmMode={selectedLlmMode}
+            industryOptions={industryOptions}
+            resumeImport={resumeImport}
+            resumeLibrary={resumeLibrary}
+            selectedResumeId={selectedResumeId}
+            busy={busy}
+            onNewSession={() => createSession()}
+            onImportResume={importResume}
+            onSelectResume={selectResume}
+            onDeleteResume={deleteSelectedResume}
+            onReloadResumes={loadResumeLibrary}
+            onProfileChange={setProfile}
+            onDefaultModeChange={changeDefaultMode}
+            onOfflineChange={setOffline}
+            onWebSearchChange={setWebSearch}
+            onSelectModel={setSelectedModelId}
+            onSelectLlmMode={selectLlmMode}
             onBack={() => setScreen("chat")}
           />
         ) : (
