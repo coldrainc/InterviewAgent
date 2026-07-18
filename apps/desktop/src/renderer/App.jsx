@@ -5,6 +5,7 @@ import { getInterviewAgentClient } from "./apiClient";
 import { fallbackIndustries, fallbackModels, llmModes } from "./constants/interview";
 import Sidebar from "./components/sidebar/Sidebar";
 import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
+import { SettingsCenter } from "./components/settings/SettingsCenter";
 import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
 import {
   buildFocusAreas,
@@ -95,6 +96,7 @@ function App() {
   const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
   const [selectedLlmMode, setSelectedLlmMode] = useState("standard");
   const [account, setAccount] = useState(null);
+  const [settingsState, setSettingsState] = useState({ status: "idle", default_interview_mode: "interviewer" });
   const [paymentState, setPaymentState] = useState({ status: "idle", amount: "10", provider: "alipay" });
   const [authState, setAuthState] = useState({ mode: "login", email: "", password: "", displayName: "", status: "idle" });
   const [authDialog, setAuthDialog] = useState({ open: false, reason: "" });
@@ -161,6 +163,7 @@ function App() {
     await loadModelOptions();
     if (api.hasToken?.()) {
       await loadAccount();
+      await loadUserSettings();
       await loadResumeLibrary();
       await loadSessionHistory();
       await restoreLastSession();
@@ -207,8 +210,44 @@ function App() {
     try {
       const result = await api.getAccount();
       setAccount(result);
+      applyUserSettings(result.settings);
     } catch (_error) {
       setAccount(null);
+    }
+  }
+
+  async function loadUserSettings() {
+    if (!api.getSettings) return;
+    try {
+      const result = await api.getSettings();
+      applyUserSettings(result);
+    } catch (_error) {
+      setSettingsState((current) => ({ ...current, status: "idle" }));
+    }
+  }
+
+  function applyUserSettings(settings) {
+    const mode = settings?.default_interview_mode;
+    if (mode === "interviewer" || mode === "candidate") {
+      setSettingsState((current) => ({ ...current, default_interview_mode: mode, status: "idle" }));
+      setProfile((current) => ({ ...current, mode }));
+    }
+  }
+
+  async function changeDefaultMode(mode) {
+    if (mode !== "interviewer" && mode !== "candidate") return;
+    setProfile((current) => ({ ...current, mode }));
+    setSettingsState((current) => ({ ...current, default_interview_mode: mode, status: "saving", error: "" }));
+    if (!account || !api.updateSettings) {
+      setSettingsState((current) => ({ ...current, status: account ? "idle" : "error", error: account ? "" : "登录后才能同步设置。" }));
+      return;
+    }
+    try {
+      const result = await api.updateSettings({ default_interview_mode: mode });
+      const savedMode = result?.default_interview_mode || mode;
+      setSettingsState({ status: "saved", default_interview_mode: savedMode });
+    } catch (error) {
+      setSettingsState((current) => ({ ...current, status: "error", error: `设置保存失败：${normalizeDesktopError(error.message)}` }));
     }
   }
 
@@ -229,6 +268,7 @@ function App() {
         await api.login(payload);
       }
       await loadAccount();
+      await loadUserSettings();
       await Promise.all([loadResumeLibrary(), loadSessionHistory()]);
       setAuthState((current) => ({ ...current, password: "", status: "success", error: "" }));
       setAuthDialog({ open: false, reason: "" });
@@ -246,6 +286,7 @@ function App() {
         platform: "desktop"
       });
       await loadAccount();
+      await loadUserSettings();
       await Promise.all([loadResumeLibrary(), loadSessionHistory()]);
       setAuthState((current) => ({ ...current, status: "success", error: "" }));
       setAuthDialog({ open: false, reason: "" });
@@ -258,6 +299,7 @@ function App() {
     await api.logout();
     setLastSessionId("");
     setAccount(null);
+    setSettingsState({ status: "idle", default_interview_mode: "interviewer" });
     setSessionId("");
     setMessages([]);
     setResumeLibrary([]);
@@ -675,6 +717,7 @@ function App() {
         onOfflineChange={setOffline}
         onWebSearchChange={setWebSearch}
         onProfileChange={setProfile}
+        onDefaultModeChange={changeDefaultMode}
         onSelectModel={setSelectedModelId}
         onSelectLlmMode={selectLlmMode}
       />
@@ -708,6 +751,14 @@ function App() {
             paymentState={paymentState}
             onPaymentStateChange={setPaymentState}
             onCreatePayment={createPayment}
+            onBack={() => setScreen("chat")}
+          />
+        ) : screen === "settings" ? (
+          <SettingsCenter
+            account={account}
+            profile={profile}
+            settingsState={settingsState}
+            onModeChange={changeDefaultMode}
             onBack={() => setScreen("chat")}
           />
         ) : (

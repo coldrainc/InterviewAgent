@@ -1,4 +1,4 @@
-import { Activity, BrainCircuit, Globe2, Loader2, MessageSquarePlus, Moon, RefreshCw, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { Activity, BrainCircuit, Globe2, Loader2, MessageSquarePlus, Moon, RefreshCw, Search, Settings, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { interviewModes, llmModes } from "../../constants/interview";
 import { currentIndustry, formatDateTime } from "../../utils/interview";
 import { AccountEntry } from "../account/AccountCenter";
@@ -33,6 +33,7 @@ export default function Sidebar({
   onOfflineChange,
   onWebSearchChange,
   onProfileChange,
+  onDefaultModeChange,
   onSelectModel,
   onSelectLlmMode
 }) {
@@ -63,6 +64,21 @@ export default function Sidebar({
         onOpen={() => onScreenChange("account")}
       />
 
+      <button
+        type="button"
+        className={`account-entry ${screen === "settings" ? "active" : ""}`}
+        onClick={() => onScreenChange("settings")}
+      >
+        <span className="account-entry-icon">
+          <Settings size={17} />
+        </span>
+        <span className="account-entry-main">
+          <strong>设置</strong>
+          <small>{profile.mode === "candidate" ? "默认 Agent 回答我" : "默认 Agent 面试我"}</small>
+        </span>
+        <Settings size={15} />
+      </button>
+
       <section className="panel mode-panel">
         <div className="panel-heading">
           <span>模式与行业</span>
@@ -70,7 +86,7 @@ export default function Sidebar({
         <SegmentedControl
           value={profile.mode}
           options={interviewModes}
-          onChange={(value) => updateProfile("mode", value)}
+          onChange={(value) => onDefaultModeChange?.(value) || updateProfile("mode", value)}
         />
         <label className="select-field">
           <span>行业</span>

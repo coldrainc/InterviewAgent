@@ -46,6 +46,7 @@ class AccountSnapshot:
     platform: str
     trial_uses_remaining: int
     credit_balance_micros: int
+    settings: dict
 
     @property
     def credit_balance(self) -> Decimal:
@@ -161,6 +162,22 @@ class BillingService:
 
     async def account_snapshot(self, *, tenant_id: str, user_id: str) -> AccountSnapshot:
         account = await self.get_or_create_account(tenant_id=tenant_id, user_id=user_id)
+        return _snapshot(account)
+
+    async def update_account_settings(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        settings: dict,
+    ) -> AccountSnapshot:
+        account = await self.get_or_create_account(tenant_id=tenant_id, user_id=user_id, for_update=True)
+        metadata = dict(account.metadata_json or {})
+        current_settings = dict(metadata.get("settings") or {})
+        current_settings.update(settings)
+        metadata["settings"] = current_settings
+        account.metadata_json = metadata
+        await self.session.flush()
         return _snapshot(account)
 
     async def recharge(
@@ -646,6 +663,7 @@ def _verify_password(password: str, encoded: str) -> bool:
 
 
 def _snapshot(account: UserAccountModel) -> AccountSnapshot:
+    metadata = account.metadata_json or {}
     return AccountSnapshot(
         tenant_id=account.tenant_id,
         user_id=account.user_id,
@@ -654,4 +672,5 @@ def _snapshot(account: UserAccountModel) -> AccountSnapshot:
         platform=account.platform,
         trial_uses_remaining=account.trial_uses_remaining,
         credit_balance_micros=account.credit_balance_micros,
+        settings=dict(metadata.get("settings") or {}),
     )

@@ -91,6 +91,17 @@ ipcMain.handle("account:get", async () => {
   return requestJson("/account");
 });
 
+ipcMain.handle("settings:get", async () => {
+  return requestJson("/settings");
+});
+
+ipcMain.handle("settings:update", async (_event, payload) => {
+  return requestJson("/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload || {})
+  });
+});
+
 ipcMain.handle("account:recharge", async (_event, payload) => {
   return requestJson("/account/recharge", {
     method: "POST",

@@ -967,7 +967,8 @@ button {
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
-.account-center {
+.account-center,
+.settings-center {
   min-height: 0;
   border: 1px solid rgba(226, 232, 240, 0.88);
   border-radius: 10px;
@@ -978,7 +979,8 @@ button {
   backdrop-filter: blur(22px);
 }
 
-.account-hero {
+.account-hero,
+.settings-hero {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
@@ -997,17 +999,20 @@ button {
 }
 
 .account-hero h3,
+.settings-hero h3,
 .account-auth-copy h3,
 .auth-dialog h3 {
   margin: 4px 0 0;
   letter-spacing: 0;
 }
 
-.account-hero h3 {
+.account-hero h3,
+.settings-hero h3 {
   font-size: 25px;
 }
 
 .account-hero p,
+.settings-hero p,
 .account-auth-copy p,
 .auth-dialog p {
   margin: 5px 0 0;
@@ -1027,19 +1032,69 @@ button {
   padding: 0 12px;
 }
 
-.account-grid {
+.account-grid,
+.settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
-.account-block {
+.account-block,
+.settings-block {
   border: 1px solid rgba(203, 213, 225, 0.72);
   border-radius: 8px;
   padding: 14px;
   display: grid;
   gap: 12px;
   background: rgba(248, 250, 252, 0.76);
+}
+
+.settings-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-mode-grid button {
+  min-height: 112px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 13px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  color: var(--text);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.settings-mode-grid button.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.settings-mode-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: #0f4d63;
+}
+
+.settings-mode-grid button.active .settings-mode-icon {
+  background: #2563eb;
+}
+
+.settings-mode-grid strong {
+  font-size: 15px;
+}
+
+.settings-mode-grid small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .credit-grid.large div {
@@ -1550,6 +1605,7 @@ button {
   }
 
   .account-hero,
+  .settings-hero,
   .account-auth-layout {
     grid-template-columns: 1fr;
     align-items: stretch;
@@ -1565,6 +1621,11 @@ button {
   }
 
   .account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-grid,
+  .settings-mode-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1583,7 +1644,8 @@ button {
   .sidebar,
   .topbar,
   .chat-panel,
-  .account-center {
+  .account-center,
+  .settings-center {
     border-radius: 8px;
   }
 
@@ -1615,7 +1677,8 @@ button {
   .mode-panel,
   .resume-panel,
   .panel.compact,
-  .account-block {
+  .account-block,
+  .settings-block {
     padding: 10px;
   }
 
@@ -1724,7 +1787,8 @@ button {
     height: 40px;
   }
 
-  .account-center {
+  .account-center,
+  .settings-center {
     padding: 14px;
   }
 

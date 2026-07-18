@@ -325,6 +325,12 @@ const browserClient = {
     return { ok: true };
   },
   getAccount: () => requestJson("/account"),
+  getSettings: () => requestJson("/settings"),
+  updateSettings: (payload) =>
+    requestJson("/settings", {
+      method: "PUT",
+      body: JSON.stringify(payload || {})
+    }),
   recharge: (payload) =>
     requestJson("/account/recharge", {
       method: "POST",

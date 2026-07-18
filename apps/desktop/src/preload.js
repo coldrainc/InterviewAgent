@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   devLogin: (payload) => ipcRenderer.invoke("auth:dev-login", payload),
   logout: () => ipcRenderer.invoke("auth:logout"),
   getAccount: () => ipcRenderer.invoke("account:get"),
+  getSettings: () => ipcRenderer.invoke("settings:get"),
+  updateSettings: (payload) => ipcRenderer.invoke("settings:update", payload),
   recharge: (payload) => ipcRenderer.invoke("account:recharge", payload),
   createPaymentOrder: (payload) => ipcRenderer.invoke("payments:create-order", payload),
   getPaymentOrder: (orderId) => ipcRenderer.invoke("payments:get-order", orderId),

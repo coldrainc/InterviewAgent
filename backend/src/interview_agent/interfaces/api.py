@@ -161,6 +161,14 @@ class MeResponse(BaseModel):
     credit_balance_micros: int = 0
 
 
+class UserSettingsResponse(BaseModel):
+    default_interview_mode: str = "interviewer"
+
+
+class UpdateUserSettingsRequest(BaseModel):
+    default_interview_mode: str | None = Field(default=None, pattern="^(interviewer|candidate)$")
+
+
 class AccountResponse(BaseModel):
     tenant_id: str
     user_id: str
@@ -170,6 +178,7 @@ class AccountResponse(BaseModel):
     trial_uses_remaining: int
     credit_balance: str
     credit_balance_micros: int
+    settings: UserSettingsResponse = Field(default_factory=UserSettingsResponse)
 
 
 class RechargeRequest(BaseModel):
@@ -541,7 +550,7 @@ def create_app(
             CORSMiddleware,
             allow_origins=allowed_origins,
             allow_credentials=True,
-            allow_methods=["GET", "POST", "DELETE"],
+            allow_methods=["GET", "POST", "PUT", "DELETE"],
             allow_headers=[
                 "Authorization",
                 "Content-Type",
@@ -714,6 +723,33 @@ def create_app(
                 user_id=context.user_id,
             )
         return _account_response(snapshot)
+
+    @app.get("/settings", response_model=UserSettingsResponse)
+    async def get_user_settings(context: RequestContext = Depends(request_context)) -> UserSettingsResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            snapshot = await _billing_service(db).account_snapshot(
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+        return _settings_response(snapshot.settings)
+
+    @app.put("/settings", response_model=UserSettingsResponse)
+    async def update_user_settings(
+        request: UpdateUserSettingsRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> UserSettingsResponse:
+        _require_authenticated(context)
+        payload = {}
+        if request.default_interview_mode is not None:
+            payload["default_interview_mode"] = request.default_interview_mode
+        async with session_scope() as db:
+            snapshot = await _billing_service(db).update_account_settings(
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                settings=payload,
+            )
+        return _settings_response(snapshot.settings)
 
     @app.post("/account/recharge", response_model=AccountResponse)
     async def recharge(
@@ -1761,7 +1797,16 @@ def _account_response(snapshot) -> AccountResponse:
         trial_uses_remaining=snapshot.trial_uses_remaining,
         credit_balance=str(snapshot.credit_balance),
         credit_balance_micros=snapshot.credit_balance_micros,
+        settings=_settings_response(snapshot.settings),
     )
+
+
+def _settings_response(settings: dict | None) -> UserSettingsResponse:
+    raw = dict(settings or {})
+    mode = raw.get("default_interview_mode")
+    if mode not in {"interviewer", "candidate"}:
+        mode = "interviewer"
+    return UserSettingsResponse(default_interview_mode=mode)
 
 
 def _payment_order_response(order) -> PaymentOrderResponse:
