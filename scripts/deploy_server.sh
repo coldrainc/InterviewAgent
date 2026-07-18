@@ -6,11 +6,54 @@ API_SERVICE="${API_SERVICE:-interview-agent-api}"
 WEB_API_URL="${WEB_API_URL:-/api}"
 WEB_HEALTH_URL="${WEB_HEALTH_URL:-https://www.aivago.cn/api/health}"
 SKIP_GIT_PULL="${SKIP_GIT_PULL:-0}"
+FORCE_INSTALL_DEPS="${FORCE_INSTALL_DEPS:-0}"
+DEPLOY_CACHE_DIR="${DEPLOY_CACHE_DIR:-$APP_DIR/.deploy-cache}"
 
 cd "$APP_DIR"
 
 log() {
   printf '\n\033[1;36m==> %s\033[0m\n' "$1"
+}
+
+fingerprint_files() {
+  local files=("$@")
+  local payload=""
+  local file
+  for file in "${files[@]}"; do
+    if [[ -f "$file" ]]; then
+      if command -v sha256sum >/dev/null 2>&1; then
+        payload+="$file $(sha256sum "$file")"$'\n'
+      elif command -v shasum >/dev/null 2>&1; then
+        payload+="$file $(shasum -a 256 "$file")"$'\n'
+      else
+        payload+="$file $(cksum "$file")"$'\n'
+      fi
+    else
+      payload+="$file missing"$'\n'
+    fi
+  done
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$payload" | sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$payload" | shasum -a 256 | awk '{print $1}'
+  else
+    printf '%s' "$payload" | cksum | awk '{print $1}'
+  fi
+}
+
+dependency_stamp_matches() {
+  local name="$1"
+  local fingerprint="$2"
+  local stamp="$DEPLOY_CACHE_DIR/$name.sha256"
+  [[ -f "$stamp" ]] && [[ "$(cat "$stamp")" == "$fingerprint" ]]
+}
+
+write_dependency_stamp() {
+  local name="$1"
+  local fingerprint="$2"
+  mkdir -p "$DEPLOY_CACHE_DIR"
+  printf '%s\n' "$fingerprint" > "$DEPLOY_CACHE_DIR/$name.sha256"
 }
 
 run_git_pull() {
@@ -35,9 +78,18 @@ ensure_backend_env() {
 
 deploy_backend() {
   ensure_backend_env
-  log "安装/更新后端依赖"
-  .venv/bin/python -m pip install --upgrade pip
-  .venv/bin/python -m pip install -e "backend[dev]"
+  local backend_deps_fingerprint
+  backend_deps_fingerprint="$(fingerprint_files "$APP_DIR/backend/pyproject.toml")"
+  if [[ "$FORCE_INSTALL_DEPS" == "1" ]] \
+    || [[ ! -x .venv/bin/interview-agent ]] \
+    || ! dependency_stamp_matches "backend-deps" "$backend_deps_fingerprint"; then
+    log "安装/更新后端依赖"
+    .venv/bin/python -m pip install --upgrade pip
+    .venv/bin/python -m pip install -e "backend[dev]"
+    write_dependency_stamp "backend-deps" "$backend_deps_fingerprint"
+  else
+    log "后端依赖未变更，跳过安装"
+  fi
 
   log "执行数据库迁移"
   cd "$APP_DIR/backend"
@@ -51,13 +103,18 @@ deploy_backend() {
 }
 
 deploy_frontend() {
-  log "安装/更新前端依赖"
   cd "$APP_DIR/apps/desktop"
-  if [[ -d node_modules ]]; then
+  local frontend_deps_fingerprint
+  frontend_deps_fingerprint="$(fingerprint_files "$APP_DIR/apps/desktop/package.json" "$APP_DIR/apps/desktop/package-lock.json")"
+  if [[ "$FORCE_INSTALL_DEPS" == "1" ]] \
+    || [[ ! -d node_modules ]] \
+    || ! dependency_stamp_matches "frontend-deps" "$frontend_deps_fingerprint"; then
+    log "安装/更新前端依赖"
     npm install --ignore-scripts
   else
-    npm install --ignore-scripts
+    log "前端依赖未变更，跳过安装"
   fi
+  write_dependency_stamp "frontend-deps" "$frontend_deps_fingerprint"
 
   log "重新构建 Web 前端"
   rm -rf dist
@@ -100,9 +157,9 @@ show_status() {
 choose_action() {
   cat <<'MENU'
 请选择部署操作：
-  1) 全部：git pull + 后端依赖/迁移/重启 + 前端构建 + Nginx 配置/reload
-  2) 只更新后端：依赖 + 迁移 + 重启服务
-  3) 只更新前端：npm install + build + Nginx reload
+  1) 全部：git pull + 后端依赖按需安装/迁移/重启 + 前端依赖按需安装/构建 + Nginx 配置/reload
+  2) 只更新后端：依赖按需安装 + 迁移 + 重启服务
+  3) 只更新前端：依赖按需安装 + build + Nginx reload
   4) 配置 Nginx：www.aivago.cn + /api 同源代理
   5) 只 git pull
   6) 查看状态
@@ -147,6 +204,7 @@ case "${1:-menu}" in
   WEB_HEALTH_URL=https://www.aivago.cn/api/health
   AUTO_DISABLE_DEFAULT_WWW=1
   SKIP_GIT_PULL=1
+  FORCE_INSTALL_DEPS=1
 USAGE
     exit 2
     ;;
