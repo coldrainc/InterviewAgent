@@ -487,33 +487,7 @@ function App() {
     const agentMessageId = appendMessage("agent", "正在分析回答，DeepSeek 思考中...");
     setBusy(true);
     try {
-      const response = api.streamMessage
-        ? await api.streamMessage(
-            {
-              sessionId: activeSessionId,
-              message: text
-            },
-            (event) => {
-              if (event.event === "tool.notice" && event.data?.message) {
-                updateMessage(agentMessageId, { text: event.data.message });
-              }
-              if (event.event === "guardrail.notice" && event.data?.message) {
-                appendMessage("system", `Harness 护栏：${event.data.message}`);
-              }
-              if (event.event === "message.done") {
-                updateMessage(agentMessageId, {
-                  text: event.data?.message || "",
-                  fallback: Boolean(event.data?.fallback_used),
-                  usage: event.data?.usage || null,
-                  modelId: event.data?.model_id || ""
-                });
-              }
-            }
-          )
-        : await api.sendMessage({
-            sessionId: activeSessionId,
-            message: text
-          });
+      const response = await sendMessageWithStreamFallback(activeSessionId, text, agentMessageId);
       updateMessage(agentMessageId, {
         text: response.message || response.data?.message || "",
         fallback: Boolean(response.fallback_used),
@@ -527,6 +501,49 @@ function App() {
       appendMessage("system", `发送失败：${error.message}`);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function sendMessageWithStreamFallback(activeSessionId, text, agentMessageId) {
+    if (!api.streamMessage) {
+      return api.sendMessage({
+        sessionId: activeSessionId,
+        message: text
+      });
+    }
+    try {
+      return await api.streamMessage(
+        {
+          sessionId: activeSessionId,
+          message: text
+        },
+        (event) => {
+          if (event.event === "tool.notice" && event.data?.message) {
+            updateMessage(agentMessageId, { text: event.data.message });
+          }
+          if (event.event === "guardrail.notice" && event.data?.message) {
+            appendMessage("system", `Harness 护栏：${event.data.message}`);
+          }
+          if (event.event === "message.done") {
+            updateMessage(agentMessageId, {
+              text: event.data?.message || "",
+              fallback: Boolean(event.data?.fallback_used),
+              usage: event.data?.usage || null,
+              modelId: event.data?.model_id || ""
+            });
+          }
+        }
+      );
+    } catch (error) {
+      const message = normalizeDesktopError(error.message);
+      if (!message.includes("无法连接 API 服务") && !message.includes("请求处理时间较长")) {
+        throw error;
+      }
+      updateMessage(agentMessageId, { text: "流式连接中断，正在切换普通请求..." });
+      return api.sendMessage({
+        sessionId: activeSessionId,
+        message: text
+      });
     }
   }
 
