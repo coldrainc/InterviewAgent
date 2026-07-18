@@ -17,17 +17,32 @@ export function formatDateTime(value) {
   });
 }
 
-export function turnsToMessages(turns) {
+export function turnsToMessages(turns, mode = "interviewer") {
   const restored = [];
   turns.forEach((turn) => {
-    if (turn.candidate) {
-      restored.push({
-        id: crypto.randomUUID(),
-        role: "user",
-        text: turn.candidate,
-        fallback: false,
-        time: formatDateTime(turn.updated_at)
-      });
+    const turnIndex = turn.turn_index || turn.turnIndex || null;
+    if (mode === "candidate") {
+      if (turn.interviewer) {
+        restored.push({
+          id: crypto.randomUUID(),
+          role: "user",
+          text: turn.interviewer,
+          fallback: false,
+          time: formatDateTime(turn.created_at),
+          turnIndex
+        });
+      }
+      if (turn.candidate) {
+        restored.push({
+          id: crypto.randomUUID(),
+          role: "agent",
+          text: turn.candidate,
+          fallback: Boolean(turn.fallback_used),
+          time: formatDateTime(turn.updated_at),
+          turnIndex
+        });
+      }
+      return;
     }
     if (turn.interviewer) {
       restored.push({
@@ -35,7 +50,18 @@ export function turnsToMessages(turns) {
         role: "agent",
         text: turn.interviewer,
         fallback: Boolean(turn.fallback_used),
-        time: formatDateTime(turn.created_at)
+        time: formatDateTime(turn.created_at),
+        turnIndex
+      });
+    }
+    if (turn.candidate) {
+      restored.push({
+        id: crypto.randomUUID(),
+        role: "user",
+        text: turn.candidate,
+        fallback: false,
+        time: formatDateTime(turn.updated_at),
+        turnIndex
       });
     }
   });

@@ -75,6 +75,21 @@ class InterviewPersistenceService:
             )
             store.save_state(config, state)
 
+    async def sync_state(
+        self,
+        *,
+        session_id: str,
+        config: InterviewConfig,
+        state: InterviewState,
+    ) -> None:
+        await self.repository.sync_session_state(
+            session_id=session_id,
+            config=config,
+            state=state,
+        )
+        if self.export_markdown:
+            self._export(session_id, config, state)
+
     async def get_session_record(self, session_id: str) -> dict | None:
         return await self.repository.get_session_record(session_id)
 

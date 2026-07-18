@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   listSessions: () => ipcRenderer.invoke("sessions:list"),
   getSession: (sessionId) => ipcRenderer.invoke("sessions:get", sessionId),
   deleteSession: (sessionId) => ipcRenderer.invoke("sessions:delete", sessionId),
+  rewindSession: (sessionId, payload) => ipcRenderer.invoke("sessions:rewind", sessionId, payload),
   importResume: () => ipcRenderer.invoke("resume:import"),
   createSession: (payload) => ipcRenderer.invoke("api:create-session", payload),
   sendMessage: (payload) => ipcRenderer.invoke("api:send-message", payload)

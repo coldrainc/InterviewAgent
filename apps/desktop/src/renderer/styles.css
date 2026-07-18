@@ -1547,6 +1547,42 @@ button {
   font-size: 13px;
 }
 
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.message-actions button {
+  min-height: 26px;
+  border: 1px solid #d9e5df;
+  border-radius: 7px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #4e625b;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease,
+    background 0.14s ease;
+}
+
+.message-actions button:hover {
+  border-color: #8fb8ff;
+  color: #234ed1;
+  background: #ffffff;
+}
+
+.message-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .usage-meta {
   display: flex;
   align-items: center;
@@ -1871,6 +1907,10 @@ button {
 
   .message-meta {
     gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .message-actions {
     flex-wrap: wrap;
   }
 

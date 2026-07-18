@@ -129,6 +129,18 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
   const timeoutMs = options.timeoutMs || REQUEST_TIMEOUT_MS;
 
   const controller = new AbortController();
+  let externallyAborted = Boolean(options.signal?.aborted);
+  const abortFromExternalSignal = () => {
+    externallyAborted = true;
+    controller.abort();
+  };
+  if (options.signal) {
+    if (options.signal.aborted) {
+      controller.abort();
+    } else {
+      options.signal.addEventListener("abort", abortFromExternalSignal, { once: true });
+    }
+  }
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
@@ -150,6 +162,11 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
       return executeJsonRequest(route, options, attempt + 1);
     }
     if (error.name === "AbortError") {
+      if (externallyAborted) {
+        const stoppedError = new Error("请求已停止。");
+        stoppedError.name = "AbortError";
+        throw stoppedError;
+      }
       throw new Error("请求处理时间较长，模型可能仍在生成。请稍后重试，或检查后端服务日志。");
     }
     if (error instanceof TypeError) {
@@ -158,6 +175,7 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
     throw error;
   } finally {
     window.clearTimeout(timeout);
+    options.signal?.removeEventListener?.("abort", abortFromExternalSignal);
   }
 }
 
@@ -167,6 +185,18 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
   const url = `${apiBaseUrl()}${normalizeRoute(route)}`;
   const timeoutMs = options.timeoutMs || LONG_REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
+  let externallyAborted = Boolean(options.signal?.aborted);
+  const abortFromExternalSignal = () => {
+    externallyAborted = true;
+    controller.abort();
+  };
+  if (options.signal) {
+    if (options.signal.aborted) {
+      controller.abort();
+    } else {
+      options.signal.addEventListener("abort", abortFromExternalSignal, { once: true });
+    }
+  }
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
@@ -219,6 +249,11 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
     return finalPayload || {};
   } catch (error) {
     if (error.name === "AbortError") {
+      if (externallyAborted) {
+        const stoppedError = new Error("请求已停止。");
+        stoppedError.name = "AbortError";
+        throw stoppedError;
+      }
       throw new Error("请求处理时间较长，模型可能仍在生成。请稍后重试，或检查后端服务日志。");
     }
     if (error instanceof TypeError) {
@@ -227,6 +262,7 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
     throw error;
   } finally {
     window.clearTimeout(timeout);
+    options.signal?.removeEventListener?.("abort", abortFromExternalSignal);
   }
 }
 
@@ -348,6 +384,11 @@ const browserClient = {
   listSessions: () => requestJson("/sessions"),
   getSession: (sessionId) => requestJson(`/sessions/${sessionId}`),
   deleteSession: (sessionId) => requestJson(`/sessions/${sessionId}`, { method: "DELETE" }),
+  rewindSession: (sessionId, payload) =>
+    requestJson(`/sessions/${sessionId}/rewind`, {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
   importResume: importResumeFromBrowser,
   createSession: (payload) =>
     requestJson("/sessions", {
@@ -359,6 +400,7 @@ const browserClient = {
     requestJson(`/sessions/${payload.sessionId}/messages`, {
       method: "POST",
       timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+      signal: payload.signal,
       body: JSON.stringify({ message: payload.message })
     }),
   streamMessage: (payload, onEvent) =>
@@ -367,6 +409,7 @@ const browserClient = {
       {
         method: "POST",
         timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+        signal: payload.signal,
         body: JSON.stringify({ message: payload.message })
       },
       onEvent

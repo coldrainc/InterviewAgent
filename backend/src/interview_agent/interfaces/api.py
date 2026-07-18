@@ -29,7 +29,7 @@ from interview_agent.interfaces.cli import (
     load_knowledge_base,
     load_vector_store_for_run,
 )
-from interview_agent.core.config import CandidateProfile, InterviewConfig, InterviewMode
+from interview_agent.core.config import CandidateProfile, InterviewConfig, InterviewMode, InterviewStage
 from interview_agent.core.industry import Industry, industry_options
 from interview_agent.domain.billing import DEFAULT_CHAT_MODEL, micros_to_credits
 from interview_agent.infrastructure.auth_providers import AuthProviderError, exchange_wechat_code
@@ -101,6 +101,10 @@ class SessionRequest(BaseModel):
 
 class MessageRequest(BaseModel):
     message: str
+
+
+class SessionRewindRequest(BaseModel):
+    turn_index: int = Field(..., ge=1)
 
 
 class DevLoginRequest(BaseModel):
@@ -297,6 +301,7 @@ class ChatResponse(BaseModel):
     guardrails: list[str] = []
     model_id: str = ""
     usage: UsageResponse | None = None
+    turn_index: int | None = None
 
 
 class SessionSummaryResponse(BaseModel):
@@ -1225,6 +1230,46 @@ def create_app(
             sessions.pop(session_id, None)
         return DeleteResponse(deleted=deleted)
 
+    @app.post("/sessions/{session_id}/rewind", response_model=SessionDetailResponse)
+    async def rewind_session(
+        session_id: str,
+        request: SessionRewindRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> SessionDetailResponse:
+        _require_authenticated(context)
+        session = await _get_or_restore_session(session_id, context.tenant_id, context.user_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="session not found")
+        if request.turn_index > len(session.loop.state.turns):
+            raise HTTPException(status_code=400, detail="turn index out of range")
+
+        state = session.loop.state.model_copy(deep=True)
+        if session.config.mode == InterviewMode.CANDIDATE:
+            state.turns = state.turns[: request.turn_index - 1]
+        else:
+            state.turns = state.turns[: request.turn_index]
+            state.turns[-1].candidate = None
+        state.completed = False
+        state.last_answer_assessment = ""
+        state.stage = state.turns[-1].stage if state.turns else InterviewStage.INTRO
+        session.loop.state = state
+
+        async with session_scope() as db:
+            service = InterviewPersistenceService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+            await service.sync_state(
+                session_id=session_id,
+                config=session.config,
+                state=state,
+            )
+            record = await service.get_session_record(session_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="session not found")
+        return SessionDetailResponse(**record)
+
     @app.post("/sessions/{session_id}/messages", response_model=ChatResponse)
     async def send_message(
         session_id: str,
@@ -1269,11 +1314,12 @@ def create_app(
     @app.post("/sessions/{session_id}/stream")
     async def stream_message(
         session_id: str,
-        request: MessageRequest,
+        message_request: MessageRequest,
+        http_request: Request,
         context: RequestContext = Depends(request_context),
     ) -> StreamingResponse:
         _require_authenticated(context)
-        _check_message(request.message, settings.max_message_chars)
+        _check_message(message_request.message, settings.max_message_chars)
         session = await _get_or_restore_session(session_id, context.tenant_id, context.user_id)
         if not session:
             raise HTTPException(status_code=404, detail="session not found")
@@ -1289,12 +1335,16 @@ def create_app(
 
         async def event_stream():
             yield _sse("tool.notice", {"message": "开始分析回答。"})
-            result = session.loop.step(request.message)
+            previous_state = session.loop.state.model_copy(deep=True)
+            result = session.loop.step(message_request.message)
+            if await http_request.is_disconnected():
+                session.loop.state = previous_state
+                return
             usage = await _record_usage(
                 session_id=session_id,
                 event_type="turn",
                 model_id=session.model_id,
-                prompt_text=request.message,
+                prompt_text=message_request.message,
                 response_text=result.message,
                 result=result,
                 context=context,
@@ -1320,6 +1370,7 @@ def create_app(
                     "guardrails": [finding.message for finding in result.guardrail_findings or []],
                     "model_id": session.model_id,
                     "usage": usage.model_dump(mode="json") if usage else None,
+                    "turn_index": len(result.state.turns) or None,
                 },
             )
 
@@ -1728,6 +1779,7 @@ def _response(
         guardrails=[finding.message for finding in result.guardrail_findings or []],
         model_id=model_id,
         usage=usage,
+        turn_index=len(result.state.turns) or None,
     )
 
 

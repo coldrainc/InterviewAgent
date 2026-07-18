@@ -1,4 +1,4 @@
-import { Bot, Coins, Loader2, MessageSquarePlus, Send, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { Bot, Coins, Loader2, MessageSquarePlus, PencilLine, Send, ShieldCheck, Sparkles, Square, Undo2, UserRound } from "lucide-react";
 import { quickPrompts } from "../../constants/interview";
 import { formatCredits } from "../../utils/interview";
 
@@ -80,7 +80,7 @@ export function EmptyState({ busy, mode, industry, onStart, onQuickPrompt }) {
   );
 }
 
-export function Message({ message, mode }) {
+export function Message({ message, mode, busy, onEditMessage, onWithdrawMessage }) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
   const userLabel = mode === "candidate" ? "面试官" : "候选人";
@@ -94,9 +94,22 @@ export function Message({ message, mode }) {
         <div className="message-meta">
           <span>{isUser ? userLabel : isSystem ? "系统" : agentLabel}</span>
           <span>{message.time}</span>
+          {message.stopped && <strong>已停止</strong>}
           {message.fallback && <strong>降级回复</strong>}
         </div>
         <div className={`message-bubble ${message.role}`}>{message.text}</div>
+        {isUser && (
+          <div className="message-actions">
+            <button type="button" title="重新编辑这条消息" disabled={busy} onClick={() => onEditMessage?.(message)}>
+              <PencilLine size={13} />
+              重新编辑
+            </button>
+            <button type="button" title="撤回这条消息及后续回复" disabled={busy} onClick={() => onWithdrawMessage?.(message)}>
+              <Undo2 size={13} />
+              撤回
+            </button>
+          </div>
+        )}
         {message.usage && <UsageMeta usage={message.usage} modelId={message.modelId} />}
       </div>
     </article>
@@ -127,7 +140,7 @@ export function Typing() {
   );
 }
 
-export function Composer({ value, busy, hasSession, textareaRef, onChange, onSubmit, onKeyDown, mode }) {
+export function Composer({ value, busy, hasSession, textareaRef, onChange, onSubmit, onKeyDown, onStop, mode }) {
   const placeholder = hasSession
     ? mode === "candidate"
       ? "输入你的面试题或追问，按 Enter 发送，Shift + Enter 换行"
@@ -145,8 +158,14 @@ export function Composer({ value, busy, hasSession, textareaRef, onChange, onSub
         onKeyDown={onKeyDown}
         placeholder={placeholder}
       />
-      <button type="submit" disabled={busy || !value.trim()} aria-label="发送回答">
-        {busy ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+      <button
+        type={busy ? "button" : "submit"}
+        disabled={!busy && !value.trim()}
+        aria-label={busy ? "停止生成" : "发送回答"}
+        title={busy ? "停止生成" : "发送"}
+        onClick={busy ? onStop : undefined}
+      >
+        {busy ? <Square size={17} /> : <Send size={18} />}
       </button>
     </form>
   );

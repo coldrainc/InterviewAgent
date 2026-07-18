@@ -66,7 +66,9 @@ function setCachedSessionMessages(sessionId, value) {
           fallback: Boolean(message.fallback),
           usage: message.usage || null,
           modelId: message.modelId || "",
-          time: message.time || ""
+          time: message.time || "",
+          turnIndex: message.turnIndex || null,
+          stopped: Boolean(message.stopped)
         })))
       );
     } else {
@@ -114,6 +116,7 @@ function App() {
   });
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const activeRequestRef = useRef(null);
 
   useEffect(() => {
     bootstrap();
@@ -419,12 +422,12 @@ function App() {
 
   async function restoreSessionById(targetSessionId) {
     const detail = await api.getSession(targetSessionId);
-    const restoredMessages = turnsToMessages(detail.turns || []);
+    const restoredMessages = turnsToMessages(detail.turns || [], detail.mode);
     const cachedMessages = getCachedSessionMessages(detail.id);
     setSessionId(detail.id);
     setLastSessionId(detail.id);
     setCompleted(detail.status === "completed");
-    setMessages(cachedMessages.length > restoredMessages.length ? cachedMessages : restoredMessages);
+    setMessages(cachedMessages.length ? cachedMessages : restoredMessages);
     return detail;
   }
 
@@ -526,39 +529,55 @@ function App() {
     }
 
     setInput("");
-    appendMessage("user", text);
+    const userTurnIndex = nextUserTurnIndex(messages);
+    appendMessage("user", text, { turn_index: userTurnIndex });
     const agentMessageId = appendMessage("agent", "正在分析回答，DeepSeek 思考中...");
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
     setBusy(true);
     try {
-      const response = await sendMessageWithStreamFallback(activeSessionId, text, agentMessageId);
+      const response = await sendMessageWithStreamFallback(activeSessionId, text, agentMessageId, controller.signal);
       updateMessage(agentMessageId, {
         text: response.message || response.data?.message || "",
         fallback: Boolean(response.fallback_used),
         usage: response.usage || null,
-        modelId: response.model_id || ""
+        modelId: response.model_id || "",
+        turnIndex: response.turn_index || null
       });
       setCompleted(Boolean(response.completed));
       await loadAccount();
       loadSessionHistory();
     } catch (error) {
+      if (isAbortError(error)) {
+        updateMessage(agentMessageId, {
+          text: "已停止生成。你可以重新编辑上一条消息后再发送。",
+          stopped: true
+        });
+        return;
+      }
       appendMessage("system", `发送失败：${error.message}`);
     } finally {
+      if (activeRequestRef.current === controller) {
+        activeRequestRef.current = null;
+      }
       setBusy(false);
     }
   }
 
-  async function sendMessageWithStreamFallback(activeSessionId, text, agentMessageId) {
+  async function sendMessageWithStreamFallback(activeSessionId, text, agentMessageId, signal) {
     if (!api.streamMessage) {
       return api.sendMessage({
         sessionId: activeSessionId,
-        message: text
+        message: text,
+        signal
       });
     }
     try {
       return await api.streamMessage(
         {
           sessionId: activeSessionId,
-          message: text
+          message: text,
+          signal
         },
         (event) => {
           if (event.event === "tool.notice" && event.data?.message) {
@@ -572,12 +591,16 @@ function App() {
               text: event.data?.message || "",
               fallback: Boolean(event.data?.fallback_used),
               usage: event.data?.usage || null,
-              modelId: event.data?.model_id || ""
+              modelId: event.data?.model_id || "",
+              turnIndex: event.data?.turn_index || null
             });
           }
         }
       );
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       const message = normalizeDesktopError(error.message);
       if (!message.includes("无法连接 API 服务") && !message.includes("请求处理时间较长")) {
         throw error;
@@ -585,7 +608,8 @@ function App() {
       updateMessage(agentMessageId, { text: "流式连接中断，正在切换普通请求..." });
       return api.sendMessage({
         sessionId: activeSessionId,
-        message: text
+        message: text,
+        signal
       });
     }
   }
@@ -641,6 +665,8 @@ function App() {
         fallback: Boolean(response.fallback_used),
         usage: response.usage || null,
         modelId: response.model_id || "",
+        turnIndex: response.turn_index || response.turnIndex || null,
+        stopped: Boolean(response.stopped),
         time: formatTime()
       },
       ...guardrails.map((item) => ({
@@ -657,6 +683,60 @@ function App() {
     setMessages((current) =>
       current.map((message) => (message.id === id ? { ...message, ...patch } : message))
     );
+  }
+
+  function maxTurnIndexFromMessages(sourceMessages = messages) {
+    return sourceMessages.reduce((max, message) => {
+      const value = Number(message.turnIndex || 0);
+      return Number.isFinite(value) ? Math.max(max, value) : max;
+    }, 0);
+  }
+
+  function nextUserTurnIndex(sourceMessages = messages) {
+    if (profile.mode === "candidate") {
+      return maxTurnIndexFromMessages(sourceMessages) + 1;
+    }
+    const activeQuestion = [...sourceMessages]
+      .reverse()
+      .find((message) => message.role === "agent" && Number(message.turnIndex || 0) > 0);
+    return Number(activeQuestion?.turnIndex || 0) || Math.max(1, maxTurnIndexFromMessages(sourceMessages));
+  }
+
+  function stopGeneration() {
+    activeRequestRef.current?.abort();
+  }
+
+  function isAbortError(error) {
+    return error?.name === "AbortError" || normalizeDesktopError(error?.message || "").includes("请求已停止");
+  }
+
+  async function withdrawMessage(message) {
+    await rewindFromUserMessage(message, { edit: false });
+  }
+
+  async function editMessage(message) {
+    await rewindFromUserMessage(message, { edit: true });
+  }
+
+  async function rewindFromUserMessage(message, { edit }) {
+    if (busy || !message || message.role !== "user") return;
+    const index = messages.findIndex((item) => item.id === message.id);
+    if (index < 0) return;
+    const nextMessages = messages.slice(0, index);
+    setMessages(nextMessages);
+    setCachedSessionMessages(sessionId, nextMessages);
+    setCompleted(false);
+    if (edit) {
+      setInput(message.text || "");
+      window.setTimeout(() => textareaRef.current?.focus(), 0);
+    }
+    if (!sessionId || !message.turnIndex || !api.rewindSession) return;
+    try {
+      await api.rewindSession(sessionId, { turn_index: message.turnIndex });
+      await loadSessionHistory();
+    } catch (error) {
+      appendMessage("system", `会话已在本地回退，但服务端同步失败：${normalizeDesktopError(error.message)}`);
+    }
   }
 
   function handleSubmit(event) {
@@ -781,7 +861,16 @@ function App() {
                   onQuickPrompt={(prompt) => createSession(prompt)}
                 />
               ) : (
-                messages.map((message) => <Message key={message.id} message={message} mode={profile.mode} />)
+                messages.map((message) => (
+                  <Message
+                    key={message.id}
+                    message={message}
+                    mode={profile.mode}
+                    busy={busy}
+                    onEditMessage={editMessage}
+                    onWithdrawMessage={withdrawMessage}
+                  />
+                ))
               )}
               {busy && <Typing />}
               <div ref={messagesEndRef} />
@@ -795,6 +884,7 @@ function App() {
               onChange={setInput}
               onSubmit={handleSubmit}
               onKeyDown={handleKeyDown}
+              onStop={stopGeneration}
               mode={profile.mode}
             />
           </section>

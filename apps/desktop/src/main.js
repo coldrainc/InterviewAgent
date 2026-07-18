@@ -150,6 +150,13 @@ ipcMain.handle("sessions:delete", async (_event, sessionId) => {
   return requestJson(`/sessions/${sessionId}`, { method: "DELETE" });
 });
 
+ipcMain.handle("sessions:rewind", async (_event, sessionId, payload) => {
+  return requestJson(`/sessions/${sessionId}/rewind`, {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
 ipcMain.handle("api:create-session", async (_event, payload) => {
   return requestJson("/sessions", {
     method: "POST",
