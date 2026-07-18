@@ -6,6 +6,8 @@ const required = [
   "miniprogram/app.json",
   "miniprogram/pages/chat/chat.js",
   "miniprogram/pages/chat/chat.wxml",
+  "miniprogram/pages/setup/setup.js",
+  "miniprogram/pages/setup/setup.wxml",
   "miniprogram/pages/resumes/resumes.js",
   "miniprogram/pages/resumes/resumes.wxml",
   "miniprogram/pages/history/history.js",

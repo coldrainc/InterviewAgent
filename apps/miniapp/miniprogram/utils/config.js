@@ -4,6 +4,7 @@ const config = {
   storageKeys: {
     token: "interview_agent_token",
     selectedResumeId: "interview_agent_selected_resume_id",
+    interviewSetup: "interview_agent_interview_setup",
     userProfile: "interview_agent_user_profile"
   }
 };

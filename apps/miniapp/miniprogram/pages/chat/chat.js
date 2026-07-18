@@ -1,37 +1,48 @@
 const api = require("../../utils/api");
 const { config } = require("../../utils/config");
 const { normalizeError } = require("../../utils/format");
+const {
+  getInterviewSetup,
+  getIndustryLabel,
+  getSetupSummary
+} = require("../../utils/interviewSetup");
 
 Page({
   data: {
     healthText: "检查中",
     industries: [],
-    selectedIndustry: "internet",
     selectedIndustryLabel: "互联网行业",
+    setup: getInterviewSetup(),
+    setupSummary: "",
     sessionId: "",
     selectedResumeId: "",
     selectedResumeName: "",
     input: "",
     busy: false,
-    messages: [],
-    modeOptions: [
-      { value: "interviewer", label: "Agent 面试我" },
-      { value: "candidate", label: "Agent 回答我" }
-    ],
-    selectedMode: "interviewer",
-    selectedModeLabel: "Agent 面试我"
+    messages: []
   },
 
   onLoad() {
     api.restoreToken();
+    this.loadSetup();
     this.loadHealth();
-    this.loadIndustries();
-    this.loadSelectedResume();
   },
 
   onShow() {
+    this.loadSetup();
+    this.loadIndustries();
     this.loadSelectedResume();
     this.restoreSessionIfNeeded();
+  },
+
+  loadSetup() {
+    const setup = getInterviewSetup();
+    const selectedIndustryLabel = getIndustryLabel(this.data.industries, setup.industry);
+    this.setData({
+      setup,
+      selectedIndustryLabel,
+      setupSummary: getSetupSummary(setup, selectedIndustryLabel)
+    });
   },
 
   loadSelectedResume() {
@@ -47,8 +58,14 @@ Page({
     this.setData({
       sessionId: detail.id,
       messages: turnsToMessages(detail.turns || []),
-      selectedMode: detail.mode || this.data.selectedMode,
-      selectedModeLabel: detail.mode === "candidate" ? "Agent 回答我" : "Agent 面试我"
+      setup: {
+        ...this.data.setup,
+        mode: detail.mode || this.data.setup.mode
+      },
+      setupSummary: getSetupSummary(
+        { ...this.data.setup, mode: detail.mode || this.data.setup.mode },
+        this.data.selectedIndustryLabel
+      )
     });
     wx.showToast({ title: "已恢复会话", icon: "success" });
   },
@@ -64,39 +81,20 @@ Page({
 
   async loadIndustries() {
     try {
-      const industries = await api.listIndustries();
+      const industries = await api.listIndustries(this.data.setup.targetRole || "AI 应用工程师");
+      const selectedIndustryLabel = getIndustryLabel(industries, this.data.setup.industry);
       this.setData({
         industries,
-        selectedIndustry: industries[0]?.value || "internet",
-        selectedIndustryLabel: industries[0]?.label || "互联网行业"
+        selectedIndustryLabel,
+        setupSummary: getSetupSummary(this.data.setup, selectedIndustryLabel)
       });
     } catch (_error) {
+      const fallback = [{ value: "internet", label: "互联网行业" }];
+      const selectedIndustryLabel = getIndustryLabel(fallback, this.data.setup.industry);
       this.setData({
-        industries: [{ value: "internet", label: "互联网行业" }],
-        selectedIndustry: "internet",
-        selectedIndustryLabel: "互联网行业"
-      });
-    }
-  },
-
-  onIndustryChange(event) {
-    const index = Number(event.detail.value);
-    const selected = this.data.industries[index];
-    if (selected) {
-      this.setData({
-        selectedIndustry: selected.value,
-        selectedIndustryLabel: selected.label
-      });
-    }
-  },
-
-  onModeChange(event) {
-    const index = Number(event.detail.value);
-    const selected = this.data.modeOptions[index];
-    if (selected) {
-      this.setData({
-        selectedMode: selected.value,
-        selectedModeLabel: selected.label
+        industries: fallback,
+        selectedIndustryLabel,
+        setupSummary: getSetupSummary(this.data.setup, selectedIndustryLabel)
       });
     }
   },
@@ -108,16 +106,17 @@ Page({
   async startInterview() {
     if (this.data.busy) return;
     if (!ensureLogin("开始面试前需要先登录，登录后会保存会话、简历和用量记录。")) return;
+    const setup = getInterviewSetup();
     this.setData({ busy: true, messages: [] });
     try {
       const response = await api.createSession({
         offline: true,
-        mode: this.data.selectedMode,
-        industry: this.data.selectedIndustry,
-        target_role: "AI 应用工程师",
-        seniority: "高级",
-        interview_goal: "请基于我的简历和 AI 项目经历进行真实面试。",
-        focus_areas: ["简历项目深挖", "RAG / Agent 生产化", "评测、上线、安全与观测"],
+        mode: setup.mode,
+        industry: setup.industry,
+        target_role: setup.targetRole,
+        seniority: setup.seniority,
+        interview_goal: setup.interviewGoal,
+        focus_areas: setup.focusAreas,
         resume_id: this.data.selectedResumeId || undefined
       });
       this.setData({
@@ -160,6 +159,10 @@ Page({
 
   openResumePage() {
     wx.switchTab({ url: "/pages/resumes/resumes" });
+  },
+
+  openSetupPage() {
+    wx.switchTab({ url: "/pages/setup/setup" });
   },
 
   openHistoryPage() {

@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/chat/chat",
+    "pages/setup/setup",
     "pages/resumes/resumes",
     "pages/history/history",
     "pages/profile/profile",
@@ -21,6 +22,10 @@
       {
         "pagePath": "pages/chat/chat",
         "text": "面试"
+      },
+      {
+        "pagePath": "pages/setup/setup",
+        "text": "配置"
       },
       {
         "pagePath": "pages/resumes/resumes",

@@ -17,16 +17,26 @@ function request(path, options = {}) {
       header: headers,
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          resolve(response.data);
+          resolve(unwrapResponse(response.data));
           return;
         }
-        reject(new Error(response.data?.detail || `HTTP ${response.statusCode}`));
+        reject(new Error(response.data?.message || response.data?.detail || `HTTP ${response.statusCode}`));
       },
       fail(error) {
         reject(new Error(error.errMsg || "请求 Interview Agent API 失败"));
       }
     });
   });
+}
+
+function unwrapResponse(payload) {
+  if (payload && typeof payload === "object" && "code" in payload && "data" in payload) {
+    if (payload.code === 0) {
+      return payload.data;
+    }
+    throw new Error(payload.message || `API_ERROR_${payload.code}`);
+  }
+  return payload;
 }
 
 function restoreToken() {

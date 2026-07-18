@@ -7,12 +7,13 @@
     <text class="status">{{healthText}}</text>
   </view>
 
-  <view class="panel">
-    <view class="field">
-      <text class="label">模式</text>
-      <picker mode="selector" range="{{modeOptions}}" range-key="label" bindchange="onModeChange">
-        <view class="picker">{{selectedModeLabel}}</view>
-      </picker>
+  <view class="workspace-card">
+    <view class="setup-summary" bindtap="openSetupPage">
+      <view>
+        <text class="label">当前配置</text>
+        <text class="summary-text">{{setupSummary}}</text>
+      </view>
+      <text class="link">配置</text>
     </view>
 
     <view class="resume-strip" bindtap="openResumePage">
@@ -23,12 +24,6 @@
       <text class="link">管理</text>
     </view>
 
-    <text class="label">行业</text>
-    <picker mode="selector" range="{{industries}}" range-key="label" bindchange="onIndustryChange">
-      <view class="picker">
-        {{selectedIndustryLabel}}
-      </view>
-    </picker>
     <view class="actions">
       <button class="secondary" bindtap="openHistoryPage">历史</button>
       <button class="primary" loading="{{busy}}" bindtap="startInterview">开始面试</button>
