@@ -2,14 +2,14 @@
   min-height: 100vh;
   padding: 28rpx;
   box-sizing: border-box;
-  background: #edf1f7;
+  background: #eef4f1;
 }
 
 .header,
 .session-card,
 .empty,
 .notice {
-  border: 1rpx solid #dce3ed;
+  border: 1rpx solid #d9e5df;
   border-radius: 16rpx;
   background: #ffffff;
   padding: 24rpx;
@@ -26,21 +26,21 @@
 .meta,
 .status {
   display: block;
-  color: #687386;
+  color: #64756f;
   font-size: 24rpx;
 }
 
 .title {
   display: block;
   margin-top: 6rpx;
-  color: #162033;
+  color: #14251f;
   font-size: 40rpx;
   font-weight: 700;
 }
 
 .refresh {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #2f63e8;
+  background: #eef5ff;
 }
 
 .notice {
@@ -48,7 +48,7 @@
 }
 
 .notice.error {
-  color: #991b1b;
+  color: #9f2525;
   background: #fff7f7;
 }
 
@@ -59,13 +59,13 @@
 
 .empty-title,
 .name {
-  color: #162033;
+  color: #14251f;
   font-size: 30rpx;
   font-weight: 700;
 }
 
 .empty-text {
-  color: #687386;
+  color: #64756f;
   font-size: 26rpx;
 }
 

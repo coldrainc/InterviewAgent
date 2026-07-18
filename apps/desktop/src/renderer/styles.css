@@ -1,22 +1,22 @@
 :root {
   color-scheme: light;
-  --bg: #edf1f7;
+  --bg: #eef4f1;
   --panel: rgba(255, 255, 255, 0.86);
   --panel-solid: #ffffff;
-  --panel-soft: #f7f9fc;
-  --line: #dce3ed;
-  --line-strong: #cbd5e1;
-  --text: #162033;
-  --muted: #687386;
-  --subtle: #94a3b8;
-  --blue: #2563eb;
-  --blue-strong: #1d4ed8;
-  --cyan: #0891b2;
-  --green: #16a34a;
-  --amber: #d97706;
-  --red: #dc2626;
-  --shadow: 0 22px 60px rgba(15, 23, 42, 0.09);
-  --soft-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --panel-soft: #f7faf8;
+  --line: #d9e5df;
+  --line-strong: #c7d7d1;
+  --text: #14251f;
+  --muted: #64756f;
+  --subtle: #8da19a;
+  --blue: #2f63e8;
+  --blue-strong: #234ed1;
+  --cyan: #0f8f8f;
+  --green: #16a673;
+  --amber: #c77918;
+  --red: #d43b3b;
+  --shadow: 0 22px 60px rgba(18, 48, 42, 0.09);
+  --soft-shadow: 0 12px 28px rgba(18, 48, 42, 0.08);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -35,8 +35,8 @@ body {
   min-height: 100vh;
   overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(237, 241, 247, 0.96)),
-    linear-gradient(135deg, #f8fafc 0%, #e7edf5 52%, #f4f7fb 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(238, 244, 241, 0.96)),
+    linear-gradient(135deg, #f7faf8 0%, #e8f1ed 52%, #f4f8f6 100%);
 }
 
 button,
@@ -68,7 +68,7 @@ button {
 .sidebar,
 .topbar,
 .chat-panel {
-  border: 1px solid rgba(226, 232, 240, 0.88);
+  border: 1px solid rgba(217, 229, 223, 0.88);
   background: var(--panel);
   box-shadow: var(--shadow);
   backdrop-filter: blur(22px);
@@ -103,9 +103,16 @@ button {
 .brand-mark {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #172554, #2563eb 62%, #06b6d4);
-  box-shadow: 0 14px 26px rgba(37, 99, 235, 0.22);
+  border-radius: 11px;
+  overflow: hidden;
+  background: #12302a;
+  box-shadow: 0 14px 26px rgba(47, 99, 232, 0.22);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .brand h1,
@@ -149,34 +156,34 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #1d4ed8, #2563eb 58%, #0891b2);
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.24);
+  background: linear-gradient(135deg, #234ed1, #2f63e8 58%, #0f8f8f);
+  box-shadow: 0 14px 28px rgba(47, 99, 232, 0.24);
 }
 
 .secondary-action {
   width: 100%;
   min-height: 40px;
-  border: 1px solid #c7d8f3;
+  border: 1px solid #c6d8f6;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: #234ed1;
+  background: #eef5ff;
   cursor: pointer;
 }
 
 .secondary-action:hover {
-  border-color: #93c5fd;
-  background: #dbeafe;
+  border-color: #8fb8ff;
+  background: #dceaff;
 }
 
 .primary-action:hover,
 .empty-start:hover,
 .composer button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.24);
+  box-shadow: 0 16px 32px rgba(47, 99, 232, 0.24);
 }
 
 .primary-action:disabled,
@@ -198,19 +205,19 @@ button {
 }
 
 .resume-hint.active {
-  color: #0f4d63;
+  color: #0f6f67;
 }
 
 .resume-hint.success {
-  color: #166534;
+  color: #146c43;
 }
 
 .resume-hint.error {
-  color: #991b1b;
+  color: #9f2525;
 }
 
 .resume-library {
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 9px;
   display: grid;
@@ -226,7 +233,7 @@ button {
 }
 
 .resume-library-head span {
-  color: #526177;
+  color: #5c6f68;
   font-size: 12px;
   font-weight: 800;
 }
@@ -238,7 +245,7 @@ button {
   border-radius: 7px;
   display: grid;
   place-items: center;
-  color: #64748b;
+  color: #60736d;
   background: #ffffff;
   cursor: pointer;
 }
@@ -246,7 +253,7 @@ button {
 .resume-library select {
   width: 100%;
   min-height: 36px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 0 9px;
   outline: none;
@@ -270,7 +277,7 @@ button {
 .account-entry {
   width: 100%;
   min-height: 58px;
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 10px;
   display: grid;
@@ -285,8 +292,8 @@ button {
 
 .account-entry:hover,
 .account-entry.active {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: #8fb8ff;
+  background: #eef5ff;
 }
 
 .account-entry-icon {
@@ -296,7 +303,7 @@ button {
   display: grid;
   place-items: center;
   color: #ffffff;
-  background: #0f4d63;
+  background: #0f6f67;
 }
 
 .account-entry-main {
@@ -331,7 +338,7 @@ button {
 .nav-button {
   width: 100%;
   min-height: 64px;
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 10px;
   display: grid;
@@ -350,9 +357,9 @@ button {
 
 .nav-button:hover,
 .nav-button.active {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+  border-color: #8fb8ff;
+  background: #eef5ff;
+  box-shadow: 0 8px 20px rgba(47, 99, 232, 0.08);
 }
 
 .nav-button-icon {
@@ -361,8 +368,8 @@ button {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  color: #1d4ed8;
-  background: #dbeafe;
+  color: #234ed1;
+  background: #dceaff;
 }
 
 .nav-button strong,
@@ -386,7 +393,7 @@ button {
 }
 
 .account-panel {
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 12px;
   background: rgba(248, 250, 252, 0.82);
@@ -394,7 +401,7 @@ button {
 
 .text-button {
   border: 0;
-  color: #1d4ed8;
+  color: #234ed1;
   background: transparent;
   cursor: pointer;
   font-size: 12px;
@@ -432,7 +439,7 @@ button {
 }
 
 .credit-grid div {
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 9px;
   background: #ffffff;
@@ -451,7 +458,7 @@ button {
 
 .credit-grid b {
   margin-top: 4px;
-  color: #0f4d63;
+  color: #0f6f67;
   font-size: 17px;
 }
 
@@ -464,10 +471,10 @@ button {
 .recharge-actions button,
 .auth-form button {
   min-height: 34px;
-  border: 1px solid #c7d8f3;
+  border: 1px solid #c6d8f6;
   border-radius: 8px;
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: #234ed1;
+  background: #eef5ff;
   cursor: pointer;
   font-weight: 850;
 }
@@ -480,7 +487,7 @@ button {
 .auth-form input {
   width: 100%;
   height: 36px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 0 10px;
   outline: none;
@@ -489,13 +496,13 @@ button {
 }
 
 .auth-form .secondary-auth {
-  color: #475569;
+  color: #4e625b;
   background: #ffffff;
 }
 
 .auth-form p {
   margin: 0;
-  color: #991b1b;
+  color: #9f2525;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -539,7 +546,7 @@ button {
 
 .history-item > button:first-child {
   min-width: 0;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 8px 9px;
   text-align: left;
@@ -549,8 +556,8 @@ button {
 }
 
 .history-item.active > button:first-child {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: #8fb8ff;
+  background: #eef5ff;
 }
 
 .history-item strong,
@@ -590,7 +597,7 @@ button {
 }
 
 .mode-panel {
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 12px;
   background: rgba(248, 250, 252, 0.76);
@@ -598,13 +605,13 @@ button {
 
 .segmented-control {
   min-height: 38px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 3px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
-  background: #eef3f9;
+  background: #eef5f2;
 }
 
 .segmented-control button {
@@ -612,16 +619,16 @@ button {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #526177;
+  color: #5c6f68;
   cursor: pointer;
   font-size: 13px;
   font-weight: 760;
 }
 
 .segmented-control button.active {
-  color: #1d4ed8;
+  color: #234ed1;
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(18, 48, 42, 0.08);
 }
 
 .select-field {
@@ -630,7 +637,7 @@ button {
 }
 
 .select-field span {
-  color: #526177;
+  color: #5c6f68;
   font-size: 12px;
   font-weight: 800;
 }
@@ -638,7 +645,7 @@ button {
 .select-field select {
   width: 100%;
   height: 38px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 0 10px;
   outline: none;
@@ -658,7 +665,7 @@ button {
 }
 
 .industry-brief {
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 9px 10px;
   display: grid;
@@ -667,7 +674,7 @@ button {
 }
 
 .industry-brief strong {
-  color: #1e3a8a;
+  color: #1f4fd7;
   font-size: 12px;
 }
 
@@ -679,11 +686,11 @@ button {
 }
 
 .industry-brief small {
-  color: #475569;
+  color: #4e625b;
 }
 
 .resume-panel {
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 12px;
   background:
@@ -707,7 +714,7 @@ button {
 }
 
 .field span {
-  color: #526177;
+  color: #5c6f68;
   font-size: 12px;
   font-weight: 800;
 }
@@ -715,7 +722,7 @@ button {
 .field input,
 .field textarea {
   width: 100%;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   outline: none;
   color: var(--text);
@@ -745,14 +752,14 @@ button {
 
 .field input:focus,
 .field textarea:focus {
-  border-color: rgba(37, 99, 235, 0.58);
+  border-color: rgba(47, 99, 232, 0.58);
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(47, 99, 232, 0.1);
 }
 
 .field input::placeholder,
 .field textarea::placeholder {
-  color: #9aa7b7;
+  color: #93a39e;
 }
 
 .panel.compact {
@@ -768,7 +775,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #475569;
+  color: #4e625b;
   font-size: 12px;
   font-weight: 850;
   letter-spacing: 0.04em;
@@ -788,14 +795,14 @@ button {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  color: #64748b;
+  color: #60736d;
   background: #ffffff;
   cursor: pointer;
 }
 
 .icon-button:hover {
   color: var(--blue);
-  border-color: #bfdbfe;
+  border-color: #c8dafc;
 }
 
 .health-card {
@@ -860,7 +867,7 @@ button {
 }
 
 .service-row span {
-  color: #64748b;
+  color: #60736d;
   font-size: 12px;
   font-weight: 700;
 }
@@ -883,7 +890,7 @@ button {
   gap: 12px;
   padding: 0 11px;
   background: var(--panel-soft);
-  color: #334155;
+  color: #334640;
   font-size: 14px;
 }
 
@@ -898,7 +905,7 @@ button {
   height: 23px;
   border-radius: 999px;
   padding: 3px;
-  background: #cbd5e1;
+  background: #c7d7d1;
   transition: background 0.14s ease;
 }
 
@@ -908,7 +915,7 @@ button {
   height: 17px;
   border-radius: 999px;
   background: #ffffff;
-  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.24);
+  box-shadow: 0 2px 5px rgba(18, 48, 42, 0.24);
   transition: transform 0.14s ease;
 }
 
@@ -922,7 +929,7 @@ button {
 
 .capability {
   min-height: 28px;
-  color: #475569;
+  color: #4e625b;
   font-size: 13px;
 }
 
@@ -975,14 +982,14 @@ button {
 
 .topbar-button {
   min-height: 31px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #c8dafc;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 0 12px;
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: #234ed1;
+  background: #eef5ff;
   cursor: pointer;
   font-size: 12px;
   font-weight: 850;
@@ -1007,23 +1014,23 @@ button {
 }
 
 .status-chip.ok {
-  color: #166534;
+  color: #146c43;
   background: #dcfce7;
 }
 
 .status-chip.fail {
-  color: #991b1b;
-  background: #fee2e2;
+  color: #9f2525;
+  background: #fee3e1;
 }
 
 .session-chip {
-  color: #475569;
-  background: #f1f5f9;
+  color: #4e625b;
+  background: #eef4f1;
 }
 
 .mode-chip {
-  color: #0f4d63;
-  background: #cffafe;
+  color: #0f6f67;
+  background: #d9f8f2;
 }
 
 .chat-panel {
@@ -1039,7 +1046,7 @@ button {
 .settings-center,
 .setup-center {
   min-height: 0;
-  border: 1px solid rgba(226, 232, 240, 0.88);
+  border: 1px solid rgba(217, 229, 223, 0.88);
   border-radius: 10px;
   padding: clamp(18px, 3vw, 34px);
   overflow-y: auto;
@@ -1069,7 +1076,7 @@ button {
   display: grid;
   place-items: center;
   color: #ffffff;
-  background: linear-gradient(145deg, #172554, #2563eb 62%, #0891b2);
+  background: linear-gradient(145deg, #12302a, #2f63e8 62%, #0f8f8f);
 }
 
 .account-hero h3,
@@ -1122,7 +1129,7 @@ button {
 .account-block,
 .settings-block,
 .setup-block {
-  border: 1px solid rgba(203, 213, 225, 0.72);
+  border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 14px;
   display: grid;
@@ -1148,7 +1155,7 @@ button {
 
 .settings-mode-grid button {
   min-height: 112px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   padding: 13px;
   display: grid;
@@ -1160,9 +1167,9 @@ button {
 }
 
 .settings-mode-grid button.active {
-  border-color: #2563eb;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: #2f63e8;
+  background: #eef5ff;
+  color: #234ed1;
 }
 
 .settings-mode-icon {
@@ -1172,11 +1179,11 @@ button {
   display: grid;
   place-items: center;
   color: #ffffff;
-  background: #0f4d63;
+  background: #0f6f67;
 }
 
 .settings-mode-grid button.active .settings-mode-icon {
-  background: #2563eb;
+  background: #2f63e8;
 }
 
 .settings-mode-grid strong {
@@ -1219,7 +1226,7 @@ button {
 }
 
 .payment-options button {
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   background: #ffffff;
   color: var(--text);
@@ -1229,9 +1236,9 @@ button {
 }
 
 .payment-options button.active {
-  border-color: #2563eb;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: #2f63e8;
+  background: #eef5ff;
+  color: #234ed1;
 }
 
 .payment-result {
@@ -1242,7 +1249,7 @@ button {
 .payment-result img {
   width: 180px;
   height: 180px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
   background: #ffffff;
   padding: 8px;
@@ -1251,9 +1258,9 @@ button {
 .payment-qr-placeholder {
   width: 180px;
   height: 180px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(18, 48, 42, 0.08);
 }
 
 .payment-result code {
@@ -1268,7 +1275,7 @@ button {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: #475569;
+  color: #4e625b;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1289,7 +1296,7 @@ button {
 }
 
 .profile-item {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #dce7e2;
   padding-bottom: 9px;
   display: grid;
   gap: 4px;
@@ -1337,7 +1344,7 @@ button {
 
 .auth-card.standalone,
 .auth-dialog {
-  border: 1px solid rgba(203, 213, 225, 0.82);
+  border: 1px solid rgba(199, 215, 209, 0.82);
   border-radius: 10px;
   padding: 18px;
   background: #ffffff;
@@ -1351,7 +1358,7 @@ button {
   display: grid;
   place-items: center;
   padding: 18px;
-  background: rgba(15, 23, 42, 0.34);
+  background: rgba(18, 48, 42, 0.34);
   backdrop-filter: blur(8px);
 }
 
@@ -1390,8 +1397,8 @@ button {
   width: 66px;
   height: 66px;
   border-radius: 10px;
-  background: linear-gradient(145deg, #0f172a, #2563eb 62%, #0891b2);
-  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.22);
+  background: linear-gradient(145deg, #12302a, #2f63e8 62%, #0f8f8f);
+  box-shadow: 0 18px 36px rgba(47, 99, 232, 0.22);
 }
 
 .empty-state h3 {
@@ -1412,7 +1419,7 @@ button {
   align-items: center;
   gap: 8px;
   padding: 0 16px;
-  background: linear-gradient(135deg, #1d4ed8, #0891b2);
+  background: linear-gradient(135deg, #234ed1, #0f8f8f);
 }
 
 .quick-grid {
@@ -1429,7 +1436,7 @@ button {
   border-radius: 8px;
   padding: 10px 12px;
   background: rgba(255, 255, 255, 0.76);
-  color: #334155;
+  color: #334640;
   cursor: pointer;
   line-height: 1.45;
   text-align: left;
@@ -1441,7 +1448,7 @@ button {
 
 .quick-grid button:hover {
   transform: translateY(-1px);
-  border-color: #93c5fd;
+  border-color: #8fb8ff;
   background: #ffffff;
 }
 
@@ -1468,20 +1475,20 @@ button {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #111827;
+  background: #14251f;
   box-shadow: var(--soft-shadow);
 }
 
 .message-row.user .avatar {
-  background: linear-gradient(145deg, #1d4ed8, #2563eb);
+  background: linear-gradient(145deg, #234ed1, #2f63e8);
 }
 
 .message-row.agent .avatar {
-  background: linear-gradient(145deg, #0f172a, #334155);
+  background: linear-gradient(145deg, #12302a, #334640);
 }
 
 .message-row.system .avatar {
-  background: linear-gradient(145deg, #b45309, #d97706);
+  background: linear-gradient(145deg, #b8711b, #c77918);
 }
 
 .message-stack {
@@ -1507,8 +1514,8 @@ button {
 .message-meta strong {
   border-radius: 999px;
   padding: 2px 7px;
-  color: #9a3412;
-  background: #ffedd5;
+  color: #99511a;
+  background: #fff0db;
   font-size: 11px;
 }
 
@@ -1519,24 +1526,24 @@ button {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
-  box-shadow: 0 7px 20px rgba(15, 23, 42, 0.07);
+  box-shadow: 0 7px 20px rgba(18, 48, 42, 0.07);
 }
 
 .message-bubble.agent {
-  border: 1px solid #e5eaf2;
+  border: 1px solid #dfe8e3;
   background: #ffffff;
   color: #1f2937;
 }
 
 .message-bubble.user {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #2f63e8, #234ed1);
   color: #ffffff;
 }
 
 .message-bubble.system {
-  border: 1px solid #fed7aa;
-  background: #fff7ed;
-  color: #9a3412;
+  border: 1px solid #f2c98f;
+  background: #fff8ef;
+  color: #99511a;
   font-size: 13px;
 }
 
@@ -1545,16 +1552,16 @@ button {
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
-  color: #64748b;
+  color: #60736d;
   font-size: 12px;
 }
 
 .usage-meta svg {
-  color: #d97706;
+  color: #c77918;
 }
 
 .usage-meta span {
-  border: 1px solid #e5eaf2;
+  border: 1px solid #dfe8e3;
   border-radius: 999px;
   padding: 2px 8px;
   background: #ffffff;
@@ -1563,16 +1570,16 @@ button {
 .typing {
   align-self: flex-start;
   min-height: 34px;
-  border: 1px solid #e5eaf2;
+  border: 1px solid #dfe8e3;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 0 13px;
-  color: #475569;
+  color: #4e625b;
   background: rgba(255, 255, 255, 0.76);
   font-size: 13px;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 18px rgba(18, 48, 42, 0.06);
 }
 
 .spin {
@@ -1584,21 +1591,21 @@ button {
   bottom: 0;
   z-index: 5;
   margin: 0 clamp(18px, 5vw, 64px) 22px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d9e5df;
   border-radius: 10px;
   background: #ffffff;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 46px;
   gap: 10px;
   padding: 9px;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 18px 44px rgba(18, 48, 42, 0.1);
 }
 
 .composer:focus-within {
-  border-color: rgba(37, 99, 235, 0.58);
+  border-color: rgba(47, 99, 232, 0.58);
   box-shadow:
-    0 0 0 4px rgba(37, 99, 235, 0.1),
-    0 18px 44px rgba(15, 23, 42, 0.1);
+    0 0 0 4px rgba(47, 99, 232, 0.1),
+    0 18px 44px rgba(18, 48, 42, 0.1);
 }
 
 .composer textarea {
@@ -1626,7 +1633,7 @@ button {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #1d4ed8, #0891b2);
+  background: linear-gradient(135deg, #234ed1, #0f8f8f);
 }
 
 @media (max-width: 1180px) {
@@ -1727,8 +1734,8 @@ button {
 
 @media (max-width: 640px) {
   :root {
-    --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-    --soft-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);
+    --shadow: 0 10px 28px rgba(18, 48, 42, 0.08);
+    --soft-shadow: 0 8px 18px rgba(18, 48, 42, 0.07);
   }
 
   .app-shell {

@@ -8,6 +8,7 @@ const required = [
   "miniprogram/pages/chat/chat.wxml",
   "miniprogram/pages/setup/setup.js",
   "miniprogram/pages/setup/setup.wxml",
+  "miniprogram/pages/setup/setup.wxss",
   "miniprogram/pages/resumes/resumes.js",
   "miniprogram/pages/resumes/resumes.wxml",
   "miniprogram/pages/history/history.js",
@@ -16,7 +17,9 @@ const required = [
   "miniprogram/pages/profile/profile.wxml",
   "miniprogram/pages/privacy/privacy.js",
   "miniprogram/pages/privacy/privacy.wxml",
-  "miniprogram/utils/api.js"
+  "miniprogram/utils/api.js",
+  "miniprogram/utils/interviewSetup.js",
+  "miniprogram/assets/app-icon.png"
 ];
 
 const missing = required.filter((file) => !fs.existsSync(path.join(__dirname, "..", file)));

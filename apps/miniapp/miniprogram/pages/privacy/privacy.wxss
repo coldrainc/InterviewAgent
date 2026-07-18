@@ -2,11 +2,11 @@
   min-height: 100vh;
   padding: 28rpx;
   box-sizing: border-box;
-  background: #edf1f7;
+  background: #eef4f1;
 }
 
 .card {
-  border: 1rpx solid #dce3ed;
+  border: 1rpx solid #d9e5df;
   border-radius: 16rpx;
   background: #ffffff;
   padding: 28rpx;
@@ -14,7 +14,7 @@
 
 .title {
   display: block;
-  color: #162033;
+  color: #14251f;
   font-size: 40rpx;
   font-weight: 700;
   margin-bottom: 20rpx;
@@ -22,7 +22,7 @@
 
 .paragraph {
   display: block;
-  color: #334155;
+  color: #334640;
   font-size: 28rpx;
   line-height: 1.65;
   margin-bottom: 18rpx;

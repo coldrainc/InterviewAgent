@@ -1,4 +1,4 @@
-import { BrainCircuit, History, MessageSquarePlus, RefreshCw, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
+import { History, MessageSquarePlus, RefreshCw, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
 import { formatDateTime } from "../../utils/interview";
 import { AccountEntry } from "../account/AccountCenter";
 
@@ -20,7 +20,7 @@ export default function Sidebar({
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark">
-          <BrainCircuit size={23} strokeWidth={2.2} />
+          <img src="./favicon.svg" alt="" aria-hidden="true" />
         </div>
         <div>
           <h1>Interview Agent</h1>

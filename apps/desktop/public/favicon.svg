@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Aivago">
+  <defs>
+    <linearGradient id="bg" x1="76" y1="52" x2="438" y2="462" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12302A"/>
+      <stop offset="0.48" stop-color="#1F4FD7"/>
+      <stop offset="1" stop-color="#0F8F8F"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="150" y1="142" x2="362" y2="368" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DDFBF3"/>
+    </linearGradient>
+    <filter id="shadow" x="80" y="88" width="360" height="350" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#071512" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <path d="M132 194C132 155.34 163.34 124 202 124H310C348.66 124 380 155.34 380 194V260C380 298.66 348.66 330 310 330H275.5L223.8 380C216.07 387.48 203 382 203 371.24V330H202C163.34 330 132 298.66 132 260V194Z" fill="url(#mark)" filter="url(#shadow)"/>
+  <path d="M193 223.5C193 211.63 202.63 202 214.5 202H297.5C309.37 202 319 211.63 319 223.5C319 235.37 309.37 245 297.5 245H214.5C202.63 245 193 235.37 193 223.5Z" fill="#1F4FD7"/>
+  <path d="M193 277C193 266.51 201.51 258 212 258H258C268.49 258 277 266.51 277 277C277 287.49 268.49 296 258 296H212C201.51 296 193 287.49 193 277Z" fill="#0F8F8F"/>
+  <circle cx="327" cy="278" r="20" fill="#12302A"/>
+</svg>

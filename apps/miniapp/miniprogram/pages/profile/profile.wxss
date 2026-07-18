@@ -2,13 +2,13 @@
   min-height: 100vh;
   padding: 28rpx;
   box-sizing: border-box;
-  background: #edf1f7;
+  background: #eef4f1;
 }
 
 .header,
 .card,
 .notice {
-  border: 1rpx solid #dce3ed;
+  border: 1rpx solid #d9e5df;
   border-radius: 16rpx;
   background: #ffffff;
   padding: 24rpx;
@@ -25,22 +25,22 @@
 .label,
 .meta {
   display: block;
-  color: #687386;
+  color: #64756f;
   font-size: 24rpx;
 }
 
 .title {
   display: block;
   margin-top: 6rpx;
-  color: #162033;
+  color: #14251f;
   font-size: 40rpx;
   font-weight: 700;
 }
 
 .refresh,
 .secondary {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #2f63e8;
+  background: #eef5ff;
 }
 
 button {
@@ -57,7 +57,7 @@ button::after {
 }
 
 .notice.error {
-  color: #991b1b;
+  color: #9f2525;
   background: #fff7f7;
 }
 
@@ -69,7 +69,7 @@ button::after {
 
 .profile-card {
   margin-bottom: 18rpx;
-  border: 1rpx solid #dce3ed;
+  border: 1rpx solid #d9e5df;
   border-radius: 16rpx;
   padding: 28rpx;
   display: flex;
@@ -79,8 +79,8 @@ button::after {
 }
 
 .profile-card.signed {
-  border-color: #bfdbfe;
-  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+  border-color: #c8dafc;
+  background: linear-gradient(135deg, #ffffff 0%, #eef5ff 100%);
 }
 
 .avatar {
@@ -92,7 +92,7 @@ button::after {
   justify-content: center;
   flex: 0 0 auto;
   color: #ffffff;
-  background: linear-gradient(145deg, #172554, #2563eb 62%, #0891b2);
+  background: linear-gradient(145deg, #12302a, #2f63e8 62%, #0f8f8f);
   font-size: 30rpx;
   font-weight: 800;
 }
@@ -111,7 +111,7 @@ button::after {
 }
 
 .value {
-  color: #162033;
+  color: #14251f;
   font-size: 32rpx;
   font-weight: 700;
 }
@@ -127,16 +127,16 @@ button::after {
 }
 
 .quota-grid > view {
-  border: 1rpx solid #dbe3ef;
+  border: 1rpx solid #d9e5df;
   border-radius: 14rpx;
   padding: 20rpx;
-  background: #f8fafc;
+  background: #f7faf8;
 }
 
 .quota-value {
   display: block;
   margin-top: 8rpx;
-  color: #0f4d63;
+  color: #0f6f67;
   font-size: 42rpx;
   font-weight: 800;
   line-height: 1.2;
@@ -151,13 +151,13 @@ button::after {
 .recharge {
   min-height: 74rpx;
   padding: 0 12rpx;
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: #234ed1;
+  background: #eef5ff;
   font-weight: 700;
 }
 
 .success {
-  color: #166534;
+  color: #146c43;
   font-size: 24rpx;
 }
 
@@ -169,7 +169,7 @@ button::after {
 
 .primary {
   color: #ffffff;
-  background: #2563eb;
+  background: #2f63e8;
 }
 
 .danger {

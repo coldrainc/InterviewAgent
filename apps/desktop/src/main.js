@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, nativeImage } = require("electron");
 const fs = require("fs/promises");
 const path = require("path");
 
@@ -7,6 +7,7 @@ let apiToken = process.env.INTERVIEW_AGENT_API_TOKEN || process.env.INTERVIEW_AP
 const RENDERER_DEV_URL = process.env.INTERVIEW_RENDERER_DEV_URL;
 const API_RETRY_COUNT = 8;
 const API_RETRY_DELAY_MS = 350;
+const APP_ICON_PATH = path.join(__dirname, "assets", "app-icon.png");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -15,7 +16,8 @@ function createWindow() {
     minWidth: 920,
     minHeight: 640,
     title: "Interview Agent",
-    backgroundColor: "#f6f7fb",
+    backgroundColor: "#eef4f1",
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -31,6 +33,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const appIcon = nativeImage.createFromPath(APP_ICON_PATH);
+  if (process.platform === "darwin" && !appIcon.isEmpty()) {
+    app.dock.setIcon(appIcon);
+  }
   createWindow();
 
   app.on("activate", () => {

@@ -2,14 +2,14 @@
   min-height: 100vh;
   padding: 28rpx;
   box-sizing: border-box;
-  background: #edf1f7;
+  background: #eef4f1;
 }
 
 .header,
 .resume-card,
 .empty,
 .notice {
-  border: 1rpx solid #dce3ed;
+  border: 1rpx solid #d9e5df;
   border-radius: 16rpx;
   background: #ffffff;
   padding: 24rpx;
@@ -26,14 +26,14 @@
 .meta,
 .summary {
   display: block;
-  color: #687386;
+  color: #64756f;
   font-size: 24rpx;
 }
 
 .title {
   display: block;
   margin-top: 6rpx;
-  color: #162033;
+  color: #14251f;
   font-size: 40rpx;
   font-weight: 700;
 }
@@ -41,7 +41,7 @@
 .upload,
 .primary {
   color: #ffffff;
-  background: #2563eb;
+  background: #2f63e8;
 }
 
 .notice {
@@ -49,7 +49,7 @@
 }
 
 .notice.error {
-  color: #991b1b;
+  color: #9f2525;
   background: #fff7f7;
 }
 
@@ -59,13 +59,13 @@
 }
 
 .empty-title {
-  color: #162033;
+  color: #14251f;
   font-size: 32rpx;
   font-weight: 700;
 }
 
 .empty-text {
-  color: #687386;
+  color: #64756f;
   font-size: 26rpx;
   line-height: 1.5;
 }
@@ -81,8 +81,8 @@
 }
 
 .resume-card.active {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: #8fb8ff;
+  background: #eef5ff;
 }
 
 .card-head {
@@ -92,14 +92,14 @@
 }
 
 .name {
-  color: #162033;
+  color: #14251f;
   font-size: 30rpx;
   font-weight: 700;
 }
 
 .badge {
   flex: 0 0 auto;
-  color: #2563eb;
+  color: #2f63e8;
   font-size: 22rpx;
 }
 
