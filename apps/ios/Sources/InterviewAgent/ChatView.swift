@@ -13,7 +13,7 @@ struct ChatView: View {
                 composer
             }
             .padding()
-            .background(Color(red: 0.93, green: 0.95, blue: 0.98))
+            .background(BrandPalette.background)
             .navigationTitle("Interview Agent")
             .onAppear {
                 viewModel.load()
@@ -33,23 +33,27 @@ struct ChatView: View {
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 12) {
+            Image("BrandIcon")
+                .resizable()
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 11))
             VStack(alignment: .leading, spacing: 4) {
                 Text("AI 技术面试")
                     .font(.title2.weight(.bold))
                 Text(viewModel.healthText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BrandPalette.muted)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text(viewModel.account == nil ? "未登录" : "已登录")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(viewModel.account == nil ? .orange : .green)
+                    .foregroundStyle(viewModel.account == nil ? BrandPalette.warning : BrandPalette.success)
                 if let account = viewModel.account {
                     Text("\(account.creditBalance) 积分")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BrandPalette.muted)
                 }
             }
         }

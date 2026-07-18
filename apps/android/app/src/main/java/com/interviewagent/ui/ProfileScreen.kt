@@ -60,7 +60,7 @@ fun ProfileScreen(
                     Box(
                         modifier = Modifier
                             .size(58.dp)
-                            .background(Color(0xFF2563EB), RoundedCornerShape(12.dp)),
+                            .background(BrandColors.Primary, RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(if (state.account == null) "未" else "我", color = Color.White)
@@ -70,7 +70,7 @@ fun ProfileScreen(
                         Text(
                             state.account?.email ?: state.account?.userId ?: "登录后保存简历、会话和用量记录",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF687386)
+                            color = BrandColors.Muted
                         )
                     }
                 }
@@ -100,7 +100,7 @@ fun ProfileScreen(
                         Text(
                             state.accountMessage,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (state.accountMessage.contains("失败")) Color(0xFFB91C1C) else Color(0xFF166534)
+                            color = if (state.accountMessage.contains("失败")) BrandColors.Danger else BrandColors.Success
                         )
                     }
                 }

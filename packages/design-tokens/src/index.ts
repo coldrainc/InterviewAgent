@@ -1,17 +1,17 @@
 export const designTokens = {
   color: {
-    background: "#edf1f7",
+    background: "#EEF4F1",
     surface: "#ffffff",
-    surfaceSoft: "#f7f9fc",
-    text: "#162033",
-    muted: "#687386",
-    primary: "#2563eb",
-    primaryStrong: "#1d4ed8",
-    cyan: "#0891b2",
-    success: "#16a34a",
-    warning: "#d97706",
-    danger: "#dc2626",
-    line: "#dce3ed"
+    surfaceSoft: "#F7FAF8",
+    text: "#14251F",
+    muted: "#64756F",
+    primary: "#2F63E8",
+    primaryStrong: "#234ED1",
+    cyan: "#0F8F8F",
+    success: "#16A673",
+    warning: "#C77918",
+    danger: "#D43B3B",
+    line: "#D9E5DF"
   },
   radius: {
     sm: 6,

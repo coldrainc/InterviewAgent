@@ -1,6 +1,7 @@
 package com.interviewagent.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.interviewagent.R
 import com.interviewagent.data.ChatMessage
 
 @Composable
@@ -79,13 +82,22 @@ fun ChatScreen(
 @Composable
 private fun Header(healthText: String, accountText: String) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.app_icon),
+                contentDescription = null,
+                modifier = Modifier.size(44.dp)
+            )
             Column(modifier = Modifier.weight(1f)) {
                 Text("Interview Agent", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(4.dp))
-                Text(healthText, style = MaterialTheme.typography.bodySmall, color = Color(0xFF687386))
+                Text(healthText, style = MaterialTheme.typography.bodySmall, color = BrandColors.Muted)
             }
-            Text(accountText, style = MaterialTheme.typography.labelMedium, color = Color(0xFF0F4D63))
+            Text(accountText, style = MaterialTheme.typography.labelMedium, color = BrandColors.Teal)
         }
     }
 }

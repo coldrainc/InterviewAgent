@@ -1,4 +1,9 @@
 <resources>
-    <color name="ia_background">#EDF1F7</color>
-    <color name="ia_primary">#2563EB</color>
+    <color name="ia_background">#EEF4F1</color>
+    <color name="ia_surface_soft">#F7FAF8</color>
+    <color name="ia_text">#14251F</color>
+    <color name="ia_muted">#64756F</color>
+    <color name="ia_primary">#2F63E8</color>
+    <color name="ia_primary_strong">#234ED1</color>
+    <color name="ia_teal">#0F8F8F</color>
 </resources>

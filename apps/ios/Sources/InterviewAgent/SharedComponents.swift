@@ -11,11 +11,11 @@ struct MetricBox: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.title2.weight(.bold))
-                .foregroundStyle(Color(red: 0.06, green: 0.30, blue: 0.39))
+                .foregroundStyle(BrandPalette.teal)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(red: 0.97, green: 0.98, blue: 1.0))
+        .background(BrandPalette.surfaceSoft)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -46,8 +46,8 @@ struct MessageBubble: View {
                 .foregroundStyle(.secondary)
             Text(message.text)
                 .padding(12)
-                .foregroundStyle(message.role == .user ? Color.white : Color.primary)
-                .background(message.role == .user ? Color.blue : Color.white)
+                .foregroundStyle(message.role == .user ? Color.white : BrandPalette.text)
+                .background(message.role == .user ? BrandPalette.primary : Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)

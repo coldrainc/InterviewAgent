@@ -19,3 +19,8 @@ The icon uses a rounded-square gradient with an interview chat mark:
 - `apps/desktop/public/apple-touch-icon.png`: iOS home-screen icon.
 - `apps/desktop/src/assets/app-icon.png`: Electron window and Dock icon.
 - `apps/miniapp/miniprogram/assets/app-icon.png`: miniapp in-product brand icon.
+- `apps/android/app/src/main/res/mipmap-*/ic_launcher.png`: Android launcher icons.
+- `apps/android/app/src/main/res/drawable-nodpi/app_icon.png`: Android in-product brand icon.
+- `apps/ios/InterviewAgent/Assets.xcassets/AppIcon.appiconset/AppIcon.png`: iOS app icon.
+- `apps/ios/InterviewAgent/Assets.xcassets/BrandIcon.imageset/brand-icon.png`: iOS in-product brand icon.
+- `apps/harmony/**/resources/base/media/app_icon.svg`: Harmony launcher/start-window icon.

@@ -43,11 +43,11 @@ fun InterviewApp(viewModel: ChatViewModel) {
     val state by viewModel.state.collectAsState()
     var selectedTab by remember { mutableStateOf(AppTab.Chat) }
 
-    MaterialTheme {
+    MaterialTheme(colorScheme = BrandColorScheme) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFEDF1F7))
+                .background(BrandColors.Background)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

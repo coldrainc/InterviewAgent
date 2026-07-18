@@ -15,7 +15,7 @@ struct AccountView: View {
                 }
                 .padding()
             }
-            .background(Color(red: 0.93, green: 0.95, blue: 0.98))
+            .background(BrandPalette.background)
             .navigationTitle("我的")
             .task {
                 await viewModel.refreshAccount()
@@ -27,10 +27,10 @@ struct AccountView: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.gradient)
-                Image(systemName: viewModel.account == nil ? "person" : "person.fill")
-                    .foregroundStyle(.white)
-                    .font(.title3.weight(.semibold))
+                    .fill(BrandPalette.primary.gradient)
+                Image("BrandIcon")
+                    .resizable()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .frame(width: 58, height: 58)
 
@@ -39,7 +39,7 @@ struct AccountView: View {
                     .font(.title3.weight(.bold))
                 Text(viewModel.account?.email ?? viewModel.account?.userID ?? "登录后保存简历、会话和用量记录")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BrandPalette.muted)
                     .lineLimit(1)
             }
             Spacer()
@@ -69,7 +69,7 @@ struct AccountView: View {
             if !viewModel.accountMessage.isEmpty {
                 Text(viewModel.accountMessage)
                     .font(.caption)
-                    .foregroundStyle(viewModel.accountMessage.contains("失败") ? .red : .green)
+                    .foregroundStyle(viewModel.accountMessage.contains("失败") ? BrandPalette.danger : BrandPalette.success)
             }
         }
         .cardStyle()

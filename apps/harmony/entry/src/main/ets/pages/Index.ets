@@ -190,7 +190,7 @@ struct Index {
       .width('100%')
       .height('100%')
       .padding(16)
-      .backgroundColor('#edf1f7')
+      .backgroundColor('#EEF4F1')
 
       if (this.authPrompt.length > 0) {
         Column({ space: 12 }) {
@@ -199,7 +199,7 @@ struct Index {
             .fontWeight(FontWeight.Bold)
           Text(this.authPrompt)
             .fontSize(14)
-            .fontColor('#475569')
+            .fontColor('#4E625B')
           Row({ space: 10 }) {
             Button('稍后')
               .layoutWeight(1)
@@ -229,24 +229,28 @@ struct Index {
   @Builder
   ChatContent() {
     Column({ space: 12 }) {
-      Row() {
+      Row({ space: 12 }) {
+        Image($r('app.media.app_icon'))
+          .width(44)
+          .height(44)
+          .borderRadius(11)
         Column() {
           Text('Interview Agent')
             .fontSize(22)
             .fontWeight(FontWeight.Bold)
           Text(this.healthText)
             .fontSize(12)
-            .fontColor('#687386')
+            .fontColor('#64756F')
         }
         .alignItems(HorizontalAlign.Start)
         Blank()
         Column() {
           Text(this.account !== null ? '已登录' : '未登录')
             .fontSize(12)
-            .fontColor(this.account !== null ? '#166534' : '#d97706')
+            .fontColor(this.account !== null ? '#16A673' : '#C77918')
           Text(this.account !== null ? `${this.account.credit_balance} 积分` : '去我的')
             .fontSize(11)
-            .fontColor('#687386')
+            .fontColor('#64756F')
         }
         .alignItems(HorizontalAlign.End)
       }
@@ -258,7 +262,7 @@ struct Index {
       Column({ space: 10 }) {
         Text('行业')
           .fontSize(12)
-          .fontColor('#687386')
+          .fontColor('#64756F')
         Select(this.industries.map((item) => ({ value: item.value, text: item.label })))
           .selected(this.industries.findIndex((item) => item.value === this.selectedIndustry))
           .onSelect((index: number) => {
@@ -280,12 +284,12 @@ struct Index {
             Column({ space: 4 }) {
               Text(message.role === 'user' ? '我' : message.role === 'agent' ? '面试官' : '系统')
                 .fontSize(12)
-                .fontColor('#687386')
+                .fontColor('#64756F')
               Text(message.text)
                 .fontSize(15)
-                .fontColor(message.role === 'user' ? Color.White : '#162033')
+                .fontColor(message.role === 'user' ? Color.White : '#14251F')
                 .padding(12)
-                .backgroundColor(message.role === 'user' ? '#2563eb' : Color.White)
+                .backgroundColor(message.role === 'user' ? '#2F63E8' : Color.White)
                 .borderRadius(10)
             }
             .alignItems(message.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)
@@ -320,13 +324,9 @@ struct Index {
     Scroll() {
       Column({ space: 12 }) {
         Row({ space: 14 }) {
-          Text(this.account !== null ? '我' : '未')
+          Image($r('app.media.app_icon'))
             .width(58)
             .height(58)
-            .textAlign(TextAlign.Center)
-            .fontSize(20)
-            .fontColor(Color.White)
-            .backgroundColor('#2563eb')
             .borderRadius(12)
           Column({ space: 4 }) {
             Text(this.account?.display_name ?? '未登录')
@@ -334,7 +334,7 @@ struct Index {
               .fontWeight(FontWeight.Bold)
             Text(this.account?.email ?? this.account?.user_id ?? '登录后保存简历、会话和用量记录')
               .fontSize(12)
-              .fontColor('#687386')
+              .fontColor('#64756F')
           }
           .layoutWeight(1)
           .alignItems(HorizontalAlign.Start)
@@ -370,7 +370,7 @@ struct Index {
           if (this.accountMessage) {
             Text(this.accountMessage)
               .fontSize(12)
-              .fontColor(this.accountMessage.includes('失败') ? '#991b1b' : '#166534')
+              .fontColor(this.accountMessage.includes('失败') ? '#D43B3B' : '#16A673')
           }
         }
         .width('100%')
@@ -424,15 +424,15 @@ struct Index {
     Column({ space: 6 }) {
       Text(label)
         .fontSize(12)
-        .fontColor('#687386')
+        .fontColor('#64756F')
       Text(value)
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#0f4d63')
+        .fontColor('#0F8F8F')
     }
     .layoutWeight(1)
     .padding(12)
-    .backgroundColor('#f8fafc')
+    .backgroundColor('#F7FAF8')
     .borderRadius(10)
   }
 
@@ -441,11 +441,11 @@ struct Index {
     Row() {
       Text(label)
         .fontSize(13)
-        .fontColor('#687386')
+        .fontColor('#64756F')
         .layoutWeight(1)
       Text(value)
         .fontSize(13)
-        .fontColor('#162033')
+        .fontColor('#14251F')
         .textAlign(TextAlign.End)
         .layoutWeight(2)
     }

@@ -11,7 +11,7 @@
     "navigationBarTitleText": "Interview Agent",
     "navigationBarBackgroundColor": "#ffffff",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#edf1f7"
+    "backgroundColor": "#EEF4F1"
   },
   "tabBar": {
     "color": "#64756F",
