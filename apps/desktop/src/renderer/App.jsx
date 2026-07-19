@@ -605,12 +605,20 @@ function App() {
       if (!message.includes("无法连接 API 服务") && !message.includes("请求处理时间较长")) {
         throw error;
       }
-      updateMessage(agentMessageId, { text: "流式连接中断，正在切换普通请求..." });
-      return api.sendMessage({
-        sessionId: activeSessionId,
-        message: text,
-        signal
-      });
+      updateMessage(agentMessageId, { text: "流式连接中断，正在使用普通请求重试..." });
+      try {
+        return await api.sendMessage({
+          sessionId: activeSessionId,
+          message: text,
+          signal
+        });
+      } catch (fallbackError) {
+        const fallbackMessage = normalizeDesktopError(fallbackError.message);
+        if (fallbackMessage.includes("无法连接 API 服务")) {
+          throw new Error("无法连接 API 服务：/api 同源代理不可用或连接被关闭。请检查 Nginx /api 代理、HTTPS 长连接和后端服务状态。");
+        }
+        throw fallbackError;
+      }
     }
   }
 

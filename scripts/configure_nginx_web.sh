@@ -85,10 +85,16 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header X-Request-ID \$request_id;
+        proxy_set_header Connection "";
 
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
         proxy_read_timeout 300;
         proxy_connect_timeout 60;
         proxy_send_timeout 300;
+
+        add_header X-Accel-Buffering no always;
     }
 
     location /assets/ {
