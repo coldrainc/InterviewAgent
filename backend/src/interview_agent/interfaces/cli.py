@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from pathlib import Path
 from time import perf_counter
 
@@ -633,13 +634,20 @@ def api(
     import uvicorn
     from interview_agent.interfaces.api import create_app
 
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logging.getLogger("interview_agent.api").setLevel(
+        getattr(logging, settings.log_level.upper(), logging.INFO)
+    )
     console.print(f"[green]Interview Agent API 启动中：[/green] http://{host}:{port}")
     console.print(f"[dim]PostgreSQL: {settings.database_url}[/dim]")
     console.print(
         f"[dim]ObjectStorage: {settings.object_storage_backend} "
         f"bucket={settings.object_storage_bucket} endpoint={settings.object_storage_endpoint}[/dim]"
     )
-    uvicorn.run(create_app(), host=host, port=port)
+    uvicorn.run(create_app(), host=host, port=port, log_level=settings.log_level.lower(), access_log=True)
 
 
 @app.command()

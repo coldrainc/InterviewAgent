@@ -74,6 +74,7 @@ class AppSettings:
     deepseek_reasoning_effort: str = "high"
     llm_request_timeout_seconds: float = 45.0
     llm_max_retries: int = 1
+    log_level: str = "INFO"
 
     @property
     def is_production(self) -> bool:
@@ -159,6 +160,7 @@ def load_settings() -> AppSettings:
         deepseek_reasoning_effort=os.getenv("DEEPSEEK_REASONING_EFFORT", "high"),
         llm_request_timeout_seconds=float(os.getenv("INTERVIEW_LLM_REQUEST_TIMEOUT_SECONDS", "45")),
         llm_max_retries=int(os.getenv("INTERVIEW_LLM_MAX_RETRIES", "1")),
+        log_level=os.getenv("INTERVIEW_LOG_LEVEL", "INFO"),
     )
 
 
