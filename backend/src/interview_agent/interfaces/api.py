@@ -1346,6 +1346,8 @@ def create_app(
             yield _sse("tool.notice", {"message": "开始分析回答。"})
             previous_state = session.loop.state.model_copy(deep=True)
             llm_started = time.perf_counter()
+            heartbeat_interval_seconds = 5
+            heartbeat_count = 0
             logger.info(
                 "stream_llm_start request_id=%s session_id=%s model_id=%s turn_count=%s",
                 request_id,
@@ -1353,8 +1355,32 @@ def create_app(
                 session.model_id,
                 len(previous_state.turns),
             )
+            llm_task = asyncio.create_task(asyncio.to_thread(session.loop.step, message_request.message))
             try:
-                result = session.loop.step(message_request.message)
+                while not llm_task.done():
+                    await asyncio.sleep(heartbeat_interval_seconds)
+                    if llm_task.done():
+                        break
+                    heartbeat_count += 1
+                    elapsed_seconds = round(time.perf_counter() - llm_started, 1)
+                    disconnected = await http_request.is_disconnected()
+                    logger.info(
+                        "stream_heartbeat request_id=%s session_id=%s model_id=%s elapsed_seconds=%s disconnected=%s",
+                        request_id,
+                        session_id,
+                        session.model_id,
+                        elapsed_seconds,
+                        disconnected,
+                    )
+                    if not disconnected:
+                        yield _sse(
+                            "heartbeat",
+                            {
+                                "status": "running",
+                                "elapsed_seconds": elapsed_seconds,
+                            },
+                        )
+                result = await llm_task
             except Exception:
                 logger.exception(
                     "stream_llm_error request_id=%s session_id=%s model_id=%s duration_ms=%s",
@@ -1365,23 +1391,23 @@ def create_app(
                 )
                 raise
             logger.info(
-                "stream_llm_done request_id=%s session_id=%s model_id=%s duration_ms=%s fallback_used=%s completed=%s",
+                "stream_llm_done request_id=%s session_id=%s model_id=%s duration_ms=%s fallback_used=%s completed=%s heartbeats=%s",
                 request_id,
                 session_id,
                 session.model_id,
                 round((time.perf_counter() - llm_started) * 1000, 2),
                 result.fallback_used,
                 result.state.completed,
+                heartbeat_count,
             )
-            if await http_request.is_disconnected():
-                session.loop.state = previous_state
+            client_disconnected = await http_request.is_disconnected()
+            if client_disconnected:
                 logger.warning(
-                    "stream_client_disconnected request_id=%s session_id=%s model_id=%s rolled_back=true",
+                    "stream_client_disconnected request_id=%s session_id=%s model_id=%s phase=after_llm will_persist=true",
                     request_id,
                     session_id,
                     session.model_id,
                 )
-                return
             persist_started = time.perf_counter()
             logger.info(
                 "stream_persist_start request_id=%s session_id=%s model_id=%s",
@@ -1415,20 +1441,30 @@ def create_app(
                 round((time.perf_counter() - persist_started) * 1000, 2),
             )
             for finding in result.guardrail_findings or []:
-                yield _sse("guardrail.notice", {"message": finding.message})
-            yield _sse(
-                "message.done",
-                {
-                    "session_id": session_id,
-                    "message": result.message,
-                    "completed": result.state.completed,
-                    "fallback_used": result.fallback_used,
-                    "guardrails": [finding.message for finding in result.guardrail_findings or []],
-                    "model_id": session.model_id,
-                    "usage": usage.model_dump(mode="json") if usage else None,
-                    "turn_index": len(result.state.turns) or None,
-                },
-            )
+                if not client_disconnected:
+                    yield _sse("guardrail.notice", {"message": finding.message})
+            if not client_disconnected:
+                yield _sse(
+                    "message.done",
+                    {
+                        "session_id": session_id,
+                        "message": result.message,
+                        "completed": result.state.completed,
+                        "fallback_used": result.fallback_used,
+                        "guardrails": [finding.message for finding in result.guardrail_findings or []],
+                        "model_id": session.model_id,
+                        "usage": usage.model_dump(mode="json") if usage else None,
+                        "turn_index": len(result.state.turns) or None,
+                    },
+                )
+            else:
+                logger.warning(
+                    "stream_done_not_sent request_id=%s session_id=%s model_id=%s persisted=true",
+                    request_id,
+                    session_id,
+                    session.model_id,
+                )
+                return
             logger.info(
                 "stream_done_sent request_id=%s session_id=%s model_id=%s",
                 request_id,

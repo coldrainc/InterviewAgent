@@ -79,6 +79,17 @@ function setCachedSessionMessages(sessionId, value) {
   }
 }
 
+function hasPendingCachedMessage(messages) {
+  return messages.some((message) => (
+    message.role === "agent"
+    && (
+      String(message.text || "").includes("正在分析回答")
+      || String(message.text || "").includes("流式连接中断")
+      || String(message.text || "").includes("正在使用普通请求重试")
+    )
+  ));
+}
+
 function App() {
   const [screen, setScreen] = useState("chat");
   const [health, setHealth] = useState({ status: "checking" });
@@ -427,7 +438,7 @@ function App() {
     setSessionId(detail.id);
     setLastSessionId(detail.id);
     setCompleted(detail.status === "completed");
-    setMessages(cachedMessages.length ? cachedMessages : restoredMessages);
+    setMessages(cachedMessages.length && !hasPendingCachedMessage(cachedMessages) ? cachedMessages : restoredMessages);
     return detail;
   }
 
