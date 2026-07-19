@@ -1318,6 +1318,7 @@ def create_app(
         http_request: Request,
         context: RequestContext = Depends(request_context),
     ) -> StreamingResponse:
+        request_id = _request_id(http_request)
         _require_authenticated(context)
         _check_message(message_request.message, settings.max_message_chars)
         session = await _get_or_restore_session(session_id, context.tenant_id, context.user_id)
@@ -1334,12 +1335,60 @@ def create_app(
             raise HTTPException(status_code=402, detail=str(exc)) from exc
 
         async def event_stream():
+            logger.info(
+                "stream_open request_id=%s session_id=%s user_id=%s model_id=%s message_chars=%s",
+                request_id,
+                session_id,
+                context.user_id,
+                session.model_id,
+                len(message_request.message),
+            )
             yield _sse("tool.notice", {"message": "开始分析回答。"})
             previous_state = session.loop.state.model_copy(deep=True)
-            result = session.loop.step(message_request.message)
+            llm_started = time.perf_counter()
+            logger.info(
+                "stream_llm_start request_id=%s session_id=%s model_id=%s turn_count=%s",
+                request_id,
+                session_id,
+                session.model_id,
+                len(previous_state.turns),
+            )
+            try:
+                result = session.loop.step(message_request.message)
+            except Exception:
+                logger.exception(
+                    "stream_llm_error request_id=%s session_id=%s model_id=%s duration_ms=%s",
+                    request_id,
+                    session_id,
+                    session.model_id,
+                    round((time.perf_counter() - llm_started) * 1000, 2),
+                )
+                raise
+            logger.info(
+                "stream_llm_done request_id=%s session_id=%s model_id=%s duration_ms=%s fallback_used=%s completed=%s",
+                request_id,
+                session_id,
+                session.model_id,
+                round((time.perf_counter() - llm_started) * 1000, 2),
+                result.fallback_used,
+                result.state.completed,
+            )
             if await http_request.is_disconnected():
                 session.loop.state = previous_state
+                logger.warning(
+                    "stream_client_disconnected request_id=%s session_id=%s model_id=%s rolled_back=true",
+                    request_id,
+                    session_id,
+                    session.model_id,
+                )
                 return
+            persist_started = time.perf_counter()
+            logger.info(
+                "stream_persist_start request_id=%s session_id=%s model_id=%s",
+                request_id,
+                session_id,
+                session.model_id,
+            )
             usage = await _record_usage(
                 session_id=session_id,
                 event_type="turn",
@@ -1358,6 +1407,13 @@ def create_app(
                 context.tenant_id,
                 context.user_id,
             )
+            logger.info(
+                "stream_persist_done request_id=%s session_id=%s model_id=%s duration_ms=%s",
+                request_id,
+                session_id,
+                session.model_id,
+                round((time.perf_counter() - persist_started) * 1000, 2),
+            )
             for finding in result.guardrail_findings or []:
                 yield _sse("guardrail.notice", {"message": finding.message})
             yield _sse(
@@ -1372,6 +1428,12 @@ def create_app(
                     "usage": usage.model_dump(mode="json") if usage else None,
                     "turn_index": len(result.state.turns) or None,
                 },
+            )
+            logger.info(
+                "stream_done_sent request_id=%s session_id=%s model_id=%s",
+                request_id,
+                session_id,
+                session.model_id,
             )
 
         return StreamingResponse(
