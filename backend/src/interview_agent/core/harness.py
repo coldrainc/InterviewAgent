@@ -75,6 +75,8 @@ class LangChainInterviewHarness(BaseInterviewHarness):
         api_key: str | None = None,
         wire_api: str | None = None,
         temperature: float = 0.4,
+        request_timeout: float | None = None,
+        max_retries: int | None = None,
         thinking_enabled: bool | None = None,
         reasoning_effort: str | None = None,
         guardrails: HarnessGuardrails | None = None,
@@ -85,6 +87,10 @@ class LangChainInterviewHarness(BaseInterviewHarness):
             llm_kwargs["base_url"] = base_url
         if api_key:
             llm_kwargs["api_key"] = api_key
+        if request_timeout is not None:
+            llm_kwargs["timeout"] = request_timeout
+        if max_retries is not None:
+            llm_kwargs["max_retries"] = max_retries
         if wire_api == "responses":
             llm_kwargs["use_responses_api"] = True
         if provider.lower() == "deepseek" and thinking_enabled is not None:

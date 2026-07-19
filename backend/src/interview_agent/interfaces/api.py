@@ -1674,6 +1674,8 @@ def _create_harness(
             base_url=runtime.base_url,
             api_key=runtime.api_key,
             wire_api=runtime.wire_api,
+            request_timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.llm_max_retries,
             thinking_enabled=resolved_thinking_enabled,
             reasoning_effort=resolved_reasoning_effort,
         )

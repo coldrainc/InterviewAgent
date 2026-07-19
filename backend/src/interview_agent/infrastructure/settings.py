@@ -72,6 +72,8 @@ class AppSettings:
     rag_max_chars: int = 6000
     deepseek_thinking_enabled: bool = True
     deepseek_reasoning_effort: str = "high"
+    llm_request_timeout_seconds: float = 45.0
+    llm_max_retries: int = 1
 
     @property
     def is_production(self) -> bool:
@@ -155,6 +157,8 @@ def load_settings() -> AppSettings:
         rag_max_chars=int(os.getenv("RAG_MAX_CHARS", "6000")),
         deepseek_thinking_enabled=_env_bool("DEEPSEEK_THINKING_ENABLED", True),
         deepseek_reasoning_effort=os.getenv("DEEPSEEK_REASONING_EFFORT", "high"),
+        llm_request_timeout_seconds=float(os.getenv("INTERVIEW_LLM_REQUEST_TIMEOUT_SECONDS", "45")),
+        llm_max_retries=int(os.getenv("INTERVIEW_LLM_MAX_RETRIES", "1")),
     )
 
 
