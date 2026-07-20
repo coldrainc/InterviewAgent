@@ -8,6 +8,7 @@ import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
 import { SettingsCenter } from "./components/settings/SettingsCenter";
 import { SetupCenter } from "./components/setup/SetupCenter";
 import { StudyCenter } from "./components/study/StudyCenter";
+import { OperationsCenter } from "./components/operations/OperationsCenter";
 import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
 import {
   buildFocusAreas,
@@ -121,6 +122,14 @@ function App() {
     importMessage: "",
     seedMessage: ""
   });
+  const [opsState, setOpsState] = useState({
+    status: "idle",
+    jobs: [],
+    traces: [],
+    evalRuns: [],
+    metrics: {},
+    message: ""
+  });
   const [studyFilters, setStudyFilters] = useState({ category: "", year: "", subject: "", questionType: "" });
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
@@ -160,6 +169,12 @@ function App() {
       loadStudyCenter();
     }
   }, [screen, account, studyFilters.category, studyFilters.year, studyFilters.subject, studyFilters.questionType]);
+
+  useEffect(() => {
+    if (screen === "ops" && account) {
+      loadOperationsCenter();
+    }
+  }, [screen, account]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -207,6 +222,7 @@ function App() {
       await loadSessionHistory();
       await restoreLastSession();
       await loadStudyCenter();
+      await loadOperationsCenter();
     }
   }
 
@@ -344,6 +360,7 @@ function App() {
     setMessages([]);
     setResumeLibrary([]);
     setSessionHistory([]);
+    setOpsState({ status: "idle", jobs: [], traces: [], evalRuns: [], metrics: {}, message: "" });
     setScreen("chat");
   }
 
@@ -452,6 +469,58 @@ function App() {
       }));
     } catch (error) {
       setStudyState((current) => ({ ...current, status: "error", error: `学习数据加载失败：${normalizeDesktopError(error.message)}` }));
+    }
+  }
+
+  async function loadOperationsCenter() {
+    if (!api.listJobs || !api.listAgentTraces || !api.getOpsMetrics) return;
+    try {
+      setOpsState((current) => ({ ...current, status: "loading", error: "", message: "" }));
+      const [jobs, traces, metrics, evalRuns] = await Promise.all([
+        api.listJobs(),
+        api.listAgentTraces(),
+        api.getOpsMetrics(),
+        api.listEvalRuns ? api.listEvalRuns() : Promise.resolve([])
+      ]);
+      setOpsState({
+        status: "idle",
+        jobs: Array.isArray(jobs) ? jobs : [],
+        traces: Array.isArray(traces) ? traces : [],
+        evalRuns: Array.isArray(evalRuns) ? evalRuns : [],
+        metrics: metrics || {},
+        message: ""
+      });
+    } catch (error) {
+      setOpsState((current) => ({ ...current, status: "error", error: `任务数据加载失败：${normalizeDesktopError(error.message)}` }));
+    }
+  }
+
+  async function runOperationsJob(kind) {
+    if (!requireAccount("运行任务与评测前需要先登录账号。")) return;
+    try {
+      setOpsState((current) => ({ ...current, status: "loading", error: "", message: "" }));
+      if (kind === "evaluation") {
+        await api.createEvalRun?.({ name: "AI 工程能力质量评估" });
+      } else if (kind === "multi_agent") {
+        await api.runWorkflow?.({ workflow_type: "multi_agent", title: "多 Agent 协作演示" });
+      } else {
+        await api.runWorkflow?.({ workflow_type: "workflow", title: "复杂任务编排演示" });
+      }
+      setOpsState((current) => ({ ...current, message: "任务已提交，正在后台执行。" }));
+      window.setTimeout(loadOperationsCenter, 500);
+      window.setTimeout(loadOperationsCenter, 1500);
+    } catch (error) {
+      setOpsState((current) => ({ ...current, status: "error", error: `任务提交失败：${normalizeDesktopError(error.message)}` }));
+    }
+  }
+
+  async function cancelOperationsJob(jobId) {
+    if (!jobId || !api.cancelJob) return;
+    try {
+      await api.cancelJob(jobId);
+      await loadOperationsCenter();
+    } catch (error) {
+      setOpsState((current) => ({ ...current, status: "error", error: `取消任务失败：${normalizeDesktopError(error.message)}` }));
     }
   }
 
@@ -994,6 +1063,16 @@ function App() {
             profile={profile}
             settingsState={settingsState}
             onModeChange={changeDefaultMode}
+            onBack={() => setScreen("chat")}
+          />
+        ) : screen === "ops" ? (
+          <OperationsCenter
+            opsState={opsState}
+            onReload={loadOperationsCenter}
+            onRunWorkflow={() => runOperationsJob("workflow")}
+            onRunEvaluation={() => runOperationsJob("evaluation")}
+            onRunMultiAgent={() => runOperationsJob("multi_agent")}
+            onCancelJob={cancelOperationsJob}
             onBack={() => setScreen("chat")}
           />
         ) : screen === "setup" ? (

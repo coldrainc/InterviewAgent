@@ -85,6 +85,55 @@ ipcMain.handle("practice:seed", async () => {
   return requestJson("/practice/questions/seed", { method: "POST" });
 });
 
+ipcMain.handle("jobs:list", async () => {
+  return requestJson("/jobs");
+});
+
+ipcMain.handle("jobs:get", async (_event, jobId) => {
+  return requestJson(`/jobs/${encodeURIComponent(jobId)}`);
+});
+
+ipcMain.handle("jobs:create", async (_event, payload) => {
+  return requestJson("/jobs", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("jobs:cancel", async (_event, jobId) => {
+  return requestJson(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+});
+
+ipcMain.handle("workflows:run", async (_event, payload) => {
+  return requestJson("/workflows/run", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("eval-runs:create", async (_event, payload) => {
+  return requestJson("/eval-runs", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("eval-runs:list", async () => {
+  return requestJson("/eval-runs");
+});
+
+ipcMain.handle("ops:traces", async () => {
+  return requestJson("/ops/traces");
+});
+
+ipcMain.handle("ops:trace", async (_event, traceId) => {
+  return requestJson(`/ops/traces/${encodeURIComponent(traceId)}`);
+});
+
+ipcMain.handle("ops:metrics", async () => {
+  return requestJson("/ops/metrics");
+});
+
 ipcMain.handle("civil-service:questions", async (_event, filters = {}) => {
   const params = new URLSearchParams();
   if (filters.year) params.set("year", filters.year);

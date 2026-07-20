@@ -395,6 +395,28 @@ const browserClient = {
   },
   listModels: () => requestJson("/metadata/models"),
   getPracticeLearningPlan: () => requestJson("/practice/learning-plan"),
+  listJobs: () => requestJson("/jobs"),
+  getJob: (jobId) => requestJson(`/jobs/${encodeURIComponent(jobId)}`),
+  createJob: (payload) =>
+    requestJson("/jobs", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  cancelJob: (jobId) => requestJson(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
+  runWorkflow: (payload) =>
+    requestJson("/workflows/run", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  createEvalRun: (payload) =>
+    requestJson("/eval-runs", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  listEvalRuns: () => requestJson("/eval-runs"),
+  listAgentTraces: () => requestJson("/ops/traces"),
+  getAgentTrace: (traceId) => requestJson(`/ops/traces/${encodeURIComponent(traceId)}`),
+  getOpsMetrics: () => requestJson("/ops/metrics"),
   listPracticeQuestions: (filters = {}) => {
     const params = new URLSearchParams();
     if (filters.category) params.set("category", filters.category);

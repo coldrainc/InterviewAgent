@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse, Response, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from interview_agent.core.agent_loop import AgentLoop
@@ -41,6 +42,7 @@ from interview_agent.infrastructure.db.session import (
     init_database,
     session_scope,
 )
+from interview_agent.infrastructure.db.models import EvalRunModel
 from interview_agent.infrastructure.model_runtime import (
     is_openai_compatible_provider,
     is_supported_native_provider,
@@ -81,6 +83,9 @@ from interview_agent.services.billing_service import (
 from interview_agent.services.interview_persistence_service import InterviewPersistenceService
 from interview_agent.services.resume_service import ResumeService
 from interview_agent.repositories.civil_service_repository import CivilServiceQuestionRepository
+from interview_agent.repositories.job_repository import JobRepository, event_to_dict, job_to_dict
+from interview_agent.services.agent_ops_service import AgentOpsService, trace_to_dict
+from interview_agent.services.workflow_runner import TERMINAL_JOB_STATUSES, create_and_start_job
 
 
 class SessionRequest(BaseModel):
@@ -174,6 +179,24 @@ class UserSettingsResponse(BaseModel):
 
 class UpdateUserSettingsRequest(BaseModel):
     default_interview_mode: str | None = Field(default=None, pattern="^(interviewer|candidate)$")
+
+
+class JobCreateRequest(BaseModel):
+    job_type: str = Field(default="workflow", pattern="^(workflow|evaluation|multi_agent)$")
+    title: str | None = Field(default=None, max_length=255)
+    input: dict = Field(default_factory=dict)
+
+
+class WorkflowRunRequest(BaseModel):
+    workflow_type: str = Field(default="workflow", pattern="^(workflow|multi_agent)$")
+    title: str | None = Field(default=None, max_length=255)
+    input: dict = Field(default_factory=dict)
+
+
+class EvalRunCreateRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=255)
+    cases: list[dict] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
 
 
 class AccountResponse(BaseModel):
@@ -1176,6 +1199,204 @@ def create_app(
     ) -> ImportResultResponse:
         return await _seed_practice_questions(context)
 
+    @app.post("/jobs")
+    async def create_job(
+        request: JobCreateRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        return await create_and_start_job(
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            job_type=request.job_type,
+            title=request.title or _default_job_title(request.job_type),
+            input_payload=request.input,
+        )
+
+    @app.get("/jobs")
+    async def list_jobs(
+        status: str | None = Query(default=None, max_length=32),
+        limit: int = Query(default=50, ge=1, le=100),
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            jobs = await JobRepository(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).list_jobs(status=status, limit=limit)
+        return [job_to_dict(job) for job in jobs]
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(
+        job_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            job = await JobRepository(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).get_job(job_id, with_children=True)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job_to_dict(job, include_children=True)
+
+    @app.post("/jobs/{job_id}/cancel")
+    async def cancel_job(
+        job_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = JobRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            job = await repo.get_job(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail="job not found")
+            if job.status not in TERMINAL_JOB_STATUSES:
+                job = await repo.set_job_status(job.id, "canceled")
+        return job_to_dict(job) if job else {"id": job_id, "status": "canceled"}
+
+    @app.get("/jobs/{job_id}/events/stream")
+    async def stream_job_events(
+        job_id: str,
+        http_request: Request,
+        context: RequestContext = Depends(request_context),
+    ) -> StreamingResponse:
+        _require_authenticated(context)
+
+        async def event_stream():
+            seen: set[str] = set()
+            for _ in range(600):
+                async with session_scope() as db:
+                    repo = JobRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+                    job = await repo.get_job(job_id)
+                    if not job:
+                        yield _sse("job.error", {"message": "job not found"})
+                        return
+                    events = await repo.list_events(job_id, limit=100)
+                    terminal = job.status in TERMINAL_JOB_STATUSES
+                for event in events:
+                    event_id = str(event.id)
+                    if event_id in seen:
+                        continue
+                    seen.add(event_id)
+                    yield _sse("job.event", event_to_dict(event))
+                if terminal:
+                    yield _sse("job.done", {"job_id": job_id, "status": job.status})
+                    return
+                if await http_request.is_disconnected():
+                    return
+                await asyncio.sleep(1)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.post("/workflows/run")
+    async def run_workflow(
+        request: WorkflowRunRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        job_type = "multi_agent" if request.workflow_type == "multi_agent" else "workflow"
+        return await create_and_start_job(
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            job_type=job_type,
+            title=request.title or _default_job_title(job_type),
+            input_payload=request.input,
+        )
+
+    @app.post("/eval-runs")
+    async def create_eval_run(
+        request: EvalRunCreateRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        return await create_and_start_job(
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            job_type="evaluation",
+            title=request.name or "AI 工程能力质量评估",
+            input_payload={"cases": request.cases, "metadata": request.metadata},
+        )
+
+    @app.get("/eval-runs")
+    async def list_eval_runs(
+        limit: int = Query(default=50, ge=1, le=100),
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            result = await db.execute(
+                select(EvalRunModel)
+                .where(EvalRunModel.tenant_id == context.tenant_id, EvalRunModel.user_id == context.user_id)
+                .order_by(EvalRunModel.created_at.desc())
+                .limit(limit)
+            )
+            runs = result.scalars().all()
+        return [_eval_run_to_dict(run) for run in runs]
+
+    @app.get("/ops/traces")
+    async def list_agent_traces(
+        limit: int = Query(default=50, ge=1, le=100),
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            traces = await AgentOpsService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).list_traces(limit=limit)
+        return [trace_to_dict(trace) for trace in traces]
+
+    @app.get("/ops/traces/{trace_id}")
+    async def get_agent_trace(
+        trace_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            trace = await AgentOpsService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).get_trace(trace_id)
+        if not trace:
+            raise HTTPException(status_code=404, detail="trace not found")
+        return trace_to_dict(trace, include_spans=True)
+
+    @app.get("/ops/metrics")
+    async def ops_metrics(
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            job_counts = await JobRepository(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).count_jobs_by_status()
+            trace_metrics = await AgentOpsService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).metrics_summary()
+        return {
+            "job_counts": job_counts,
+            **trace_metrics,
+        }
+
     @app.post("/resume/parse", response_model=ResumeParseResponse)
     async def parse_resume(
         request: ResumeParseRequest,
@@ -2152,6 +2373,29 @@ def _settings_response(settings: dict | None) -> UserSettingsResponse:
     if mode not in {"interviewer", "candidate"}:
         mode = "interviewer"
     return UserSettingsResponse(default_interview_mode=mode)
+
+
+def _default_job_title(job_type: str) -> str:
+    return {
+        "workflow": "复杂任务编排演示",
+        "evaluation": "AI 工程能力质量评估",
+        "multi_agent": "多 Agent 协作演示",
+    }.get(job_type, "后台任务")
+
+
+def _eval_run_to_dict(run: EvalRunModel) -> dict:
+    return {
+        "id": str(run.id),
+        "tenant_id": run.tenant_id,
+        "user_id": run.user_id,
+        "dataset_id": str(run.dataset_id) if run.dataset_id else None,
+        "job_id": str(run.job_id) if run.job_id else None,
+        "name": run.name,
+        "status": run.status,
+        "metrics": run.metrics_json,
+        "created_at": run.created_at.isoformat(),
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+    }
 
 
 def _payment_order_response(order) -> PaymentOrderResponse:

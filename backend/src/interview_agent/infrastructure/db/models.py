@@ -365,3 +365,205 @@ class CivilServiceQuestionModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
+
+
+class JobModel(Base):
+    __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_tenant_user_updated", "tenant_id", "user_id", "updated_at"),
+        Index("ix_jobs_tenant_status", "tenant_id", "status", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    input_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    result_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    steps: Mapped[list["JobStepModel"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+    events: Mapped[list["JobEventModel"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+
+
+class JobStepModel(Base):
+    __tablename__ = "job_steps"
+    __table_args__ = (
+        UniqueConstraint("job_id", "step_key", name="uq_job_steps_job_key"),
+        Index("ix_job_steps_job_created", "job_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    step_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    input_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    job: Mapped[JobModel] = relationship(back_populates="steps")
+
+
+class JobEventModel(Base):
+    __tablename__ = "job_events"
+    __table_args__ = (
+        Index("ix_job_events_job_created", "job_id", "created_at"),
+        Index("ix_job_events_type_created", "event_type", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    payload_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    job: Mapped[JobModel] = relationship(back_populates="events")
+
+
+class EvalDatasetModel(Base):
+    __tablename__ = "eval_datasets"
+    __table_args__ = (
+        Index("ix_eval_datasets_tenant_user_updated", "tenant_id", "user_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    cases: Mapped[list["EvalCaseModel"]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
+    runs: Mapped[list["EvalRunModel"]] = relationship(back_populates="dataset")
+
+
+class EvalCaseModel(Base):
+    __tablename__ = "eval_cases"
+    __table_args__ = (
+        Index("ix_eval_cases_dataset_created", "dataset_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("eval_datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    input_text: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    dataset: Mapped[EvalDatasetModel] = relationship(back_populates="cases")
+
+
+class EvalRunModel(Base):
+    __tablename__ = "eval_runs"
+    __table_args__ = (
+        Index("ix_eval_runs_tenant_user_created", "tenant_id", "user_id", "created_at"),
+        Index("ix_eval_runs_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UuidString(), ForeignKey("eval_datasets.id", ondelete="SET NULL")
+    )
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UuidString(), ForeignKey("jobs.id", ondelete="SET NULL"))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    metrics_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    dataset: Mapped[EvalDatasetModel | None] = relationship(back_populates="runs")
+    results: Mapped[list["EvalResultModel"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+
+
+class EvalResultModel(Base):
+    __tablename__ = "eval_results"
+    __table_args__ = (
+        Index("ix_eval_results_run_created", "run_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("eval_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    case_id: Mapped[uuid.UUID | None] = mapped_column(UuidString(), ForeignKey("eval_cases.id", ondelete="SET NULL"))
+    score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    run: Mapped[EvalRunModel] = relationship(back_populates="results")
+
+
+class AgentTraceModel(Base):
+    __tablename__ = "agent_traces"
+    __table_args__ = (
+        Index("ix_agent_traces_tenant_user_created", "tenant_id", "user_id", "created_at"),
+        Index("ix_agent_traces_job", "job_id"),
+        Index("ix_agent_traces_session", "session_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UuidString(), ForeignKey("jobs.id", ondelete="SET NULL"))
+    session_id: Mapped[str | None] = mapped_column(String(64))
+    trace_type: Mapped[str] = mapped_column(String(64), nullable=False, default="workflow")
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
+    input_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    result_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    metrics_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    spans: Mapped[list["AgentSpanModel"]] = relationship(back_populates="trace", cascade="all, delete-orphan")
+
+
+class AgentSpanModel(Base):
+    __tablename__ = "agent_spans"
+    __table_args__ = (
+        Index("ix_agent_spans_trace_started", "trace_id", "started_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    trace_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("agent_traces.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_span_id: Mapped[str | None] = mapped_column(String(36))
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    span_type: Mapped[str] = mapped_column(String(64), nullable=False, default="step")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
+    input_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    metrics_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    trace: Mapped[AgentTraceModel] = relationship(back_populates="spans")

@@ -1,4 +1,4 @@
-import { BookOpenCheck, History, MessageSquarePlus, RefreshCw, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Activity, BookOpenCheck, History, MessageSquarePlus, RefreshCw, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
 import { formatDateTime } from "../../utils/interview";
 import { AccountEntry } from "../account/AccountCenter";
 
@@ -54,6 +54,13 @@ export default function Sidebar({
           label="面试刷题"
           detail="题库练习和学习路径"
           onClick={() => onScreenChange("study")}
+        />
+        <NavButton
+          active={screen === "ops"}
+          icon={<Activity size={17} />}
+          label="任务与评测"
+          detail="工作流 / AgentOps / 质量评估"
+          onClick={() => onScreenChange("ops")}
         />
       </nav>
 
