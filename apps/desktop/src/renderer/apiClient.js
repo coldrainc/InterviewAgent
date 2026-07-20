@@ -378,7 +378,7 @@ async function importQuestionBankFromBrowser() {
   }
   const text = await fileToText(file);
   const questions = parseQuestionBankFile(file.name, text);
-  const stored = await requestJson("/civil-service/questions/import", {
+  const stored = await requestJson("/practice/questions/import", {
     method: "POST",
     timeoutMs: UPLOAD_TIMEOUT_MS,
     body: JSON.stringify({ questions })
@@ -394,6 +394,19 @@ const browserClient = {
     return requestJson(`/metadata/industries${query}`);
   },
   listModels: () => requestJson("/metadata/models"),
+  getPracticeLearningPlan: () => requestJson("/practice/learning-plan"),
+  listPracticeQuestions: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.category) params.set("category", filters.category);
+    if (filters.year) params.set("year", filters.year);
+    if (filters.subject) params.set("subject", filters.subject);
+    if (filters.questionType) params.set("question_type", filters.questionType);
+    params.set("limit", filters.limit || 30);
+    params.set("offset", filters.offset || 0);
+    return requestJson(`/practice/questions?${params.toString()}`);
+  },
+  seedPracticeQuestions: () => requestJson("/practice/questions/seed", { method: "POST" }),
+  importPracticeQuestionBank: importQuestionBankFromBrowser,
   getCivilServiceLearningPlan: () => requestJson("/civil-service/learning-plan"),
   listCivilServiceQuestions: (filters = {}) => {
     const params = new URLSearchParams();

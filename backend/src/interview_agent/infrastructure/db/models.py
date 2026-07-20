@@ -337,6 +337,7 @@ class CivilServiceQuestionModel(Base):
     __tablename__ = "civil_service_questions"
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", "content_hash", name="uq_civil_service_questions_user_hash"),
+        Index("ix_civil_service_questions_category", "tenant_id", "user_id", "practice_category"),
         Index("ix_civil_service_questions_year_subject", "tenant_id", "user_id", "exam_year", "subject"),
         Index("ix_civil_service_questions_type", "tenant_id", "user_id", "question_type"),
         Index("ix_civil_service_questions_updated", "tenant_id", "user_id", "updated_at"),
@@ -345,6 +346,7 @@ class CivilServiceQuestionModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
     user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    practice_category: Mapped[str] = mapped_column(String(64), nullable=False, default="civil_service")
     source: Mapped[str] = mapped_column(String(128), nullable=False, default="manual")
     source_url: Mapped[str | None] = mapped_column(Text)
     exam_year: Mapped[int] = mapped_column(Integer, nullable=False)

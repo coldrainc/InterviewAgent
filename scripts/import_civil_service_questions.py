@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import civil service exam questions into InterviewAgent API.")
+    parser = argparse.ArgumentParser(description="Import practice questions into InterviewAgent API.")
     parser.add_argument("path", type=Path, help="JSON or CSV file path.")
     parser.add_argument("--api-base", default=os.getenv("INTERVIEW_PUBLIC_API_BASE", "https://www.aivago.cn/api"))
     parser.add_argument("--token", default=os.getenv("INTERVIEW_API_TOKEN", ""))
@@ -23,7 +23,7 @@ def main() -> int:
         return 1
     payload = json.dumps({"questions": questions}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
-        f"{args.api_base.rstrip('/')}/civil-service/questions/import",
+        f"{args.api_base.rstrip('/')}/practice/questions/import",
         data=payload,
         method="POST",
         headers={
@@ -55,10 +55,11 @@ def normalize_csv_row(row: dict[str, str]) -> dict:
         choices = [item.strip() for item in row["choices"].split("|") if item.strip()]
     return {
         "source": row.get("source") or "csv_import",
+        "practice_category": row.get("practice_category") or row.get("category") or "",
         "source_url": row.get("source_url") or "",
         "exam_year": row.get("exam_year") or row.get("year"),
-        "exam_name": row.get("exam_name") or "考公导入题",
-        "subject": row.get("subject") or "xingce",
+        "exam_name": row.get("exam_name") or "导入题库",
+        "subject": row.get("subject") or "general",
         "question_type": row.get("question_type") or row.get("type") or "综合训练",
         "prompt": row.get("prompt") or row.get("question") or "",
         "choices": choices,

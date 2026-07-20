@@ -1231,7 +1231,7 @@ button {
 
 .study-filters {
   display: grid;
-  grid-template-columns: 120px 150px minmax(0, 1fr);
+  grid-template-columns: 150px 120px 150px minmax(0, 1fr);
   gap: 10px;
 }
 

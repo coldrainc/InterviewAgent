@@ -51,8 +51,8 @@ export default function Sidebar({
         <NavButton
           active={screen === "study"}
           icon={<BookOpenCheck size={17} />}
-          label="刷题学习"
-          detail="考公题库和学习路径"
+          label="面试刷题"
+          detail="题库练习和学习路径"
           onClick={() => onScreenChange("study")}
         />
       </nav>

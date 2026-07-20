@@ -47,6 +47,7 @@ class CivilServiceQuestionRepository:
     async def list_questions(
         self,
         *,
+        category: str | None = None,
         year: int | None = None,
         subject: str | None = None,
         question_type: str | None = None,
@@ -57,6 +58,8 @@ class CivilServiceQuestionRepository:
             CivilServiceQuestionModel.tenant_id == self.tenant_id,
             CivilServiceQuestionModel.user_id == self.user_id,
         ]
+        if category:
+            filters.append(CivilServiceQuestionModel.practice_category == normalize_practice_category(category))
         if year:
             filters.append(CivilServiceQuestionModel.exam_year == year)
         if subject:
@@ -99,10 +102,13 @@ def normalize_question_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if exam_year <= 0:
         raise ValueError("题目年份必须是有效数字。")
     return {
+        "practice_category": normalize_practice_category(
+            payload.get("practice_category") or payload.get("category") or infer_practice_category(payload)
+        ),
         "source": str(payload.get("source") or "manual").strip()[:128],
         "source_url": str(payload.get("source_url") or "").strip() or None,
         "exam_year": exam_year,
-        "exam_name": str(payload.get("exam_name") or "考公训练题").strip()[:255],
+        "exam_name": str(payload.get("exam_name") or "练习题").strip()[:255],
         "subject": normalize_subject(payload.get("subject")),
         "question_type": str(payload.get("question_type") or payload.get("type") or "综合训练").strip()[:64],
         "prompt": prompt,
@@ -116,7 +122,7 @@ def normalize_question_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_subject(value: Any) -> str:
-    cleaned = str(value or "xingce").strip().lower()
+    cleaned = str(value or "general").strip().lower()
     aliases = {
         "行测": "xingce",
         "行政职业能力测验": "xingce",
@@ -124,7 +130,42 @@ def normalize_subject(value: Any) -> str:
         "面试": "interview",
         "结构化面试": "interview",
     }
-    return aliases.get(cleaned, cleaned or "xingce")[:64]
+    return aliases.get(cleaned, cleaned or "general")[:64]
+
+
+def normalize_practice_category(value: Any) -> str:
+    cleaned = str(value or "internet").strip().lower()
+    aliases = {
+        "考公": "civil_service",
+        "公考": "civil_service",
+        "公务员": "civil_service",
+        "公职考试": "civil_service",
+        "civil-service": "civil_service",
+        "civil service": "civil_service",
+        "互联网": "internet",
+        "互联网面试": "internet",
+        "技术面试": "internet",
+        "面试": "interview",
+        "ai": "ai_engineering",
+        "ai工程": "ai_engineering",
+        "ai 工程": "ai_engineering",
+        "ai工程面试": "ai_engineering",
+    }
+    return aliases.get(cleaned, cleaned or "internet")[:64]
+
+
+def infer_practice_category(payload: dict[str, Any]) -> str:
+    subject = normalize_subject(payload.get("subject"))
+    exam_name = str(payload.get("exam_name") or "").lower()
+    tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
+    joined_tags = " ".join(str(tag).lower() for tag in tags)
+    if subject in {"xingce", "shenlun"} or any(marker in exam_name for marker in ("考公", "国考", "省考", "申论", "行测")):
+        return "civil_service"
+    if any(marker in joined_tags for marker in ("考公", "国考", "省考", "申论", "行测")):
+        return "civil_service"
+    if any(marker in exam_name for marker in ("ai", "agent", "rag", "llm")):
+        return "ai_engineering"
+    return "internet"
 
 
 def normalize_difficulty(value: Any) -> str:
@@ -135,6 +176,7 @@ def normalize_difficulty(value: Any) -> str:
 def question_content_hash(payload: dict[str, Any]) -> str:
     signature = "\n".join(
         [
+            payload["practice_category"],
             str(payload["exam_year"]),
             payload["exam_name"],
             payload["subject"],
@@ -146,6 +188,7 @@ def question_content_hash(payload: dict[str, Any]) -> str:
 
 
 def apply_question_payload(model: CivilServiceQuestionModel, payload: dict[str, Any], content_hash: str) -> None:
+    model.practice_category = payload["practice_category"]
     model.source = payload["source"]
     model.source_url = payload["source_url"]
     model.exam_year = payload["exam_year"]
@@ -165,6 +208,8 @@ def apply_question_payload(model: CivilServiceQuestionModel, payload: dict[str, 
 def question_to_dict(model: CivilServiceQuestionModel) -> dict[str, Any]:
     return {
         "id": str(model.id),
+        "practice_category": model.practice_category,
+        "category": model.practice_category,
         "source": model.source,
         "source_url": model.source_url,
         "exam_year": model.exam_year,

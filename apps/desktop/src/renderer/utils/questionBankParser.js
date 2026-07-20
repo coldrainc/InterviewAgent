@@ -5,6 +5,9 @@ const CSV_FIELD_ALIASES = {
   examYear: "exam_year",
   question: "prompt",
   type: "question_type",
+  practiceCategory: "practice_category",
+  practice_category: "practice_category",
+  category: "practice_category",
   sourceUrl: "source_url",
   sourceURL: "source_url"
 };
@@ -100,9 +103,10 @@ function normalizeHeader(value) {
 function normalizeQuestionRow(row) {
   const normalized = { ...row };
   normalized.source = normalized.source || "user-upload";
+  normalized.practice_category = normalizeCategory(normalized.practice_category || normalized.category || inferCategory(normalized));
   normalized.exam_year = Number(normalized.exam_year || normalized.year || 0);
   normalized.exam_name = String(normalized.exam_name || "自定义题库").trim();
-  normalized.subject = String(normalized.subject || "xingce").trim();
+  normalized.subject = String(normalized.subject || "general").trim();
   normalized.question_type = String(normalized.question_type || normalized.type || "综合训练").trim();
   normalized.prompt = String(normalized.prompt || normalized.question || "").trim();
   normalized.choices = normalizeList(normalized.choices);
@@ -117,6 +121,36 @@ function normalizeQuestionRow(row) {
     throw new Error("题库中存在无效年份，请补充 exam_year/year 字段。");
   }
   return normalized;
+}
+
+function normalizeCategory(value) {
+  const cleaned = String(value || "internet").trim().toLowerCase();
+  const aliases = {
+    "考公": "civil_service",
+    "公考": "civil_service",
+    "公务员": "civil_service",
+    "civil-service": "civil_service",
+    "civil service": "civil_service",
+    "互联网": "internet",
+    "技术面试": "internet",
+    "ai": "ai_engineering",
+    "ai工程": "ai_engineering",
+    "ai 工程": "ai_engineering",
+    "面试": "interview"
+  };
+  return aliases[cleaned] || cleaned || "internet";
+}
+
+function inferCategory(row) {
+  const subject = String(row.subject || "").trim().toLowerCase();
+  const examName = String(row.exam_name || "").trim().toLowerCase();
+  if (["xingce", "shenlun"].includes(subject) || /考公|国考|省考|申论|行测/.test(examName)) {
+    return "civil_service";
+  }
+  if (/ai|rag|agent|llm/.test(examName)) {
+    return "ai_engineering";
+  }
+  return "internet";
 }
 
 function normalizeList(value) {

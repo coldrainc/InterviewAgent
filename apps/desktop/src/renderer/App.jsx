@@ -121,7 +121,7 @@ function App() {
     importMessage: "",
     seedMessage: ""
   });
-  const [studyFilters, setStudyFilters] = useState({ year: "", subject: "", questionType: "" });
+  const [studyFilters, setStudyFilters] = useState({ category: "", year: "", subject: "", questionType: "" });
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
   const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
@@ -159,7 +159,7 @@ function App() {
     if (screen === "study" && account) {
       loadStudyCenter();
     }
-  }, [screen, account, studyFilters.year, studyFilters.subject, studyFilters.questionType]);
+  }, [screen, account, studyFilters.category, studyFilters.year, studyFilters.subject, studyFilters.questionType]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -428,12 +428,15 @@ function App() {
   }
 
   async function loadStudyCenter() {
-    if (!api.getCivilServiceLearningPlan || !api.listCivilServiceQuestions) return;
+    const getLearningPlan = api.getPracticeLearningPlan || api.getCivilServiceLearningPlan;
+    const listQuestions = api.listPracticeQuestions || api.listCivilServiceQuestions;
+    if (!getLearningPlan || !listQuestions) return;
     try {
       setStudyState((current) => ({ ...current, status: "loading", error: "" }));
       const [plan, questions] = await Promise.all([
-        api.getCivilServiceLearningPlan(),
-        api.listCivilServiceQuestions({
+        getLearningPlan(),
+        listQuestions({
+          category: studyFilters.category,
           year: studyFilters.year.trim(),
           subject: studyFilters.subject,
           questionType: studyFilters.questionType.trim(),
@@ -456,12 +459,13 @@ function App() {
     setStudyFilters((current) => ({ ...current, ...patch }));
   }
 
-  async function seedCivilServiceQuestions() {
-    if (!requireAccount("初始化考公题库前需要先登录账号。")) return;
-    if (!api.seedCivilServiceQuestions) return;
+  async function seedPracticeQuestions() {
+    if (!requireAccount("初始化练习样题前需要先登录账号。")) return;
+    const seedQuestions = api.seedPracticeQuestions || api.seedCivilServiceQuestions;
+    if (!seedQuestions) return;
     try {
       setStudyState((current) => ({ ...current, status: "loading", error: "", seedMessage: "" }));
-      const result = await api.seedCivilServiceQuestions();
+      const result = await seedQuestions();
       setStudyState((current) => ({
         ...current,
         status: "idle",
@@ -469,16 +473,17 @@ function App() {
       }));
       await loadStudyCenter();
     } catch (error) {
-      setStudyState((current) => ({ ...current, status: "error", error: `初始化题库失败：${normalizeDesktopError(error.message)}` }));
+      setStudyState((current) => ({ ...current, status: "error", error: `初始化样题失败：${normalizeDesktopError(error.message)}` }));
     }
   }
 
-  async function importCivilServiceQuestionBank() {
+  async function importPracticeQuestionBank() {
     if (!requireAccount("上传题库前需要先登录账号。")) return;
-    if (!api.importCivilServiceQuestionBank) return;
+    const importQuestionBank = api.importPracticeQuestionBank || api.importCivilServiceQuestionBank;
+    if (!importQuestionBank) return;
     try {
       setStudyState((current) => ({ ...current, status: "loading", error: "", importMessage: "", seedMessage: "" }));
-      const result = await api.importCivilServiceQuestionBank();
+      const result = await importQuestionBank();
       if (result?.canceled) {
         setStudyState((current) => ({ ...current, status: "idle" }));
         return;
@@ -1025,8 +1030,8 @@ function App() {
             studyFilters={studyFilters}
             onFilterChange={updateStudyFilters}
             onReload={loadStudyCenter}
-            onSeed={seedCivilServiceQuestions}
-            onImportQuestions={importCivilServiceQuestionBank}
+            onSeed={seedPracticeQuestions}
+            onImportQuestions={importPracticeQuestionBank}
             onBack={() => setScreen("chat")}
           />
         ) : (

@@ -66,6 +66,25 @@ ipcMain.handle("civil-service:learning-plan", async () => {
   return requestJson("/civil-service/learning-plan");
 });
 
+ipcMain.handle("practice:learning-plan", async () => {
+  return requestJson("/practice/learning-plan");
+});
+
+ipcMain.handle("practice:questions", async (_event, filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  if (filters.year) params.set("year", filters.year);
+  if (filters.subject) params.set("subject", filters.subject);
+  if (filters.questionType) params.set("question_type", filters.questionType);
+  params.set("limit", filters.limit || 30);
+  params.set("offset", filters.offset || 0);
+  return requestJson(`/practice/questions?${params.toString()}`);
+});
+
+ipcMain.handle("practice:seed", async () => {
+  return requestJson("/practice/questions/seed", { method: "POST" });
+});
+
 ipcMain.handle("civil-service:questions", async (_event, filters = {}) => {
   const params = new URLSearchParams();
   if (filters.year) params.set("year", filters.year);
@@ -97,7 +116,31 @@ ipcMain.handle("civil-service:import-file", async () => {
   const filePath = result.filePaths[0];
   const text = await fs.readFile(filePath, "utf-8");
   const questions = parseQuestionBankFile(path.basename(filePath), text);
-  const stored = await requestJson("/civil-service/questions/import", {
+  const stored = await requestJson("/practice/questions/import", {
+    method: "POST",
+    body: JSON.stringify({ questions })
+  });
+  return { canceled: false, path: filePath, ...stored };
+});
+
+ipcMain.handle("practice:import-file", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择题库文件",
+    properties: ["openFile"],
+    filters: [
+      { name: "题库文件", extensions: ["json", "csv"] },
+      { name: "JSON", extensions: ["json"] },
+      { name: "CSV", extensions: ["csv"] }
+    ]
+  });
+  if (result.canceled || !result.filePaths.length) {
+    return { canceled: true };
+  }
+
+  const filePath = result.filePaths[0];
+  const text = await fs.readFile(filePath, "utf-8");
+  const questions = parseQuestionBankFile(path.basename(filePath), text);
+  const stored = await requestJson("/practice/questions/import", {
     method: "POST",
     body: JSON.stringify({ questions })
   });
@@ -383,6 +426,9 @@ function normalizeHeader(value) {
     examYear: "exam_year",
     question: "prompt",
     type: "question_type",
+    practiceCategory: "practice_category",
+    practice_category: "practice_category",
+    category: "practice_category",
     sourceUrl: "source_url",
     sourceURL: "source_url"
   };
@@ -392,9 +438,10 @@ function normalizeHeader(value) {
 function normalizeQuestionRow(row) {
   const normalized = { ...row };
   normalized.source = normalized.source || "user-upload";
+  normalized.practice_category = normalizeCategory(normalized.practice_category || normalized.category || inferCategory(normalized));
   normalized.exam_year = Number(normalized.exam_year || normalized.year || 0);
   normalized.exam_name = String(normalized.exam_name || "自定义题库").trim();
-  normalized.subject = String(normalized.subject || "xingce").trim();
+  normalized.subject = String(normalized.subject || "general").trim();
   normalized.question_type = String(normalized.question_type || normalized.type || "综合训练").trim();
   normalized.prompt = String(normalized.prompt || normalized.question || "").trim();
   normalized.choices = normalizeList(normalized.choices);
@@ -409,6 +456,36 @@ function normalizeQuestionRow(row) {
     throw new Error("题库中存在无效年份，请补充 exam_year/year 字段。");
   }
   return normalized;
+}
+
+function normalizeCategory(value) {
+  const cleaned = String(value || "internet").trim().toLowerCase();
+  const aliases = {
+    "考公": "civil_service",
+    "公考": "civil_service",
+    "公务员": "civil_service",
+    "civil-service": "civil_service",
+    "civil service": "civil_service",
+    "互联网": "internet",
+    "技术面试": "internet",
+    "ai": "ai_engineering",
+    "ai工程": "ai_engineering",
+    "ai 工程": "ai_engineering",
+    "面试": "interview"
+  };
+  return aliases[cleaned] || cleaned || "internet";
+}
+
+function inferCategory(row) {
+  const subject = String(row.subject || "").trim().toLowerCase();
+  const examName = String(row.exam_name || "").trim().toLowerCase();
+  if (["xingce", "shenlun"].includes(subject) || /考公|国考|省考|申论|行测/.test(examName)) {
+    return "civil_service";
+  }
+  if (/ai|rag|agent|llm/.test(examName)) {
+    return "ai_engineering";
+  }
+  return "internet";
 }
 
 function normalizeList(value) {

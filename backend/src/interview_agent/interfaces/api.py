@@ -1052,15 +1052,26 @@ def create_app(
     ) -> list[IndustryOptionResponse]:
         return [IndustryOptionResponse(**item) for item in industry_options(target_role.strip())]
 
-    @app.get("/civil-service/learning-plan")
-    async def civil_service_learning_plan(
+    async def _practice_learning_plan(
         context: RequestContext = Depends(request_context),
     ) -> list[dict]:
         _require_authenticated(context)
         return CIVIL_SERVICE_LEARNING_PLAN
 
-    @app.get("/civil-service/questions", response_model=CivilServiceQuestionListResponse)
-    async def list_civil_service_questions(
+    @app.get("/practice/learning-plan")
+    async def practice_learning_plan(
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        return await _practice_learning_plan(context)
+
+    @app.get("/civil-service/learning-plan")
+    async def civil_service_learning_plan(
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        return await _practice_learning_plan(context)
+
+    async def _list_practice_questions(
+        category: str | None = None,
         year: int | None = Query(default=None, ge=1990, le=2100),
         subject: str | None = Query(default=None, max_length=64),
         question_type: str | None = Query(default=None, max_length=64),
@@ -1075,6 +1086,7 @@ def create_app(
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
             ).list_questions(
+                category=category,
                 year=year,
                 subject=subject,
                 question_type=question_type,
@@ -1083,8 +1095,30 @@ def create_app(
             )
         return CivilServiceQuestionListResponse(items=items, total=total, limit=limit, offset=offset)
 
-    @app.post("/civil-service/questions/import", response_model=ImportResultResponse)
-    async def import_civil_service_questions(
+    @app.get("/practice/questions", response_model=CivilServiceQuestionListResponse)
+    async def list_practice_questions(
+        category: str | None = Query(default=None, max_length=64),
+        year: int | None = Query(default=None, ge=1990, le=2100),
+        subject: str | None = Query(default=None, max_length=64),
+        question_type: str | None = Query(default=None, max_length=64),
+        limit: int = Query(default=30, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        context: RequestContext = Depends(request_context),
+    ) -> CivilServiceQuestionListResponse:
+        return await _list_practice_questions(category, year, subject, question_type, limit, offset, context)
+
+    @app.get("/civil-service/questions", response_model=CivilServiceQuestionListResponse)
+    async def list_civil_service_questions(
+        year: int | None = Query(default=None, ge=1990, le=2100),
+        subject: str | None = Query(default=None, max_length=64),
+        question_type: str | None = Query(default=None, max_length=64),
+        limit: int = Query(default=30, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        context: RequestContext = Depends(request_context),
+    ) -> CivilServiceQuestionListResponse:
+        return await _list_practice_questions("civil_service", year, subject, question_type, limit, offset, context)
+
+    async def _import_practice_questions(
         request: CivilServiceQuestionImportRequest,
         context: RequestContext = Depends(request_context),
     ) -> ImportResultResponse:
@@ -1102,8 +1136,23 @@ def create_app(
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
         return ImportResultResponse(**result)
 
-    @app.post("/civil-service/questions/seed", response_model=ImportResultResponse)
-    async def seed_civil_service_questions(
+    @app.post("/practice/questions/import", response_model=ImportResultResponse)
+    async def import_practice_questions(
+        request: CivilServiceQuestionImportRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ImportResultResponse:
+        return await _import_practice_questions(request, context)
+
+    @app.post("/civil-service/questions/import", response_model=ImportResultResponse)
+    async def import_civil_service_questions(
+        request: CivilServiceQuestionImportRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ImportResultResponse:
+        for question in request.questions:
+            question.setdefault("practice_category", "civil_service")
+        return await _import_practice_questions(request, context)
+
+    async def _seed_practice_questions(
         context: RequestContext = Depends(request_context),
     ) -> ImportResultResponse:
         _require_authenticated(context)
@@ -1114,6 +1163,18 @@ def create_app(
                 user_id=context.user_id,
             ).upsert_many(CIVIL_SERVICE_SEED_QUESTIONS)
         return ImportResultResponse(**result)
+
+    @app.post("/practice/questions/seed", response_model=ImportResultResponse)
+    async def seed_practice_questions(
+        context: RequestContext = Depends(request_context),
+    ) -> ImportResultResponse:
+        return await _seed_practice_questions(context)
+
+    @app.post("/civil-service/questions/seed", response_model=ImportResultResponse)
+    async def seed_civil_service_questions(
+        context: RequestContext = Depends(request_context),
+    ) -> ImportResultResponse:
+        return await _seed_practice_questions(context)
 
     @app.post("/resume/parse", response_model=ResumeParseResponse)
     async def parse_resume(

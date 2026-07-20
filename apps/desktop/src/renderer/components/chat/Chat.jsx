@@ -13,7 +13,7 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
       : screen === "setup"
       ? "面试配置"
       : screen === "study"
-      ? "刷题学习"
+      ? "面试刷题"
       : profile.mode === "candidate"
       ? `${profile.targetRole || "AI 工程师"}候选人答题`
       : profile.targetRole
