@@ -4,9 +4,10 @@ import hashlib
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from interview_agent.domain.civil_service import DEFAULT_PRACTICE_QUESTIONS
 from interview_agent.infrastructure.db.models import CivilServiceQuestionModel
 
 
@@ -67,10 +68,6 @@ class CivilServiceQuestionRepository:
         if question_type:
             filters.append(CivilServiceQuestionModel.question_type == question_type)
 
-        total_result = await self.session.execute(
-            select(func.count()).select_from(CivilServiceQuestionModel).where(*filters)
-        )
-        total = int(total_result.scalar_one() or 0)
         result = await self.session.execute(
             select(CivilServiceQuestionModel)
             .where(*filters)
@@ -78,10 +75,22 @@ class CivilServiceQuestionRepository:
                 CivilServiceQuestionModel.exam_year.desc(),
                 CivilServiceQuestionModel.updated_at.desc(),
             )
-            .limit(limit)
-            .offset(offset)
         )
-        return [question_to_dict(item) for item in result.scalars().all()], total
+        user_items = [question_to_dict(item) for item in result.scalars().all()]
+        user_hashes = {item["content_hash"] for item in user_items if item.get("content_hash")}
+        default_items = [
+            item
+            for item in default_question_dicts(
+                category=category,
+                year=year,
+                subject=subject,
+                question_type=question_type,
+            )
+            if item.get("content_hash") not in user_hashes
+        ]
+        merged = [*default_items, *user_items]
+        total = len(merged)
+        return merged[offset : offset + limit], total
 
     async def _get_by_hash(self, content_hash: str) -> CivilServiceQuestionModel | None:
         result = await self.session.execute(
@@ -173,6 +182,38 @@ def normalize_difficulty(value: Any) -> str:
     return cleaned if cleaned in {"easy", "medium", "hard"} else "medium"
 
 
+def default_question_dicts(
+    *,
+    category: str | None = None,
+    year: int | None = None,
+    subject: str | None = None,
+    question_type: str | None = None,
+) -> list[dict[str, Any]]:
+    filters = {
+        "category": normalize_practice_category(category) if category else None,
+        "subject": normalize_subject(subject) if subject else None,
+        "question_type": question_type.strip() if question_type else None,
+    }
+    items: list[dict[str, Any]] = []
+    for payload in DEFAULT_PRACTICE_QUESTIONS:
+        normalized = normalize_question_payload(payload)
+        if filters["category"] and normalized["practice_category"] != filters["category"]:
+            continue
+        if year and normalized["exam_year"] != year:
+            continue
+        if filters["subject"] and normalized["subject"] != filters["subject"]:
+            continue
+        if filters["question_type"] and normalized["question_type"] != filters["question_type"]:
+            continue
+        content_hash = question_content_hash(normalized)
+        items.append(default_question_to_dict(normalized, content_hash))
+    return sorted(
+        items,
+        key=lambda item: (item["exam_year"], item["practice_category"], item["question_type"]),
+        reverse=True,
+    )
+
+
 def question_content_hash(payload: dict[str, Any]) -> str:
     signature = "\n".join(
         [
@@ -223,6 +264,33 @@ def question_to_dict(model: CivilServiceQuestionModel) -> dict[str, Any]:
         "difficulty": model.difficulty,
         "tags": model.tags_json,
         "metadata": model.metadata_json,
+        "content_hash": model.content_hash,
+        "builtin": False,
         "created_at": model.created_at.isoformat(),
         "updated_at": model.updated_at.isoformat(),
+    }
+
+
+def default_question_to_dict(payload: dict[str, Any], content_hash: str) -> dict[str, Any]:
+    return {
+        "id": f"default:{content_hash[:16]}",
+        "practice_category": payload["practice_category"],
+        "category": payload["practice_category"],
+        "source": payload["source"],
+        "source_url": payload["source_url"],
+        "exam_year": payload["exam_year"],
+        "exam_name": payload["exam_name"],
+        "subject": payload["subject"],
+        "question_type": payload["question_type"],
+        "prompt": payload["prompt"],
+        "choices": payload["choices"],
+        "answer": payload["answer"],
+        "explanation": payload["explanation"],
+        "difficulty": payload["difficulty"],
+        "tags": payload["tags"],
+        "metadata": payload["metadata"],
+        "content_hash": content_hash,
+        "builtin": True,
+        "created_at": None,
+        "updated_at": None,
     }

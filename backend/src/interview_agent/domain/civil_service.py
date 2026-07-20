@@ -75,3 +75,74 @@ CIVIL_SERVICE_SEED_QUESTIONS: list[dict[str, Any]] = [
         "tags": ["申论", "归纳概括", "公共服务"],
     },
 ]
+
+
+INTERNET_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网技术面试训练样题",
+        "subject": "system_design",
+        "question_type": "系统设计",
+        "prompt": "设计一个短链服务。请说明核心表结构、生成算法、跳转链路、缓存策略、风控和高并发下的可用性设计。",
+        "choices": [],
+        "answer": "围绕短码生成、唯一性、重定向读多写少、缓存、限流、黑名单、监控和降级展开。",
+        "explanation": "系统设计题重点不是背方案，而是讲清楚业务约束、核心路径、数据模型、容量估算和故障处理。",
+        "difficulty": "medium",
+        "tags": ["系统设计", "高并发", "缓存", "风控"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网技术面试训练样题",
+        "subject": "project",
+        "question_type": "项目深挖",
+        "prompt": "请用 STAR 结构讲一个你主导排查线上故障的案例，重点说明定位路径、数据证据、止血动作和复盘改进。",
+        "choices": [],
+        "answer": "需要覆盖背景、任务、行动、结果，并补充监控指标、日志证据、回滚/降级和后续机制建设。",
+        "explanation": "项目深挖题要体现真实工程经验，回答里最好有指标、个人职责、关键判断和复盘闭环。",
+        "difficulty": "medium",
+        "tags": ["项目深挖", "线上故障", "稳定性", "STAR"],
+    },
+]
+
+
+AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "ai_engineering",
+        "exam_year": 2026,
+        "exam_name": "AI 工程面试训练样题",
+        "subject": "project",
+        "question_type": "RAG 项目深挖",
+        "prompt": "你做过的 RAG 系统如何处理召回不准和幻觉问题？请说明切分、向量召回、重排、引用校验、评测指标和线上观测。",
+        "choices": [],
+        "answer": "可从 chunk 策略、混合检索、rerank、答案引用、拒答机制、离线评测集、线上反馈闭环等角度回答。",
+        "explanation": "AI 工程题要避免只讲概念，需要落到数据、评测、上线和安全治理。",
+        "difficulty": "hard",
+        "tags": ["RAG", "召回", "评测", "幻觉治理"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "ai_engineering",
+        "exam_year": 2026,
+        "exam_name": "AI 工程面试训练样题",
+        "subject": "system_design",
+        "question_type": "Agent 设计",
+        "prompt": "如果要设计一个可调用工具的 Agent，你会如何做权限控制、工具选择、失败重试、成本控制和审计日志？",
+        "choices": [],
+        "answer": "重点覆盖工具白名单、参数校验、最小权限、计划执行、超时重试、预算上限、人工确认和全链路审计。",
+        "explanation": "Agent 不是只让模型调用函数，还要把安全边界、可观测性和成本治理设计进去。",
+        "difficulty": "hard",
+        "tags": ["Agent", "工具调用", "权限", "审计"],
+    },
+]
+
+
+DEFAULT_PRACTICE_QUESTIONS: list[dict[str, Any]] = [
+    *INTERNET_SEED_QUESTIONS,
+    *AI_ENGINEERING_SEED_QUESTIONS,
+    *CIVIL_SERVICE_SEED_QUESTIONS,
+]

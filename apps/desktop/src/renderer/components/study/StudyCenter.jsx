@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpenCheck, CheckCircle2, Database, Eye, EyeOff, Filter, RefreshCw, UploadCloud } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, Eye, EyeOff, Filter, RefreshCw, UploadCloud } from "lucide-react";
 
 const subjectOptions = [
   { value: "", label: "全部科目" },
@@ -25,7 +25,6 @@ export function StudyCenter({
   studyFilters,
   onFilterChange,
   onReload,
-  onSeed,
   onImportQuestions,
   onBack
 }) {
@@ -41,10 +40,6 @@ export function StudyCenter({
         </div>
         <div className="setup-hero-actions">
           <button type="button" className="secondary-action inline" onClick={onBack}>返回工作台</button>
-          <button type="button" className="primary-action inline" onClick={onSeed} disabled={studyState.status === "loading"}>
-            <Database size={17} />
-            初始化样题
-          </button>
         </div>
       </div>
 
@@ -120,12 +115,12 @@ export function StudyCenter({
           {studyState.error && <p className="resume-hint error">{studyState.error}</p>}
           {studyState.seedMessage && <p className="resume-hint success">{studyState.seedMessage}</p>}
           {studyState.importMessage && <p className="resume-hint success">{studyState.importMessage}</p>}
-          <p className="resume-hint">当前筛选共 {total} 道题。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
+          <p className="resume-hint">当前筛选共 {total} 道题，已包含系统默认题库。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
           <div className="question-list">
             {questions.length ? questions.map((question) => (
               <QuestionCard key={question.id} question={question} />
             )) : (
-              <p className="resume-hint">暂无题目。可以先初始化样题，或上传自己的合法题库。</p>
+              <p className="resume-hint">暂无匹配题目。可以切换训练类型，或上传自己的合法题库作为补充。</p>
             )}
           </div>
         </section>

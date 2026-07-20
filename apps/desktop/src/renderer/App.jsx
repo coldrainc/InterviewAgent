@@ -1030,7 +1030,6 @@ function App() {
             studyFilters={studyFilters}
             onFilterChange={updateStudyFilters}
             onReload={loadStudyCenter}
-            onSeed={seedPracticeQuestions}
             onImportQuestions={importPracticeQuestionBank}
             onBack={() => setScreen("chat")}
           />
