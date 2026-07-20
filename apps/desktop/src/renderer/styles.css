@@ -1468,6 +1468,14 @@ button {
   font-size: 13px;
 }
 
+.ops-next-actions {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #4e625b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .ops-row-actions {
   display: flex;
   align-items: center;

@@ -1563,7 +1563,7 @@ def create_app(
             user_id=context.user_id,
             job_type="evaluation",
             title=request.name or "AI 工程能力质量评估",
-            input_payload={"cases": request.cases, "metadata": request.metadata},
+            input_payload={"cases": request.cases, "metadata": request.metadata, **request.metadata},
         )
 
     @app.get("/eval-runs")

@@ -560,16 +560,47 @@ function App() {
     if (!requireAccount("运行任务与评测前需要先登录账号。")) return;
     try {
       setOpsState((current) => ({ ...current, status: "loading", error: "", message: "" }));
+      const baseInput = {
+        session_id: sessionId || undefined,
+        category: profile.industry || "internet",
+        subject: studyFilters.subject || undefined,
+        target_role: profile.targetRole,
+        seniority: profile.seniority,
+        profile: {
+          targetRole: profile.targetRole,
+          industry: profile.industry,
+          seniority: profile.seniority,
+          mode: profile.mode
+        }
+      };
       if (kind === "evaluation") {
-        await api.createEvalRun?.({ name: "AI 工程能力质量评估" });
+        await api.createEvalRun?.({
+          name: "当前会话与题库质量评估",
+          metadata: { ...baseInput, scenario: "quality_gate" }
+        });
       } else if (kind === "multi_agent") {
-        await api.runWorkflow?.({ workflow_type: "multi_agent", title: "多 Agent 协作演示" });
+        await api.runWorkflow?.({
+          workflow_type: "multi_agent",
+          title: "多 Agent 审核当前准备度",
+          input: { ...baseInput, scenario: "session_review" }
+        });
+      } else if (kind === "study_plan") {
+        await api.runWorkflow?.({
+          workflow_type: "workflow",
+          title: "刷题与学习计划生成",
+          input: { ...baseInput, scenario: "study_plan" }
+        });
       } else {
-        await api.runWorkflow?.({ workflow_type: "workflow", title: "复杂任务编排演示" });
+        await api.runWorkflow?.({
+          workflow_type: "workflow",
+          title: "面试准备度复盘",
+          input: { ...baseInput, scenario: "interview_readiness" }
+        });
       }
       setOpsState((current) => ({ ...current, message: "任务已提交，正在后台执行。" }));
       window.setTimeout(loadOperationsCenter, 500);
       window.setTimeout(loadOperationsCenter, 1500);
+      window.setTimeout(loadOperationsCenter, 3500);
     } catch (error) {
       setOpsState((current) => ({ ...current, status: "error", error: `任务提交失败：${normalizeDesktopError(error.message)}` }));
     }
@@ -1147,6 +1178,7 @@ function App() {
             opsState={opsState}
             onReload={loadOperationsCenter}
             onRunWorkflow={() => runOperationsJob("workflow")}
+            onRunStudyPlan={() => runOperationsJob("study_plan")}
             onRunEvaluation={() => runOperationsJob("evaluation")}
             onRunMultiAgent={() => runOperationsJob("multi_agent")}
             onCancelJob={cancelOperationsJob}
