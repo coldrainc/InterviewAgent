@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpenCheck, CheckCircle2, Database, Eye, EyeOff, Filter, RefreshCw } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, Database, Eye, EyeOff, Filter, RefreshCw, UploadCloud } from "lucide-react";
 
 const subjectOptions = [
   { value: "", label: "全部科目" },
@@ -14,6 +14,7 @@ export function StudyCenter({
   onFilterChange,
   onReload,
   onSeed,
+  onImportQuestions,
   onBack
 }) {
   const questions = studyState.questions?.items || [];
@@ -24,7 +25,7 @@ export function StudyCenter({
         <div>
           <span className="eyebrow">Civil Service Study</span>
           <h3>刷题学习</h3>
-          <p>围绕考公行测、申论和结构化面试做模块训练，题库支持后续批量导入历年数据。</p>
+          <p>围绕考公行测、申论和结构化面试做模块训练，支持上传自己的 JSON 或 CSV 题库。</p>
         </div>
         <div className="setup-hero-actions">
           <button type="button" className="secondary-action inline" onClick={onBack}>返回工作台</button>
@@ -57,9 +58,20 @@ export function StudyCenter({
         <section className="study-block wide">
           <div className="panel-heading">
             <span><Filter size={15} /> 题库训练</span>
-            <button className="icon-button" type="button" onClick={onReload} aria-label="刷新题库">
-              <RefreshCw size={15} />
-            </button>
+            <div className="study-toolbar">
+              <button
+                className="secondary-action inline compact"
+                type="button"
+                onClick={onImportQuestions}
+                disabled={studyState.status === "loading"}
+              >
+                <UploadCloud size={15} />
+                上传题库
+              </button>
+              <button className="icon-button" type="button" onClick={onReload} aria-label="刷新题库">
+                <RefreshCw size={15} />
+              </button>
+            </div>
           </div>
           <div className="study-filters">
             <label>
@@ -89,12 +101,13 @@ export function StudyCenter({
 
           {studyState.error && <p className="resume-hint error">{studyState.error}</p>}
           {studyState.seedMessage && <p className="resume-hint success">{studyState.seedMessage}</p>}
-          <p className="resume-hint">当前筛选共 {total} 道题。题目来源会标记为样题、导入或指定数据源。</p>
+          {studyState.importMessage && <p className="resume-hint success">{studyState.importMessage}</p>}
+          <p className="resume-hint">当前筛选共 {total} 道题。CSV 字段支持 exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
           <div className="question-list">
             {questions.length ? questions.map((question) => (
               <QuestionCard key={question.id} question={question} />
             )) : (
-              <p className="resume-hint">暂无题目。可以先初始化样题，或用导入脚本批量导入合法题库。</p>
+              <p className="resume-hint">暂无题目。可以先初始化样题，或上传自己的合法题库。</p>
             )}
           </div>
         </section>

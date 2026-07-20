@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   getCivilServiceLearningPlan: () => ipcRenderer.invoke("civil-service:learning-plan"),
   listCivilServiceQuestions: (filters) => ipcRenderer.invoke("civil-service:questions", filters),
   seedCivilServiceQuestions: () => ipcRenderer.invoke("civil-service:seed"),
+  importCivilServiceQuestionBank: () => ipcRenderer.invoke("civil-service:import-file"),
   register: (payload) => ipcRenderer.invoke("auth:register", payload),
   login: (payload) => ipcRenderer.invoke("auth:login", payload),
   devLogin: (payload) => ipcRenderer.invoke("auth:dev-login", payload),

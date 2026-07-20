@@ -1,3 +1,5 @@
+import { parseQuestionBankFile } from "./utils/questionBankParser";
+
 const DEFAULT_API_BASE_URL = "/api";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -299,6 +301,10 @@ function chooseResumeFile() {
   return chooseFile(".pdf,.md,.markdown,application/pdf,text/markdown,text/plain");
 }
 
+function chooseQuestionBankFile() {
+  return chooseFile(".json,.csv,application/json,text/csv,text/plain");
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -308,6 +314,15 @@ function fileToBase64(file) {
       resolve(value.includes(",") ? value.split(",")[1] : value);
     };
     reader.readAsDataURL(file);
+  });
+}
+
+function fileToText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取题库文件失败。"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsText(file, "utf-8");
   });
 }
 
@@ -345,6 +360,21 @@ async function parseDocumentFromBrowser({ accept } = {}) {
   return { canceled: false, path: file.name, ...parsed };
 }
 
+async function importQuestionBankFromBrowser() {
+  const file = await chooseQuestionBankFile();
+  if (!file) {
+    return { canceled: true };
+  }
+  const text = await fileToText(file);
+  const questions = parseQuestionBankFile(file.name, text);
+  const stored = await requestJson("/civil-service/questions/import", {
+    method: "POST",
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+    body: JSON.stringify({ questions })
+  });
+  return { canceled: false, path: file.name, ...stored };
+}
+
 const browserClient = {
   hasToken: () => Boolean(getStoredToken()),
   health: () => requestJson("/health"),
@@ -364,6 +394,7 @@ const browserClient = {
     return requestJson(`/civil-service/questions?${params.toString()}`);
   },
   seedCivilServiceQuestions: () => requestJson("/civil-service/questions/seed", { method: "POST" }),
+  importCivilServiceQuestionBank: importQuestionBankFromBrowser,
   async register(payload) {
     const response = await requestJson("/auth/register", {
       method: "POST",

@@ -11,9 +11,15 @@ from interview_agent.infrastructure.db.models import CivilServiceQuestionModel
 
 
 class CivilServiceQuestionRepository:
-    def __init__(self, session: AsyncSession, tenant_id: str = "default") -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        tenant_id: str = "default",
+        user_id: str = "anonymous",
+    ) -> None:
         self.session = session
         self.tenant_id = tenant_id
+        self.user_id = user_id
 
     async def upsert_many(self, questions: list[dict[str, Any]]) -> dict[str, int]:
         created = 0
@@ -29,6 +35,7 @@ class CivilServiceQuestionRepository:
                 model = CivilServiceQuestionModel(
                     id=uuid.uuid4(),
                     tenant_id=self.tenant_id,
+                    user_id=self.user_id,
                     content_hash=content_hash,
                 )
                 apply_question_payload(model, normalized, content_hash)
@@ -46,7 +53,10 @@ class CivilServiceQuestionRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
-        filters = [CivilServiceQuestionModel.tenant_id == self.tenant_id]
+        filters = [
+            CivilServiceQuestionModel.tenant_id == self.tenant_id,
+            CivilServiceQuestionModel.user_id == self.user_id,
+        ]
         if year:
             filters.append(CivilServiceQuestionModel.exam_year == year)
         if subject:
@@ -74,6 +84,7 @@ class CivilServiceQuestionRepository:
         result = await self.session.execute(
             select(CivilServiceQuestionModel).where(
                 CivilServiceQuestionModel.tenant_id == self.tenant_id,
+                CivilServiceQuestionModel.user_id == self.user_id,
                 CivilServiceQuestionModel.content_hash == content_hash,
             )
         )
@@ -81,14 +92,20 @@ class CivilServiceQuestionRepository:
 
 
 def normalize_question_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    prompt = str(payload.get("prompt") or payload.get("question") or "").strip()
+    if not prompt:
+        raise ValueError("题目内容不能为空。")
+    exam_year = int(payload.get("exam_year") or payload.get("year") or 0)
+    if exam_year <= 0:
+        raise ValueError("题目年份必须是有效数字。")
     return {
         "source": str(payload.get("source") or "manual").strip()[:128],
         "source_url": str(payload.get("source_url") or "").strip() or None,
-        "exam_year": int(payload.get("exam_year") or payload.get("year") or 0),
+        "exam_year": exam_year,
         "exam_name": str(payload.get("exam_name") or "考公训练题").strip()[:255],
         "subject": normalize_subject(payload.get("subject")),
         "question_type": str(payload.get("question_type") or payload.get("type") or "综合训练").strip()[:64],
-        "prompt": str(payload.get("prompt") or payload.get("question") or "").strip(),
+        "prompt": prompt,
         "choices": payload.get("choices") if isinstance(payload.get("choices"), list) else [],
         "answer": str(payload.get("answer") or "").strip() or None,
         "explanation": str(payload.get("explanation") or "").strip() or None,

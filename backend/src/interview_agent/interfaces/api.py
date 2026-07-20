@@ -1072,6 +1072,7 @@ def create_app(
             items, total = await CivilServiceQuestionRepository(
                 db,
                 tenant_id=context.tenant_id,
+                user_id=context.user_id,
             ).list_questions(
                 year=year,
                 subject=subject,
@@ -1090,10 +1091,14 @@ def create_app(
         if len(request.questions) > 500:
             raise HTTPException(status_code=413, detail="单次最多导入 500 道题。")
         async with session_scope() as db:
-            result = await CivilServiceQuestionRepository(
-                db,
-                tenant_id=context.tenant_id,
-            ).upsert_many(request.questions)
+            try:
+                result = await CivilServiceQuestionRepository(
+                    db,
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                ).upsert_many(request.questions)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         return ImportResultResponse(**result)
 
     @app.post("/civil-service/questions/seed", response_model=ImportResultResponse)
@@ -1105,6 +1110,7 @@ def create_app(
             result = await CivilServiceQuestionRepository(
                 db,
                 tenant_id=context.tenant_id,
+                user_id=context.user_id,
             ).upsert_many(CIVIL_SERVICE_SEED_QUESTIONS)
         return ImportResultResponse(**result)
 

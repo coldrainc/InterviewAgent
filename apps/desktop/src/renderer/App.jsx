@@ -114,7 +114,13 @@ function App() {
   const [selectedResumeId, setSelectedResumeId] = useState("");
   const [sessionHistory, setSessionHistory] = useState([]);
   const [historyState, setHistoryState] = useState({ status: "idle" });
-  const [studyState, setStudyState] = useState({ status: "idle", plan: [], questions: { items: [], total: 0, limit: 30, offset: 0 } });
+  const [studyState, setStudyState] = useState({
+    status: "idle",
+    plan: [],
+    questions: { items: [], total: 0, limit: 30, offset: 0 },
+    importMessage: "",
+    seedMessage: ""
+  });
   const [studyFilters, setStudyFilters] = useState({ year: "", subject: "", questionType: "" });
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
@@ -464,6 +470,27 @@ function App() {
       await loadStudyCenter();
     } catch (error) {
       setStudyState((current) => ({ ...current, status: "error", error: `初始化题库失败：${normalizeDesktopError(error.message)}` }));
+    }
+  }
+
+  async function importCivilServiceQuestionBank() {
+    if (!requireAccount("上传题库前需要先登录账号。")) return;
+    if (!api.importCivilServiceQuestionBank) return;
+    try {
+      setStudyState((current) => ({ ...current, status: "loading", error: "", importMessage: "", seedMessage: "" }));
+      const result = await api.importCivilServiceQuestionBank();
+      if (result?.canceled) {
+        setStudyState((current) => ({ ...current, status: "idle" }));
+        return;
+      }
+      setStudyState((current) => ({
+        ...current,
+        status: "idle",
+        importMessage: `题库已上传：新增 ${result.created}，更新 ${result.updated}。`
+      }));
+      await loadStudyCenter();
+    } catch (error) {
+      setStudyState((current) => ({ ...current, status: "error", error: `上传题库失败：${normalizeDesktopError(error.message)}` }));
     }
   }
 
@@ -992,6 +1019,7 @@ function App() {
             onFilterChange={updateStudyFilters}
             onReload={loadStudyCenter}
             onSeed={seedCivilServiceQuestions}
+            onImportQuestions={importCivilServiceQuestionBank}
             onBack={() => setScreen("chat")}
           />
         ) : (
