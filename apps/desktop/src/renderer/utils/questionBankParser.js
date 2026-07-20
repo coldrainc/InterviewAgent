@@ -106,7 +106,7 @@ function normalizeQuestionRow(row) {
   normalized.practice_category = normalizeCategory(normalized.practice_category || normalized.category || inferCategory(normalized));
   normalized.exam_year = Number(normalized.exam_year || normalized.year || 0);
   normalized.exam_name = String(normalized.exam_name || "自定义题库").trim();
-  normalized.subject = String(normalized.subject || "general").trim();
+  normalized.subject = normalizeSubject(normalized.subject || "general");
   normalized.question_type = String(normalized.question_type || normalized.type || "综合训练").trim();
   normalized.prompt = String(normalized.prompt || normalized.question || "").trim();
   normalized.choices = normalizeList(normalized.choices);
@@ -139,6 +139,36 @@ function normalizeCategory(value) {
     "面试": "interview"
   };
   return aliases[cleaned] || cleaned || "internet";
+}
+
+function normalizeSubject(value) {
+  const cleaned = String(value || "general").trim().toLowerCase();
+  const aliases = {
+    "项目深挖": "project",
+    "系统设计": "system_design",
+    "算法": "algorithm",
+    "数据结构": "algorithm",
+    "agent harness": "agent_harness",
+    "agentharness": "agent_harness",
+    "agentops": "agentops",
+    "agent ops": "agentops",
+    "搜索": "search",
+    "ai搜索": "search",
+    "多 agent": "multi_agent",
+    "多agent": "multi_agent",
+    "多 agent 协作": "multi_agent",
+    "复杂任务编排": "workflow",
+    "任务编排": "workflow",
+    "异步工作流": "async_workflow",
+    "长任务": "long_running_tasks",
+    "长任务执行平台": "long_running_tasks",
+    "质量评估": "evaluation",
+    "评估": "evaluation",
+    "行测": "xingce",
+    "申论": "shenlun",
+    "结构化面试": "interview"
+  };
+  return aliases[cleaned] || cleaned || "general";
 }
 
 function inferCategory(row) {
