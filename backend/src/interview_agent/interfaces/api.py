@@ -32,6 +32,7 @@ from interview_agent.interfaces.cli import (
 from interview_agent.core.config import CandidateProfile, InterviewConfig, InterviewMode, InterviewStage
 from interview_agent.core.industry import Industry, industry_options
 from interview_agent.domain.billing import DEFAULT_CHAT_MODEL, micros_to_credits
+from interview_agent.domain.civil_service import CIVIL_SERVICE_LEARNING_PLAN, CIVIL_SERVICE_SEED_QUESTIONS
 from interview_agent.infrastructure.auth_providers import AuthProviderError, exchange_wechat_code
 from interview_agent.infrastructure.codex_config import load_codex_model_config
 from interview_agent.infrastructure.db.session import (
@@ -78,6 +79,7 @@ from interview_agent.services.billing_service import (
 )
 from interview_agent.services.interview_persistence_service import InterviewPersistenceService
 from interview_agent.services.resume_service import ResumeService
+from interview_agent.repositories.civil_service_repository import CivilServiceQuestionRepository
 
 
 class SessionRequest(BaseModel):
@@ -338,6 +340,23 @@ class IndustryOptionResponse(BaseModel):
     follow_up_angles: list[str]
     answer_expectations: list[str]
     recommended_focus_areas: list[str]
+
+
+class CivilServiceQuestionImportRequest(BaseModel):
+    questions: list[dict]
+
+
+class CivilServiceQuestionListResponse(BaseModel):
+    items: list[dict]
+    total: int
+    limit: int
+    offset: int
+
+
+class ImportResultResponse(BaseModel):
+    created: int
+    updated: int
+    total: int
 
 
 @dataclass
@@ -1031,6 +1050,63 @@ def create_app(
         target_role: str = Query(default="AI 应用工程师", min_length=1, max_length=80),
     ) -> list[IndustryOptionResponse]:
         return [IndustryOptionResponse(**item) for item in industry_options(target_role.strip())]
+
+    @app.get("/civil-service/learning-plan")
+    async def civil_service_learning_plan(
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        return CIVIL_SERVICE_LEARNING_PLAN
+
+    @app.get("/civil-service/questions", response_model=CivilServiceQuestionListResponse)
+    async def list_civil_service_questions(
+        year: int | None = Query(default=None, ge=1990, le=2100),
+        subject: str | None = Query(default=None, max_length=64),
+        question_type: str | None = Query(default=None, max_length=64),
+        limit: int = Query(default=30, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        context: RequestContext = Depends(request_context),
+    ) -> CivilServiceQuestionListResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            items, total = await CivilServiceQuestionRepository(
+                db,
+                tenant_id=context.tenant_id,
+            ).list_questions(
+                year=year,
+                subject=subject,
+                question_type=question_type,
+                limit=limit,
+                offset=offset,
+            )
+        return CivilServiceQuestionListResponse(items=items, total=total, limit=limit, offset=offset)
+
+    @app.post("/civil-service/questions/import", response_model=ImportResultResponse)
+    async def import_civil_service_questions(
+        request: CivilServiceQuestionImportRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ImportResultResponse:
+        _require_authenticated(context)
+        if len(request.questions) > 500:
+            raise HTTPException(status_code=413, detail="单次最多导入 500 道题。")
+        async with session_scope() as db:
+            result = await CivilServiceQuestionRepository(
+                db,
+                tenant_id=context.tenant_id,
+            ).upsert_many(request.questions)
+        return ImportResultResponse(**result)
+
+    @app.post("/civil-service/questions/seed", response_model=ImportResultResponse)
+    async def seed_civil_service_questions(
+        context: RequestContext = Depends(request_context),
+    ) -> ImportResultResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            result = await CivilServiceQuestionRepository(
+                db,
+                tenant_id=context.tenant_id,
+            ).upsert_many(CIVIL_SERVICE_SEED_QUESTIONS)
+        return ImportResultResponse(**result)
 
     @app.post("/resume/parse", response_model=ResumeParseResponse)
     async def parse_resume(

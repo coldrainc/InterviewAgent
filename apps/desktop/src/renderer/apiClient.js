@@ -285,14 +285,18 @@ function parseSseChunk(chunk) {
   }
 }
 
-function chooseResumeFile() {
+function chooseFile(accept) {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".pdf,.md,.markdown,application/pdf,text/markdown,text/plain";
+    input.accept = accept;
     input.onchange = () => resolve(input.files?.[0] || null);
     input.click();
   });
+}
+
+function chooseResumeFile() {
+  return chooseFile(".pdf,.md,.markdown,application/pdf,text/markdown,text/plain");
 }
 
 function fileToBase64(file) {
@@ -324,6 +328,23 @@ async function importResumeFromBrowser() {
   return { canceled: false, path: file.name, ...stored };
 }
 
+async function parseDocumentFromBrowser({ accept } = {}) {
+  const file = await chooseFile(accept || ".pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain");
+  if (!file) {
+    return { canceled: true };
+  }
+  const contentBase64 = await fileToBase64(file);
+  const parsed = await requestJson("/resume/parse", {
+    method: "POST",
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+    body: JSON.stringify({
+      filename: file.name,
+      content_base64: contentBase64
+    })
+  });
+  return { canceled: false, path: file.name, ...parsed };
+}
+
 const browserClient = {
   hasToken: () => Boolean(getStoredToken()),
   health: () => requestJson("/health"),
@@ -332,6 +353,17 @@ const browserClient = {
     return requestJson(`/metadata/industries${query}`);
   },
   listModels: () => requestJson("/metadata/models"),
+  getCivilServiceLearningPlan: () => requestJson("/civil-service/learning-plan"),
+  listCivilServiceQuestions: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.year) params.set("year", filters.year);
+    if (filters.subject) params.set("subject", filters.subject);
+    if (filters.questionType) params.set("question_type", filters.questionType);
+    params.set("limit", filters.limit || 30);
+    params.set("offset", filters.offset || 0);
+    return requestJson(`/civil-service/questions?${params.toString()}`);
+  },
+  seedCivilServiceQuestions: () => requestJson("/civil-service/questions/seed", { method: "POST" }),
   async register(payload) {
     const response = await requestJson("/auth/register", {
       method: "POST",
@@ -390,6 +422,7 @@ const browserClient = {
       body: JSON.stringify(payload || {})
     }),
   importResume: importResumeFromBrowser,
+  parseDocument: parseDocumentFromBrowser,
   createSession: (payload) =>
     requestJson("/sessions", {
       method: "POST",

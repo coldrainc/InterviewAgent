@@ -44,6 +44,13 @@ export const fallbackIndustries = [
     description: "面向高并发用户产品、内容/直播/社区/工具类业务。",
     production_signals: ["p95/p99 延迟", "QPS", "灰度通过率"],
     recommended_focus_areas: []
+  },
+  {
+    value: "civil_service",
+    label: "考公 / 公职考试",
+    description: "面向公务员、事业单位和选调备考，覆盖行测、申论和结构化面试。",
+    production_signals: ["正确率", "限时完成率", "错题复盘率"],
+    recommended_focus_areas: ["行测模块刷题", "申论材料分析", "结构化面试表达"]
   }
 ];
 

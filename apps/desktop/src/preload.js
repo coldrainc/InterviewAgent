@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   health: () => ipcRenderer.invoke("api:health"),
   listIndustries: (targetRole) => ipcRenderer.invoke("metadata:industries", targetRole),
   listModels: () => ipcRenderer.invoke("metadata:models"),
+  getCivilServiceLearningPlan: () => ipcRenderer.invoke("civil-service:learning-plan"),
+  listCivilServiceQuestions: (filters) => ipcRenderer.invoke("civil-service:questions", filters),
+  seedCivilServiceQuestions: () => ipcRenderer.invoke("civil-service:seed"),
   register: (payload) => ipcRenderer.invoke("auth:register", payload),
   login: (payload) => ipcRenderer.invoke("auth:login", payload),
   devLogin: (payload) => ipcRenderer.invoke("auth:dev-login", payload),
@@ -22,6 +25,7 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   deleteSession: (sessionId) => ipcRenderer.invoke("sessions:delete", sessionId),
   rewindSession: (sessionId, payload) => ipcRenderer.invoke("sessions:rewind", sessionId, payload),
   importResume: () => ipcRenderer.invoke("resume:import"),
+  parseDocument: () => ipcRenderer.invoke("document:parse"),
   createSession: (payload) => ipcRenderer.invoke("api:create-session", payload),
   sendMessage: (payload) => ipcRenderer.invoke("api:send-message", payload)
 });

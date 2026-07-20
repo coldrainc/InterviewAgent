@@ -4,7 +4,8 @@ const { normalizeError } = require("../../utils/format");
 const {
   getInterviewSetup,
   getIndustryLabel,
-  getSetupSummary
+  getSetupSummary,
+  buildInterviewGoal
 } = require("../../utils/interviewSetup");
 
 Page({
@@ -115,7 +116,7 @@ Page({
         industry: setup.industry,
         target_role: setup.targetRole,
         seniority: setup.seniority,
-        interview_goal: setup.interviewGoal,
+        interview_goal: buildInterviewGoal(setup),
         focus_areas: setup.focusAreas,
         resume_id: this.data.selectedResumeId || undefined
       });

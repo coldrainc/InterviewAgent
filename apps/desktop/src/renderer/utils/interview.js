@@ -78,8 +78,14 @@ export function buildInterviewGoal(profile, seedMessage = "") {
   const baseGoal =
     profile.interviewGoal ||
     "请基于我的简历和做过的事情进行 AI 工程面试，重点深挖真实项目、RAG/Agent、评测、上线和安全治理。";
-  if (!seedMessage) return baseGoal;
-  return `${baseGoal}\n本轮启动意图：${seedMessage}`;
+  const sections = [`面试目标：\n${baseGoal}`];
+  if (profile.interviewerRequirements) {
+    sections.push(`面试官要求：\n${profile.interviewerRequirements}`);
+  }
+  if (seedMessage) {
+    sections.push(`本轮启动意图：\n${seedMessage}`);
+  }
+  return sections.join("\n\n");
 }
 
 export function buildFocusAreas(profile, seedMessage = "", industryOptions = fallbackIndustries) {
@@ -96,13 +102,14 @@ export function buildFocusAreas(profile, seedMessage = "", industryOptions = fal
         `${label}评测、上线、安全与观测`,
         `${label}行为协作与项目复盘`
       ];
-  if (seedMessage.includes("RAG")) {
+  const requirementText = `${seedMessage}\n${profile.interviewerRequirements || ""}`;
+  if (requirementText.includes("RAG")) {
     return ["简历中的 RAG 项目深挖", ...areas.filter((area) => !area.includes("简历项目"))];
   }
-  if (seedMessage.includes("LLMOps") || seedMessage.includes("评测")) {
+  if (requirementText.includes("LLMOps") || requirementText.includes("评测")) {
     return ["LLMOps、评测和上线治理", ...areas.filter((area) => !area.includes("评测"))];
   }
-  if (seedMessage.includes("Agent") || seedMessage.includes("工具调用")) {
+  if (requirementText.includes("Agent") || requirementText.includes("工具调用")) {
     return ["Agent 工具调用和安全护栏", ...areas.filter((area) => !area.includes("RAG / Agent"))];
   }
   return areas;

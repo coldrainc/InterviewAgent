@@ -41,6 +41,10 @@
       <text class="label">面试目标</text>
       <textarea value="{{setup.interviewGoal}}" data-key="interviewGoal" bindinput="onSetupInput" auto-height placeholder="希望面试官重点考察哪些方向？" />
     </view>
+    <view class="field">
+      <text class="label">面试官要求</text>
+      <textarea value="{{setup.interviewerRequirements}}" data-key="interviewerRequirements" bindinput="onSetupInput" auto-height placeholder="粘贴 JD、面试通知、考察范围或面试官特别要求。回答会同时参考简历和这些要求。" />
+    </view>
   </view>
 
   <view class="section">

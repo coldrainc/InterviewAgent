@@ -12,6 +12,7 @@ class Industry(str, Enum):
     ECOMMERCE = "ecommerce"
     FINTECH = "fintech"
     ENTERPRISE_SAAS = "enterprise_saas"
+    CIVIL_SERVICE = "civil_service"
 
 
 class IndustryProfile(BaseModel):
@@ -173,6 +174,31 @@ INDUSTRY_PROFILES: dict[Industry, IndustryProfile] = {
             "能把多租户、权限和审计作为一等公民",
             "能说明集成系统的失败补偿和人工确认",
             "能关注客户交付、运维和成本模型",
+        ],
+    ),
+    Industry.CIVIL_SERVICE: IndustryProfile(
+        value=Industry.CIVIL_SERVICE,
+        label="考公 / 公职考试",
+        description="面向公务员、事业单位和选调等公共岗位备考，强调行测模块化训练、申论材料分析、政策理解和表达规范。",
+        scenario_keywords=["行测", "申论", "言语理解", "数量关系", "判断推理", "资料分析", "常识判断"],
+        interview_focus=[
+            "岗位认知、公共服务动机和基层治理理解",
+            "结构化面试中的综合分析、组织协调和应急应变",
+            "申论材料概括、对策提出和公文写作",
+            "行测题型识别、限时策略和错题复盘",
+        ],
+        production_signals=["正确率", "限时完成率", "错题复盘率", "申论结构完整度", "表达规范性"],
+        risk_controls=["资料来源合规", "答案依据可追溯", "避免押题承诺", "避免编造政策", "区分真题与模拟题"],
+        follow_up_angles=[
+            "这道题的题型识别依据是什么",
+            "有没有更快的排除法或估算法",
+            "申论答案如何从材料中找依据",
+            "结构化面试如何把观点落到公共治理场景",
+        ],
+        answer_expectations=[
+            "能先识别题型和考点，再给解题路径",
+            "能把错因归类到知识点、方法或时间管理",
+            "能用规范、克制、面向公共价值的语言作答",
         ],
     ),
 }

@@ -9,6 +9,7 @@ from pathlib import Path
 MAX_RESUME_BYTES = 10 * 1024 * 1024
 MAX_RESUME_CHARS = 30000
 SUPPORTED_MARKDOWN_EXTENSIONS = {".md", ".markdown"}
+SUPPORTED_TEXT_EXTENSIONS = {".txt"}
 
 
 class ResumeParseError(ValueError):
@@ -43,11 +44,14 @@ def parse_resume_bytes(filename: str, content: bytes) -> ParsedResume:
     if suffix in SUPPORTED_MARKDOWN_EXTENSIONS:
         text = _decode_markdown(content)
         file_type = "markdown"
+    elif suffix in SUPPORTED_TEXT_EXTENSIONS:
+        text = _decode_markdown(content)
+        file_type = "text"
     elif suffix == ".pdf":
         text = _extract_pdf_text(content)
         file_type = "pdf"
     else:
-        raise ResumeParseError("仅支持 PDF、Markdown 简历文件。")
+        raise ResumeParseError("仅支持 PDF、Markdown 或文本文件。")
 
     normalized = _normalize_text(text)
     if not normalized:

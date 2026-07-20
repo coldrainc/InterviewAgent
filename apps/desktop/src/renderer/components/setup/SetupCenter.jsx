@@ -12,11 +12,13 @@ export function SetupCenter({
   selectedLlmMode,
   industryOptions,
   resumeImport,
+  requirementsImport,
   resumeLibrary,
   selectedResumeId,
   busy,
   onNewSession,
   onImportResume,
+  onImportRequirements,
   onSelectResume,
   onDeleteResume,
   onReloadResumes,
@@ -118,6 +120,32 @@ export function SetupCenter({
           <Field textarea label="简历摘要" value={profile.resumeSummary} placeholder="粘贴 3-5 行简历摘要：岗位、年限、技术栈、代表项目..." onChange={(value) => updateProfile("resumeSummary", value)} />
           <Field textarea tall label="完整简历" value={profile.resumeText} placeholder="可粘贴完整简历，面试官会围绕其中的项目、职责和技术栈追问。" onChange={(value) => updateProfile("resumeText", value)} />
           <Field textarea tall label="做过的事情" value={profile.projectExperience} placeholder="写你真实做过的项目：背景、职责、架构、指标、难点、复盘。" onChange={(value) => updateProfile("projectExperience", value)} />
+          <div className="requirements-panel">
+            <div className="requirements-panel-head">
+              <div>
+                <span>面试官要求</span>
+                <small>上传 JD、面试通知、考察范围或手动粘贴，回答会同时参考简历和这些要求。</small>
+              </div>
+              <button
+                type="button"
+                className="secondary-action inline"
+                onClick={onImportRequirements}
+                disabled={busy || requirementsImport?.status === "loading"}
+              >
+                {requirementsImport?.status === "loading" ? <Loader2 size={17} className="spin" /> : <Upload size={17} />}
+                上传要求
+              </button>
+            </div>
+            <RequirementsImportStatus state={requirementsImport} />
+            <Field
+              textarea
+              tall
+              label="要求内容"
+              value={profile.interviewerRequirements}
+              placeholder="例如：重点考察 Agent 工程经验、RAG 生产化、评测指标、线上稳定性、安全合规、候选人过往项目真实性..."
+              onChange={(value) => updateProfile("interviewerRequirements", value)}
+            />
+          </div>
           <Field textarea label="面试目标" value={profile.interviewGoal} placeholder="希望面试官重点考察哪些方向？" onChange={(value) => updateProfile("interviewGoal", value)} />
         </section>
       </div>
@@ -138,6 +166,24 @@ function ResumeImportStatus({ state }) {
   return (
     <p className="resume-hint success">
       当前使用 {state.filename}
+      {state.truncated ? "，内容较长已截断" : ""}
+    </p>
+  );
+}
+
+function RequirementsImportStatus({ state }) {
+  if (!state || state.status === "idle") {
+    return <p className="resume-hint">支持 .pdf、.md、.markdown、.txt；导入后仍可手动编辑。</p>;
+  }
+  if (state.status === "loading") {
+    return <p className="resume-hint active">正在解析面试官要求...</p>;
+  }
+  if (state.status === "error") {
+    return <p className="resume-hint error">{state.error}</p>;
+  }
+  return (
+    <p className="resume-hint success">
+      当前要求来自 {state.filename}
       {state.truncated ? "，内容较长已截断" : ""}
     </p>
   );

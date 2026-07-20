@@ -11,6 +11,7 @@ const defaultInterviewSetup = {
   targetRole: "AI 应用工程师",
   seniority: "高级",
   interviewGoal: "请基于我的简历和 AI 项目经历进行真实面试。",
+  interviewerRequirements: "",
   focusAreas: ["简历项目深挖", "RAG / Agent 生产化", "评测、上线、安全与观测"]
 };
 
@@ -49,6 +50,14 @@ function getSetupSummary(setup, selectedIndustryLabel) {
   return `${getModeLabel(setup.mode)} · ${setup.targetRole || "目标岗位"} · ${selectedIndustryLabel || "行业"}`;
 }
 
+function buildInterviewGoal(setup = {}) {
+  const sections = [`面试目标：\n${setup.interviewGoal || defaultInterviewSetup.interviewGoal}`];
+  if (setup.interviewerRequirements) {
+    sections.push(`面试官要求：\n${setup.interviewerRequirements}`);
+  }
+  return sections.join("\n\n");
+}
+
 module.exports = {
   defaultInterviewSetup,
   modeOptions,
@@ -56,5 +65,6 @@ module.exports = {
   saveInterviewSetup,
   getModeLabel,
   getIndustryLabel,
-  getSetupSummary
+  getSetupSummary,
+  buildInterviewGoal
 };

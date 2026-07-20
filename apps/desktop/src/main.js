@@ -61,6 +61,24 @@ ipcMain.handle("metadata:models", async () => {
   return requestJson("/metadata/models");
 });
 
+ipcMain.handle("civil-service:learning-plan", async () => {
+  return requestJson("/civil-service/learning-plan");
+});
+
+ipcMain.handle("civil-service:questions", async (_event, filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.year) params.set("year", filters.year);
+  if (filters.subject) params.set("subject", filters.subject);
+  if (filters.questionType) params.set("question_type", filters.questionType);
+  params.set("limit", filters.limit || 30);
+  params.set("offset", filters.offset || 0);
+  return requestJson(`/civil-service/questions?${params.toString()}`);
+});
+
+ipcMain.handle("civil-service:seed", async () => {
+  return requestJson("/civil-service/questions/seed", { method: "POST" });
+});
+
 ipcMain.handle("auth:register", async (_event, payload) => {
   const response = await requestJson("/auth/register", {
     method: "POST",
@@ -189,6 +207,32 @@ ipcMain.handle("resume:import", async () => {
     })
   });
   return { canceled: false, path: filePath, ...stored };
+});
+
+ipcMain.handle("document:parse", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择面试官要求文件",
+    properties: ["openFile"],
+    filters: [
+      { name: "要求文件", extensions: ["pdf", "md", "markdown", "txt"] },
+      { name: "PDF", extensions: ["pdf"] },
+      { name: "Markdown / Text", extensions: ["md", "markdown", "txt"] }
+    ]
+  });
+  if (result.canceled || !result.filePaths.length) {
+    return { canceled: true };
+  }
+
+  const filePath = result.filePaths[0];
+  const buffer = await fs.readFile(filePath);
+  const parsed = await requestJson("/resume/parse", {
+    method: "POST",
+    body: JSON.stringify({
+      filename: path.basename(filePath),
+      content_base64: buffer.toString("base64")
+    })
+  });
+  return { canceled: false, path: filePath, ...parsed };
 });
 
 ipcMain.handle("api:send-message", async (_event, payload) => {

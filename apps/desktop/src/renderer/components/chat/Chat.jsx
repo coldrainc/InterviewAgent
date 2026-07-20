@@ -4,7 +4,7 @@ import { formatCredits } from "../../utils/interview";
 
 export function Topbar({ sessionId, offline, webSearch, completed, status, profile, model, account, screen, onOpenAccount, onOpenChat }) {
   const mode = completed ? "已完成" : offline ? "离线模式" : "模型模式";
-  const auxiliaryScreen = screen === "account" || screen === "settings" || screen === "setup";
+  const auxiliaryScreen = screen === "account" || screen === "settings" || screen === "setup" || screen === "study";
   const title =
     screen === "account"
       ? "账户中心"
@@ -12,6 +12,8 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
       ? "设置"
       : screen === "setup"
       ? "面试配置"
+      : screen === "study"
+      ? "刷题学习"
       : profile.mode === "candidate"
       ? `${profile.targetRole || "AI 工程师"}候选人答题`
       : profile.targetRole

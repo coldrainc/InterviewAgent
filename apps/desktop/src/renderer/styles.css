@@ -216,6 +216,34 @@ button {
   color: #9f2525;
 }
 
+.requirements-panel {
+  border-top: 1px solid #d9e5df;
+  padding-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.requirements-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.requirements-panel-head span {
+  display: block;
+  color: #14251f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.requirements-panel-head small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .resume-library {
   border: 1px solid #d9e5df;
   border-radius: 8px;
@@ -1044,7 +1072,8 @@ button {
 
 .account-center,
 .settings-center,
-.setup-center {
+.setup-center,
+.study-center {
   min-height: 0;
   border: 1px solid rgba(217, 229, 223, 0.88);
   border-radius: 10px;
@@ -1057,7 +1086,8 @@ button {
 
 .account-hero,
 .settings-hero,
-.setup-hero {
+.setup-hero,
+.study-hero {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
@@ -1065,7 +1095,8 @@ button {
   margin-bottom: 20px;
 }
 
-.setup-hero {
+.setup-hero,
+.study-hero {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -1082,6 +1113,7 @@ button {
 .account-hero h3,
 .settings-hero h3,
 .setup-hero h3,
+.study-hero h3,
 .account-auth-copy h3,
 .auth-dialog h3 {
   margin: 4px 0 0;
@@ -1090,13 +1122,15 @@ button {
 
 .account-hero h3,
 .settings-hero h3,
-.setup-hero h3 {
+.setup-hero h3,
+.study-hero h3 {
   font-size: 25px;
 }
 
 .account-hero p,
 .settings-hero p,
 .setup-hero p,
+.study-hero p,
 .account-auth-copy p,
 .auth-dialog p {
   margin: 5px 0 0;
@@ -1120,7 +1154,8 @@ button {
 
 .account-grid,
 .settings-grid,
-.setup-grid {
+.setup-grid,
+.study-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
@@ -1128,7 +1163,8 @@ button {
 
 .account-block,
 .settings-block,
-.setup-block {
+.setup-block,
+.study-block {
   border: 1px solid rgba(199, 215, 209, 0.72);
   border-radius: 8px;
   padding: 14px;
@@ -1137,8 +1173,128 @@ button {
   background: rgba(248, 250, 252, 0.76);
 }
 
+.study-block.wide,
 .setup-block.wide {
   grid-column: 1 / -1;
+}
+
+.learning-plan {
+  display: grid;
+  gap: 10px;
+}
+
+.learning-step {
+  border: 1px solid #dfe8e3;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.learning-step span,
+.question-meta span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  color: #234ed1;
+  background: #edf3ff;
+  font-size: 12px;
+}
+
+.learning-step strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+}
+
+.learning-step p,
+.answer-panel p,
+.question-prompt {
+  margin: 6px 0 0;
+  line-height: 1.65;
+}
+
+.learning-step ul,
+.choice-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #4e625b;
+  line-height: 1.65;
+}
+
+.study-filters {
+  display: grid;
+  grid-template-columns: 120px 150px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.study-filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.study-filters input,
+.study-filters select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #d9e5df;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: #ffffff;
+}
+
+.question-list {
+  display: grid;
+  gap: 12px;
+}
+
+.question-card {
+  border: 1px solid #dfe8e3;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(18, 48, 42, 0.05);
+}
+
+.question-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.question-actions {
+  margin-top: 10px;
+}
+
+.question-actions button {
+  min-height: 32px;
+  border: 1px solid #d9e5df;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #234ed1;
+  background: #ffffff;
+}
+
+.answer-panel {
+  margin-top: 10px;
+  border: 1px solid #cce4db;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f4fbf8;
+}
+
+.answer-panel strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #12302a;
 }
 
 .setup-toggles {
@@ -1741,13 +1897,15 @@ button {
   .account-hero,
   .settings-hero,
   .setup-hero,
+  .study-hero,
   .account-auth-layout {
     grid-template-columns: 1fr;
     align-items: stretch;
   }
 
   .account-hero,
-  .setup-hero {
+  .setup-hero,
+  .study-hero {
     gap: 12px;
   }
 
@@ -1763,7 +1921,12 @@ button {
 
   .settings-grid,
   .setup-grid,
+  .study-grid,
   .settings-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .study-filters {
     grid-template-columns: 1fr;
   }
 }
@@ -1784,7 +1947,8 @@ button {
   .chat-panel,
   .account-center,
   .settings-center,
-  .setup-center {
+  .setup-center,
+  .study-center {
     border-radius: 8px;
   }
 
@@ -1818,7 +1982,8 @@ button {
   .panel.compact,
   .account-block,
   .settings-block,
-  .setup-block {
+  .setup-block,
+  .study-block {
     padding: 10px;
   }
 

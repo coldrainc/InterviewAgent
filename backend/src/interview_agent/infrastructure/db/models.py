@@ -331,3 +331,34 @@ class RagChunkModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     document: Mapped[KnowledgeDocumentModel] = relationship(back_populates="chunks")
+
+
+class CivilServiceQuestionModel(Base):
+    __tablename__ = "civil_service_questions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "content_hash", name="uq_civil_service_questions_hash"),
+        Index("ix_civil_service_questions_year_subject", "tenant_id", "exam_year", "subject"),
+        Index("ix_civil_service_questions_type", "tenant_id", "question_type"),
+        Index("ix_civil_service_questions_updated", "tenant_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    source: Mapped[str] = mapped_column(String(128), nullable=False, default="manual")
+    source_url: Mapped[str | None] = mapped_column(Text)
+    exam_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    exam_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject: Mapped[str] = mapped_column(String(64), nullable=False)
+    question_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    choices_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    answer: Mapped[str | None] = mapped_column(Text)
+    explanation: Mapped[str | None] = mapped_column(Text)
+    difficulty: Mapped[str] = mapped_column(String(32), nullable=False, default="medium")
+    tags_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )

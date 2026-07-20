@@ -7,6 +7,7 @@ import Sidebar from "./components/sidebar/Sidebar";
 import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
 import { SettingsCenter } from "./components/settings/SettingsCenter";
 import { SetupCenter } from "./components/setup/SetupCenter";
+import { StudyCenter } from "./components/study/StudyCenter";
 import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
 import {
   buildFocusAreas,
@@ -108,10 +109,13 @@ function App() {
   const [webSearch, setWebSearch] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [resumeImport, setResumeImport] = useState({ status: "idle" });
+  const [requirementsImport, setRequirementsImport] = useState({ status: "idle" });
   const [resumeLibrary, setResumeLibrary] = useState([]);
   const [selectedResumeId, setSelectedResumeId] = useState("");
   const [sessionHistory, setSessionHistory] = useState([]);
   const [historyState, setHistoryState] = useState({ status: "idle" });
+  const [studyState, setStudyState] = useState({ status: "idle", plan: [], questions: { items: [], total: 0, limit: 30, offset: 0 } });
+  const [studyFilters, setStudyFilters] = useState({ year: "", subject: "", questionType: "" });
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
   const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
@@ -130,6 +134,7 @@ function App() {
     resumeSummary: "",
     resumeText: "",
     projectExperience: "",
+    interviewerRequirements: "",
     interviewGoal: "请基于我的简历和做过的事情进行 AI 工程面试，重点深挖真实项目、RAG/Agent、评测、上线和安全治理。"
   });
   const messagesEndRef = useRef(null);
@@ -143,6 +148,12 @@ function App() {
   useEffect(() => {
     loadIndustryOptions(profile.targetRole);
   }, [profile.targetRole]);
+
+  useEffect(() => {
+    if (screen === "study" && account) {
+      loadStudyCenter();
+    }
+  }, [screen, account, studyFilters.year, studyFilters.subject, studyFilters.questionType]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -189,6 +200,7 @@ function App() {
       await loadResumeLibrary();
       await loadSessionHistory();
       await restoreLastSession();
+      await loadStudyCenter();
     }
   }
 
@@ -409,6 +421,52 @@ function App() {
     }
   }
 
+  async function loadStudyCenter() {
+    if (!api.getCivilServiceLearningPlan || !api.listCivilServiceQuestions) return;
+    try {
+      setStudyState((current) => ({ ...current, status: "loading", error: "" }));
+      const [plan, questions] = await Promise.all([
+        api.getCivilServiceLearningPlan(),
+        api.listCivilServiceQuestions({
+          year: studyFilters.year.trim(),
+          subject: studyFilters.subject,
+          questionType: studyFilters.questionType.trim(),
+          limit: 30,
+          offset: 0
+        })
+      ]);
+      setStudyState((current) => ({
+        ...current,
+        status: "idle",
+        plan: Array.isArray(plan) ? plan : [],
+        questions: questions || { items: [], total: 0, limit: 30, offset: 0 }
+      }));
+    } catch (error) {
+      setStudyState((current) => ({ ...current, status: "error", error: `学习数据加载失败：${normalizeDesktopError(error.message)}` }));
+    }
+  }
+
+  function updateStudyFilters(patch) {
+    setStudyFilters((current) => ({ ...current, ...patch }));
+  }
+
+  async function seedCivilServiceQuestions() {
+    if (!requireAccount("初始化考公题库前需要先登录账号。")) return;
+    if (!api.seedCivilServiceQuestions) return;
+    try {
+      setStudyState((current) => ({ ...current, status: "loading", error: "", seedMessage: "" }));
+      const result = await api.seedCivilServiceQuestions();
+      setStudyState((current) => ({
+        ...current,
+        status: "idle",
+        seedMessage: `题库已初始化：新增 ${result.created}，更新 ${result.updated}。`
+      }));
+      await loadStudyCenter();
+    } catch (error) {
+      setStudyState((current) => ({ ...current, status: "error", error: `初始化题库失败：${normalizeDesktopError(error.message)}` }));
+    }
+  }
+
   async function restoreSession(targetSessionId) {
     if (!targetSessionId || busy) return;
     if (!requireAccount("恢复历史会话前需要先登录账号。")) return;
@@ -533,6 +591,40 @@ function App() {
       const message = normalizeDesktopError(error.message);
       setResumeImport({ status: "error", error: message });
       appendMessage("system", `导入简历失败：${message}`);
+    }
+  }
+
+  async function importInterviewerRequirements() {
+    if (busy || requirementsImport.status === "loading") return;
+    if (!requireAccount("上传面试官要求前需要先登录账号。")) return;
+    if (!api.parseDocument) {
+      setRequirementsImport({ status: "error", error: "当前客户端暂不支持上传解析，请直接粘贴面试官要求。" });
+      return;
+    }
+    setRequirementsImport({ status: "loading" });
+    try {
+      const result = await api.parseDocument({
+        accept: ".pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain"
+      });
+      if (result.canceled) {
+        setRequirementsImport({ status: "idle" });
+        return;
+      }
+      setProfile((current) => ({
+        ...current,
+        interviewerRequirements: result.text || result.summary || current.interviewerRequirements
+      }));
+      setRequirementsImport({
+        status: "success",
+        filename: result.filename || result.path,
+        truncated: Boolean(result.truncated)
+      });
+      appendMessage(
+        "system",
+        `已导入面试官要求：${result.filename || result.path}${result.truncated ? "（内容较长，已截断到安全长度）" : ""}`
+      );
+    } catch (error) {
+      setRequirementsImport({ status: "error", error: normalizeDesktopError(error.message) });
     }
   }
 
@@ -875,11 +967,13 @@ function App() {
             selectedLlmMode={selectedLlmMode}
             industryOptions={industryOptions}
             resumeImport={resumeImport}
+            requirementsImport={requirementsImport}
             resumeLibrary={resumeLibrary}
             selectedResumeId={selectedResumeId}
             busy={busy}
             onNewSession={() => createSession()}
             onImportResume={importResume}
+            onImportRequirements={importInterviewerRequirements}
             onSelectResume={selectResume}
             onDeleteResume={deleteSelectedResume}
             onReloadResumes={loadResumeLibrary}
@@ -889,6 +983,15 @@ function App() {
             onWebSearchChange={setWebSearch}
             onSelectModel={setSelectedModelId}
             onSelectLlmMode={selectLlmMode}
+            onBack={() => setScreen("chat")}
+          />
+        ) : screen === "study" ? (
+          <StudyCenter
+            studyState={studyState}
+            studyFilters={studyFilters}
+            onFilterChange={updateStudyFilters}
+            onReload={loadStudyCenter}
+            onSeed={seedCivilServiceQuestions}
             onBack={() => setScreen("chat")}
           />
         ) : (
