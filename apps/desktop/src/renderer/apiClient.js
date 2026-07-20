@@ -2,6 +2,8 @@ import { parseQuestionBankFile } from "./utils/questionBankParser";
 
 const DEFAULT_API_BASE_URL = "/api";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
+const REFRESH_TOKEN_STORAGE_KEY = "interview-agent-refresh-token";
+const TENANT_STORAGE_KEY = "interview-agent-tenant-id";
 const REQUEST_TIMEOUT_MS = 15000;
 const LONG_REQUEST_TIMEOUT_MS = 180000;
 const UPLOAD_TIMEOUT_MS = 60000;
@@ -9,6 +11,7 @@ const MAX_CONCURRENT_REQUESTS = 2;
 const JSON_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 let activeRequests = 0;
 const requestQueue = [];
+let refreshInFlight = null;
 
 function apiBaseUrl() {
   return (import.meta.env.VITE_INTERVIEW_AGENT_API_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -32,6 +35,40 @@ function setStoredToken(token) {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
     } else {
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch (_error) {
+    // Ignore storage failures so private browsing modes still work.
+  }
+}
+
+function getStoredRefreshToken() {
+  try {
+    return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getStoredTenantId() {
+  try {
+    return window.localStorage.getItem(TENANT_STORAGE_KEY) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function setStoredAuth(response = {}) {
+  setStoredToken(response.access_token || "");
+  try {
+    if (response.refresh_token) {
+      window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, response.refresh_token);
+    } else if (!response.access_token) {
+      window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    }
+    if (response.tenant_id) {
+      window.localStorage.setItem(TENANT_STORAGE_KEY, response.tenant_id);
+    } else if (!response.access_token) {
+      window.localStorage.removeItem(TENANT_STORAGE_KEY);
     }
   } catch (_error) {
     // Ignore storage failures so private browsing modes still work.
@@ -162,6 +199,16 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
     });
     const text = await response.text();
     const data = normalizeJson(text);
+    if (
+      response.status === 401
+      && attempt === 0
+      && options.auth !== false
+      && route !== "/auth/refresh"
+      && getStoredRefreshToken()
+    ) {
+      await refreshAccessToken();
+      return executeJsonRequest(route, options, attempt + 1);
+    }
     return unwrapApiResponse(data, response);
   } catch (error) {
     if (attempt === 0 && method === "GET") {
@@ -185,7 +232,51 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
   }
 }
 
-async function executeEventStreamRequest(route, options = {}, onEvent) {
+async function refreshAccessToken() {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) {
+    throw new Error("登录状态已失效，请重新登录。");
+  }
+  refreshInFlight = (async () => {
+    const response = await fetch(`${apiBaseUrl()}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Request-ID": requestId()
+      },
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "follow",
+      referrerPolicy: "strict-origin-when-cross-origin",
+      body: JSON.stringify({
+        refresh_token: refreshToken,
+        tenant_id: getStoredTenantId() || undefined
+      })
+    });
+    const text = await response.text();
+    const payload = unwrapApiResponse(normalizeJson(text), response);
+    if (!payload?.access_token || !payload?.refresh_token) {
+      throw new Error("登录状态刷新失败，请重新登录。");
+    }
+    setStoredAuth(payload);
+    return payload.access_token;
+  })();
+  try {
+    return await refreshInFlight;
+  } catch (error) {
+    setStoredAuth({});
+    throw error;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function executeEventStreamRequest(route, options = {}, onEvent, attempt = 0) {
   const method = (options.method || "POST").toUpperCase();
   const hasJsonBody = JSON_METHODS.has(method) && options.body !== undefined;
   const url = `${apiBaseUrl()}${normalizeRoute(route)}`;
@@ -216,6 +307,15 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
       referrerPolicy: "strict-origin-when-cross-origin",
       signal: controller.signal
     });
+    if (
+      response.status === 401
+      && attempt === 0
+      && options.auth !== false
+      && getStoredRefreshToken()
+    ) {
+      await refreshAccessToken();
+      return executeEventStreamRequest(route, options, onEvent, attempt + 1);
+    }
     if (!response.ok) {
       const text = await response.text();
       const data = normalizeJson(text);
@@ -387,7 +487,7 @@ async function importQuestionBankFromBrowser() {
 }
 
 const browserClient = {
-  hasToken: () => Boolean(getStoredToken()),
+  hasToken: () => Boolean(getStoredToken() || getStoredRefreshToken()),
   health: () => requestJson("/health"),
   listIndustries: (targetRole) => {
     const query = targetRole ? `?target_role=${encodeURIComponent(targetRole)}` : "";
@@ -447,7 +547,7 @@ const browserClient = {
       method: "POST",
       body: JSON.stringify({ ...payload, platform: "web" })
     });
-    setStoredToken(response.access_token || "");
+    setStoredAuth(response);
     return response;
   },
   async login(payload) {
@@ -455,7 +555,7 @@ const browserClient = {
       method: "POST",
       body: JSON.stringify({ ...payload, platform: "web" })
     });
-    setStoredToken(response.access_token || "");
+    setStoredAuth(response);
     return response;
   },
   async devLogin(payload) {
@@ -463,11 +563,21 @@ const browserClient = {
       method: "POST",
       body: JSON.stringify({ ...payload, platform: "web" })
     });
-    setStoredToken(response.access_token || "");
+    setStoredAuth(response);
     return response;
   },
   logout: async () => {
-    setStoredToken("");
+    const refreshToken = getStoredRefreshToken();
+    try {
+      if (refreshToken) {
+        await requestJson("/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+      }
+    } finally {
+      setStoredAuth({});
+    }
     return { ok: true };
   },
   getAccount: () => requestJson("/account"),
@@ -479,6 +589,18 @@ const browserClient = {
     }),
   recharge: (payload) =>
     requestJson("/account/recharge", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  listSecurityEvents: () => requestJson("/admin/security/events?limit=50"),
+  listRoles: () => requestJson("/admin/roles"),
+  grantRole: (payload) =>
+    requestJson("/admin/roles/grant", {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  revokeRole: (payload) =>
+    requestJson("/admin/roles/revoke", {
       method: "POST",
       body: JSON.stringify(payload || {})
     }),

@@ -11,6 +11,7 @@ SITES_ENABLED="${SITES_ENABLED:-/etc/nginx/sites-enabled}"
 SITES_DISABLED="${SITES_DISABLED:-/etc/nginx/sites-disabled}"
 CERT_DIR="${CERT_DIR:-/etc/letsencrypt/live/$WEB_DOMAIN}"
 AUTO_DISABLE_DEFAULT_WWW="${AUTO_DISABLE_DEFAULT_WWW:-0}"
+SECURITY_SNIPPET="${SECURITY_SNIPPET:-/etc/nginx/snippets/aivago-security.conf}"
 
 CONFIG_PATH="$SITES_AVAILABLE/$CONFIG_NAME"
 ENABLED_PATH="$SITES_ENABLED/$CONFIG_NAME"
@@ -48,6 +49,10 @@ backup_existing_config() {
 
 render_config() {
   local target="$1"
+  local security_include=""
+  if [[ -f "$SECURITY_SNIPPET" ]]; then
+    security_include="    include $SECURITY_SNIPPET;"
+  fi
   cat > "$target" <<NGINX
 server {
     listen 80;
@@ -75,6 +80,7 @@ server {
     add_header X-Frame-Options DENY always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+$security_include
 
     location ~ ^/api/(sessions/[^/]+/stream)$ {
         rewrite ^/api/(.*)$ /\$1 break;

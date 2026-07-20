@@ -33,8 +33,13 @@ export function AccountCenter({
   onLogout,
   onSelectModel,
   paymentState,
+  adminState,
   onPaymentStateChange,
   onCreatePayment,
+  onReloadAdmin,
+  onAdminFieldChange,
+  onGrantRole,
+  onRevokeRole,
   onBack
 }) {
   const rechargeOptions = ["10", "50", "100"];
@@ -143,14 +148,24 @@ export function AccountCenter({
             <div className="security-list">
               <div>
                 <ShieldCheck size={16} />
-                <span>桌面端 token 仅保存在当前 Electron 主进程内存中。</span>
+                <span>登录态使用短期 access token + refresh token rotation，异常复用会自动吊销同族 token。</span>
               </div>
               <div>
                 <Database size={16} />
-                <span>简历、会话和用量记录按当前后端存储策略保存。</span>
+                <span>上传文档、题库和候选人输入会经过内容安全与 Prompt Injection 扫描。</span>
               </div>
             </div>
           </section>
+
+          {account.role === "admin" && (
+            <AdminSecurityPanel
+              state={adminState}
+              onReload={onReloadAdmin}
+              onFieldChange={onAdminFieldChange}
+              onGrantRole={onGrantRole}
+              onRevokeRole={onRevokeRole}
+            />
+          )}
         </div>
       </section>
     );
@@ -180,6 +195,77 @@ export function AccountCenter({
       </div>
     </section>
   );
+}
+
+function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRevokeRole }) {
+  const roles = Array.isArray(state?.roles) ? state.roles : [];
+  const events = Array.isArray(state?.events) ? state.events : [];
+  return (
+    <section className="account-block wide">
+      <div className="panel-heading">
+        <span>管理后台</span>
+        <button type="button" className="secondary-action inline compact" onClick={onReload}>
+          刷新
+        </button>
+      </div>
+      <div className="admin-role-form">
+        <input
+          value={state?.userId || ""}
+          placeholder="用户 ID，如 email:name@example.com"
+          onChange={(event) => onFieldChange?.("userId", event.target.value)}
+        />
+        <select value={state?.role || "support"} onChange={(event) => onFieldChange?.("role", event.target.value)}>
+          <option value="support">support</option>
+          <option value="admin">admin</option>
+        </select>
+        <button
+          type="button"
+          className="primary-action inline compact"
+          disabled={state?.status === "saving" || !state?.userId?.trim()}
+          onClick={onGrantRole}
+        >
+          授权
+        </button>
+      </div>
+      {state?.error && <p className="resume-hint error">{state.error}</p>}
+      <div className="admin-grid">
+        <div className="admin-list">
+          <strong>角色</strong>
+          {roles.length ? roles.slice(0, 8).map((role) => (
+            <div className="admin-row" key={`${role.user_id}-${role.role}`}>
+              <span>
+                <b>{role.role}</b>
+                <small>{role.user_id}</small>
+              </span>
+              {role.role !== "user" && (
+                <button type="button" className="danger-inline" onClick={() => onRevokeRole?.(role)}>
+                  撤销
+                </button>
+              )}
+            </div>
+          )) : <p className="resume-hint">暂无额外角色。</p>}
+        </div>
+        <div className="admin-list">
+          <strong>安全事件</strong>
+          {events.length ? events.slice(0, 8).map((event) => (
+            <div className="admin-row event" key={event.id}>
+              <span>
+                <b>{event.event_type}</b>
+                <small>{event.severity} · {event.ip_address || "-"} · {formatDate(event.created_at)}</small>
+              </span>
+            </div>
+          )) : <p className="resume-hint">暂无安全事件。</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
 }
 
 function PaymentStatus({ state }) {

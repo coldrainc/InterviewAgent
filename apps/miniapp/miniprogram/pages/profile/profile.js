@@ -42,7 +42,7 @@ Page({
     this.setData({ loading: true, error: "" });
     try {
       const auth = await api.devLogin();
-      api.setApiToken(auth.access_token);
+      api.setAuthTokens(auth);
       await this.load();
       wx.showToast({ title: "已登录", icon: "success" });
     } catch (error) {
@@ -57,7 +57,7 @@ Page({
     try {
       const code = await wxLogin();
       const auth = await api.wechatLogin(code);
-      api.setApiToken(auth.access_token);
+      api.setAuthTokens(auth);
       await this.load();
       wx.showToast({ title: "微信登录成功", icon: "success" });
     } catch (error) {
@@ -68,7 +68,7 @@ Page({
   },
 
   logout() {
-    api.setApiToken("");
+    api.setAuthTokens({});
     wx.removeStorageSync(config.storageKeys.selectedResumeId);
     wx.removeStorageSync(`${config.storageKeys.selectedResumeId}:name`);
     this.setData({ me: null, account: null });

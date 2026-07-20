@@ -139,6 +139,14 @@ function App() {
   const [account, setAccount] = useState(null);
   const [settingsState, setSettingsState] = useState({ status: "idle", default_interview_mode: "interviewer" });
   const [paymentState, setPaymentState] = useState({ status: "idle", amount: "10", provider: "alipay" });
+  const [adminState, setAdminState] = useState({
+    status: "idle",
+    roles: [],
+    events: [],
+    userId: "",
+    role: "support",
+    error: ""
+  });
   const [authState, setAuthState] = useState({ mode: "login", email: "", password: "", displayName: "", status: "idle" });
   const [authDialog, setAuthDialog] = useState({ open: false, reason: "" });
   const [profile, setProfile] = useState({
@@ -176,6 +184,12 @@ function App() {
       loadOperationsCenter();
     }
   }, [screen, account]);
+
+  useEffect(() => {
+    if (screen === "account" && account?.role === "admin") {
+      loadAdminSecurity();
+    }
+  }, [screen, account?.role]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -362,7 +376,51 @@ function App() {
     setResumeLibrary([]);
     setSessionHistory([]);
     setOpsState({ status: "idle", jobs: [], traces: [], evalRuns: [], metrics: {}, message: "" });
+    setAdminState({ status: "idle", roles: [], events: [], userId: "", role: "support", error: "" });
     setScreen("chat");
+  }
+
+  async function loadAdminSecurity() {
+    if (!api.listSecurityEvents || !api.listRoles) return;
+    setAdminState((current) => ({ ...current, status: "loading", error: "" }));
+    try {
+      const [events, roles] = await Promise.all([api.listSecurityEvents(), api.listRoles()]);
+      setAdminState((current) => ({
+        ...current,
+        status: "ready",
+        events: Array.isArray(events) ? events : [],
+        roles: Array.isArray(roles) ? roles : [],
+        error: ""
+      }));
+    } catch (error) {
+      setAdminState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
+    }
+  }
+
+  function updateAdminField(key, value) {
+    setAdminState((current) => ({ ...current, [key]: value }));
+  }
+
+  async function grantAdminRole() {
+    if (!adminState.userId.trim()) return;
+    setAdminState((current) => ({ ...current, status: "saving", error: "" }));
+    try {
+      await api.grantRole({ user_id: adminState.userId.trim(), role: adminState.role });
+      await loadAdminSecurity();
+    } catch (error) {
+      setAdminState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
+    }
+  }
+
+  async function revokeAdminRole(role) {
+    if (!role?.user_id || !role?.role) return;
+    setAdminState((current) => ({ ...current, status: "saving", error: "" }));
+    try {
+      await api.revokeRole({ user_id: role.user_id, role: role.role });
+      await loadAdminSecurity();
+    } catch (error) {
+      setAdminState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
+    }
   }
 
   async function loadResumeLibrary() {
@@ -1067,8 +1125,13 @@ function App() {
             onLogout={logout}
             onSelectModel={setSelectedModelId}
             paymentState={paymentState}
+            adminState={adminState}
             onPaymentStateChange={setPaymentState}
             onCreatePayment={createPayment}
+            onReloadAdmin={loadAdminSecurity}
+            onAdminFieldChange={updateAdminField}
+            onGrantRole={grantAdminRole}
+            onRevokeRole={revokeAdminRole}
             onBack={() => setScreen("chat")}
           />
         ) : screen === "settings" ? (

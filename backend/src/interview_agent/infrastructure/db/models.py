@@ -92,6 +92,68 @@ class UserAccountModel(Base):
     )
 
 
+class AuthRefreshTokenModel(Base):
+    __tablename__ = "auth_refresh_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_auth_refresh_tokens_hash"),
+        Index("ix_auth_refresh_tokens_tenant_user_created", "tenant_id", "user_id", "created_at"),
+        Index("ix_auth_refresh_tokens_family", "family_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    family_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    replaced_by_token_id: Mapped[uuid.UUID | None] = mapped_column(UuidString())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SecurityEventModel(Base):
+    __tablename__ = "security_events"
+    __table_args__ = (
+        Index("ix_security_events_tenant_created", "tenant_id", "created_at"),
+        Index("ix_security_events_tenant_user_created", "tenant_id", "user_id", "created_at"),
+        Index("ix_security_events_ip_created", "ip_address", "created_at"),
+        Index("ix_security_events_type_created", "event_type", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str | None] = mapped_column(String(128))
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False, default="info")
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    request_id: Mapped[str | None] = mapped_column(String(128))
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class UserRoleAssignmentModel(Base):
+    __tablename__ = "user_role_assignments"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "role", name="uq_user_role_assignments_active_role"),
+        Index("ix_user_role_assignments_tenant_user", "tenant_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="user")
+    granted_by: Mapped[str | None] = mapped_column(String(128))
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class CreditLedgerModel(Base):
     __tablename__ = "credit_ledger"
     __table_args__ = (

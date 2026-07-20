@@ -41,6 +41,7 @@ from interview_agent.domain.civil_service import (
     PRACTICE_LEARNING_PLAN,
 )
 from interview_agent.infrastructure.auth_providers import AuthProviderError, exchange_wechat_code
+from interview_agent.infrastructure.content_security import scan_prompt_injection, scan_upload_content
 from interview_agent.infrastructure.codex_config import load_codex_model_config
 from interview_agent.infrastructure.db.session import (
     configure_database_for_tests,
@@ -87,6 +88,12 @@ from interview_agent.services.billing_service import (
 )
 from interview_agent.services.interview_persistence_service import InterviewPersistenceService
 from interview_agent.services.resume_service import ResumeService
+from interview_agent.services.security_service import (
+    SecurityService,
+    has_permission,
+    role_assignment_to_dict,
+    security_event_to_dict,
+)
 from interview_agent.repositories.civil_service_repository import CivilServiceQuestionRepository
 from interview_agent.repositories.job_repository import JobRepository, event_to_dict, job_to_dict
 from interview_agent.services.agent_ops_service import AgentOpsService, trace_to_dict
@@ -143,14 +150,38 @@ class PhoneLoginRequest(BaseModel):
 
 class AuthTokenResponse(BaseModel):
     access_token: str
+    refresh_token: str = ""
     token_type: str = "bearer"
     expires_at: int
+    refresh_expires_at: int = 0
     tenant_id: str
     user_id: str
     platform: str
+    role: str = "user"
     display_name: str = ""
     trial_uses_remaining: int = 0
     credit_balance: str = "0"
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=32, max_length=512)
+    tenant_id: str | None = Field(default=None, max_length=64)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str | None = Field(default=None, max_length=512)
+    revoke_all: bool = False
+
+
+class RoleGrantRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=128)
+    role: str = Field(pattern="^(user|support|admin)$")
+    metadata: dict = Field(default_factory=dict)
+
+
+class RoleRevokeRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=128)
+    role: str = Field(pattern="^(support|admin)$")
 
 
 class RegisterRequest(BaseModel):
@@ -172,6 +203,7 @@ class MeResponse(BaseModel):
     tenant_id: str
     user_id: str
     platform: str
+    role: str = "user"
     authenticated: bool
     trial_uses_remaining: int = 0
     credit_balance: str = "0"
@@ -210,6 +242,7 @@ class AccountResponse(BaseModel):
     display_name: str
     email: str | None = None
     platform: str
+    role: str = "user"
     trial_uses_remaining: int
     credit_balance: str
     credit_balance_micros: int
@@ -632,7 +665,7 @@ def create_app(
         }
 
     @app.post("/auth/dev-login", response_model=AuthTokenResponse)
-    async def dev_login(request: DevLoginRequest) -> AuthTokenResponse:
+    async def dev_login(request: DevLoginRequest, http_request: Request) -> AuthTokenResponse:
         if not settings.auth_dev_login_enabled:
             raise HTTPException(status_code=403, detail="开发登录未启用。")
         tenant_id = request.tenant_id or settings.default_tenant_id
@@ -648,6 +681,7 @@ def create_app(
             user_id=request.user_id,
             platform=request.platform,
             display_name=request.display_name,
+            http_request=http_request,
         )
 
     @app.post("/auth/register", response_model=AuthTokenResponse)
@@ -670,18 +704,64 @@ def create_app(
             user_id=account.user_id,
             platform=request.platform,
             display_name=account.display_name,
+            http_request=http_request,
         )
 
     @app.post("/auth/login", response_model=AuthTokenResponse)
     async def password_login(request: PasswordLoginRequest, http_request: Request) -> AuthTokenResponse:
         _check_auth_rate_limit(http_request, "login", request.email)
         tenant_id = request.tenant_id or settings.default_tenant_id
+        blocked_by_ip = False
         async with session_scope() as db:
-            account = await _billing_service(db).authenticate_password(
-                tenant_id=tenant_id,
-                email=request.email,
-                password=request.password,
+            security = SecurityService(db, tenant_id=tenant_id)
+            ip_address = _client_ip(http_request)
+            failed_count = await security.recent_event_count(
+                event_type="login_failed",
+                ip_address=ip_address,
+                minutes=60,
             )
+            if failed_count >= settings.auth_max_failed_attempts_per_hour:
+                await security.record_event(
+                    user_id=f"email:{request.email.lower().strip()}",
+                    event_type="login_blocked",
+                    severity="critical",
+                    ip_address=ip_address,
+                    user_agent=_client_user_agent(http_request),
+                    request_id=_request_id(http_request),
+                    metadata={"reason": "too_many_failed_attempts"},
+                )
+                blocked_by_ip = True
+                account = None
+            else:
+                account = await _billing_service(db).authenticate_password(
+                    tenant_id=tenant_id,
+                    email=request.email,
+                    password=request.password,
+                )
+            if blocked_by_ip:
+                pass
+            elif account is None:
+                await security.record_event(
+                    user_id=f"email:{request.email.lower().strip()}",
+                    event_type="login_failed",
+                    severity="warning",
+                    ip_address=ip_address,
+                    user_agent=_client_user_agent(http_request),
+                    request_id=_request_id(http_request),
+                )
+                new_failed_count = failed_count + 1
+                if new_failed_count >= settings.auth_alert_failed_attempts_per_hour:
+                    await security.record_event(
+                        user_id=f"email:{request.email.lower().strip()}",
+                        event_type="abnormal_login_alert",
+                        severity="critical",
+                        ip_address=ip_address,
+                        user_agent=_client_user_agent(http_request),
+                        request_id=_request_id(http_request),
+                        metadata={"failed_attempts_last_hour": new_failed_count},
+                    )
+        if blocked_by_ip:
+            raise HTTPException(status_code=429, detail="登录失败次数过多，请稍后再试。")
         if account is None:
             raise HTTPException(status_code=401, detail="邮箱或密码错误。")
         return await _issue_auth_response(
@@ -689,6 +769,7 @@ def create_app(
             user_id=account.user_id,
             platform=request.platform,
             display_name=account.display_name,
+            http_request=http_request,
         )
 
     @app.post("/auth/wechat/login", response_model=AuthTokenResponse)
@@ -713,6 +794,7 @@ def create_app(
                 user_id=f"wechat:{session.openid}",
                 platform=request.platform or "miniapp",
                 display_name=request.display_name or "微信用户",
+                http_request=http_request,
             )
         if not settings.auth_mock_provider_login_enabled:
             raise HTTPException(status_code=501, detail="微信登录需要接入微信 code2session 后启用。")
@@ -721,6 +803,7 @@ def create_app(
             user_id=f"wechat:{request.code[:32]}",
             platform=request.platform or "miniapp",
             display_name=request.display_name or "微信用户",
+            http_request=http_request,
         )
 
     @app.post("/auth/apple/login", response_model=AuthTokenResponse)
@@ -733,6 +816,7 @@ def create_app(
             user_id=f"apple:{request.code[:32]}",
             platform=request.platform or "ios",
             display_name=request.display_name or "Apple 用户",
+            http_request=http_request,
         )
 
     @app.post("/auth/phone/login", response_model=AuthTokenResponse)
@@ -747,7 +831,77 @@ def create_app(
             user_id=f"phone:{request.phone}",
             platform=request.platform,
             display_name="手机号用户",
+            http_request=http_request,
         )
+
+    @app.post("/auth/refresh", response_model=AuthTokenResponse)
+    async def refresh_token(request: RefreshTokenRequest, http_request: Request) -> AuthTokenResponse:
+        async with session_scope() as db:
+            security = SecurityService(db, tenant_id=request.tenant_id or settings.default_tenant_id)
+            try:
+                current, refresh = await security.rotate_refresh_token(
+                    refresh_token=request.refresh_token,
+                    ttl_seconds=settings.auth_refresh_token_ttl_seconds,
+                    ip_address=_client_ip(http_request),
+                    user_agent=_client_user_agent(http_request),
+                )
+            except ValueError as exc:
+                await security.record_event(
+                    event_type="refresh_failed",
+                    severity="warning",
+                    ip_address=_client_ip(http_request),
+                    user_agent=_client_user_agent(http_request),
+                    request_id=_request_id(http_request),
+                    metadata={"reason": str(exc)},
+                )
+                raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录。") from exc
+            role = await security.get_role(current.user_id)
+            snapshot = await _billing_service(db).account_snapshot(
+                tenant_id=current.tenant_id,
+                user_id=current.user_id,
+            )
+        token, expires_at = issue_client_token(
+            settings,
+            tenant_id=current.tenant_id,
+            user_id=current.user_id,
+            platform=current.platform,
+            display_name=snapshot.display_name,
+            role=role,
+        )
+        return AuthTokenResponse(
+            access_token=token,
+            refresh_token=refresh.token,
+            expires_at=expires_at,
+            refresh_expires_at=int(refresh.expires_at.timestamp()),
+            tenant_id=current.tenant_id,
+            user_id=current.user_id,
+            platform=current.platform,
+            role=role,
+            display_name=snapshot.display_name,
+            trial_uses_remaining=snapshot.trial_uses_remaining,
+            credit_balance=str(snapshot.credit_balance),
+        )
+
+    @app.post("/auth/logout")
+    async def logout(
+        request: LogoutRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            security = SecurityService(db, tenant_id=context.tenant_id)
+            if request.revoke_all or not request.refresh_token:
+                revoked = await security.revoke_user_refresh_tokens(context.user_id)
+            else:
+                revoked = await security.revoke_refresh_token(request.refresh_token, user_id=context.user_id)
+            await security.record_event(
+                user_id=context.user_id,
+                event_type="logout",
+                severity="info",
+                request_id=context.request_id,
+                metadata={"revoke_all": request.revoke_all, "revoked_tokens": revoked},
+            )
+        return {"ok": True, "revoked_tokens": revoked}
 
     @app.get("/me", response_model=MeResponse)
     async def me(context: RequestContext = Depends(request_context)) -> MeResponse:
@@ -761,6 +915,7 @@ def create_app(
             tenant_id=context.tenant_id,
             user_id=context.user_id,
             platform=context.platform,
+            role=context.role,
             authenticated=context.authenticated,
             trial_uses_remaining=account.trial_uses_remaining,
             credit_balance=str(account.credit_balance),
@@ -775,7 +930,7 @@ def create_app(
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
             )
-        return _account_response(snapshot)
+        return _account_response(snapshot, role=context.role)
 
     @app.get("/settings", response_model=UserSettingsResponse)
     async def get_user_settings(context: RequestContext = Depends(request_context)) -> UserSettingsResponse:
@@ -803,6 +958,54 @@ def create_app(
                 settings=payload,
             )
         return _settings_response(snapshot.settings)
+
+    @app.get("/admin/security/events")
+    async def admin_security_events(
+        limit: int = Query(default=100, ge=1, le=500),
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_permission(context, "security:read")
+        async with session_scope() as db:
+            events = await SecurityService(db, tenant_id=context.tenant_id).list_events(limit=limit)
+        return [security_event_to_dict(event) for event in events]
+
+    @app.get("/admin/roles")
+    async def admin_roles(
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_permission(context, "users:read")
+        async with session_scope() as db:
+            roles = await SecurityService(db, tenant_id=context.tenant_id).list_roles()
+        return [role_assignment_to_dict(role) for role in roles]
+
+    @app.post("/admin/roles/grant")
+    async def admin_grant_role(
+        request: RoleGrantRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_permission(context, "roles:write")
+        async with session_scope() as db:
+            await SecurityService(db, tenant_id=context.tenant_id).grant_role(
+                user_id=request.user_id,
+                role=request.role,
+                granted_by=context.user_id,
+                metadata=request.metadata,
+            )
+        return {"ok": True}
+
+    @app.post("/admin/roles/revoke")
+    async def admin_revoke_role(
+        request: RoleRevokeRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_permission(context, "roles:write")
+        async with session_scope() as db:
+            revoked = await SecurityService(db, tenant_id=context.tenant_id).revoke_role(
+                user_id=request.user_id,
+                role=request.role,
+                revoked_by=context.user_id,
+            )
+        return {"ok": True, "revoked": revoked}
 
     @app.post("/account/recharge", response_model=AccountResponse)
     async def recharge(
@@ -832,7 +1035,7 @@ def create_app(
                 )
         except BillingError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return _account_response(snapshot)
+        return _account_response(snapshot, role=context.role)
 
     @app.post("/payments/orders", response_model=PaymentOrderResponse)
     async def create_payment_order(
@@ -1160,6 +1363,26 @@ def create_app(
         _require_authenticated(context)
         if len(request.questions) > 500:
             raise HTTPException(status_code=413, detail="单次最多导入 500 道题。")
+        suspicious_questions = []
+        for index, question in enumerate(request.questions):
+            prompt_text = str(question.get("prompt") or question.get("question") or "")
+            scan = scan_prompt_injection(
+                prompt_text,
+                block_score=settings.prompt_injection_block_score,
+                enabled=settings.prompt_injection_block_enabled,
+            )
+            if scan.blocked:
+                suspicious_questions.append({"index": index, "score": scan.score})
+        if suspicious_questions:
+            async with session_scope() as db:
+                await SecurityService(db, tenant_id=context.tenant_id).record_event(
+                    user_id=context.user_id,
+                    event_type="question_bank_prompt_injection_blocked",
+                    severity="critical",
+                    request_id=context.request_id,
+                    metadata={"questions": suspicious_questions[:20]},
+                )
+            raise HTTPException(status_code=400, detail="题库包含疑似 Prompt Injection 内容，已拒绝导入。")
         async with session_scope() as db:
             try:
                 result = await CivilServiceQuestionRepository(
@@ -1413,10 +1636,17 @@ def create_app(
     @app.post("/resume/parse", response_model=ResumeParseResponse)
     async def parse_resume(
         request: ResumeParseRequest,
+        http_request: Request,
         context: RequestContext = Depends(request_context),
     ) -> ResumeParseResponse:
         _require_authenticated(context)
         _check_base64_size(request.content_base64, settings.max_upload_bytes)
+        await _scan_upload_or_raise(
+            filename=request.filename,
+            content_base64=request.content_base64,
+            context=context,
+            request=http_request,
+        )
         try:
             parsed = parse_resume_base64(request.filename, request.content_base64)
         except ResumeParseError as exc:
@@ -1432,10 +1662,17 @@ def create_app(
     @app.post("/resumes", response_model=ResumeRecordResponse)
     async def import_resume(
         request: ResumeImportRequest,
+        http_request: Request,
         context: RequestContext = Depends(request_context),
     ) -> ResumeRecordResponse:
         _require_authenticated(context)
         _check_base64_size(request.content_base64, settings.max_upload_bytes)
+        await _scan_upload_or_raise(
+            filename=request.filename,
+            content_base64=request.content_base64,
+            context=context,
+            request=http_request,
+        )
         try:
             async with session_scope() as db:
                 stored = await ResumeService(
@@ -1921,26 +2158,40 @@ async def _issue_auth_response(
     user_id: str,
     platform: str,
     display_name: str,
+    http_request: Request | None = None,
 ) -> AuthTokenResponse:
     settings = load_settings()
     try:
+        async with session_scope() as db:
+            security = SecurityService(db, tenant_id=tenant_id)
+            role = await security.get_role(user_id)
+            refresh = await security.issue_refresh_token(
+                user_id=user_id,
+                platform=platform,
+                ttl_seconds=settings.auth_refresh_token_ttl_seconds,
+                ip_address=_client_ip(http_request) if http_request else None,
+                user_agent=_client_user_agent(http_request) if http_request else None,
+            )
+            snapshot = await _billing_service(db).account_snapshot(tenant_id=tenant_id, user_id=user_id)
         token, expires_at = issue_client_token(
             settings,
             tenant_id=tenant_id,
             user_id=user_id,
             platform=platform,
             display_name=display_name,
+            role=role,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    async with session_scope() as db:
-        snapshot = await _billing_service(db).account_snapshot(tenant_id=tenant_id, user_id=user_id)
     return AuthTokenResponse(
         access_token=token,
+        refresh_token=refresh.token,
         expires_at=expires_at,
+        refresh_expires_at=int(refresh.expires_at.timestamp()),
         tenant_id=tenant_id,
         user_id=user_id,
         platform=platform,
+        role=role,
         display_name=display_name,
         trial_uses_remaining=snapshot.trial_uses_remaining,
         credit_balance=str(snapshot.credit_balance),
@@ -2010,11 +2261,46 @@ def _require_authenticated(context: RequestContext) -> None:
 def _require_admin_or_mock_recharge(context: RequestContext, settings, payment_provider: str) -> None:
     _require_authenticated(context)
     provider = payment_provider.strip().lower()
-    if context.role == "admin":
+    if context.role in {"admin", "server"}:
         return
     if settings.allow_mock_recharge and not settings.is_production and provider in {"mock", "dev", "manual"}:
         return
     raise HTTPException(status_code=403, detail="充值入账只能由管理员或已签名支付回调完成。")
+
+
+def _require_permission(context: RequestContext, permission: str) -> None:
+    _require_authenticated(context)
+    if not has_permission(context.role, permission):
+        raise HTTPException(status_code=403, detail="当前账号没有权限执行该操作。")
+
+
+async def _scan_upload_or_raise(
+    *,
+    filename: str,
+    content_base64: str,
+    context: RequestContext,
+    request: Request | None = None,
+) -> None:
+    settings = load_settings()
+    result = scan_upload_content(filename=filename, content_base64=content_base64, settings=settings)
+    if not result.findings:
+        return
+    async with session_scope() as db:
+        await SecurityService(db, tenant_id=context.tenant_id).record_event(
+            user_id=context.user_id,
+            event_type="upload_security_scan",
+            severity="critical" if result.blocked else "warning",
+            ip_address=_client_ip(request) if request else None,
+            user_agent=_client_user_agent(request) if request else None,
+            request_id=context.request_id,
+            metadata={
+                "filename": filename,
+                "score": result.score,
+                "findings": [finding.__dict__ for finding in result.findings],
+            },
+        )
+    if result.blocked:
+        raise HTTPException(status_code=400, detail="上传内容未通过安全扫描，请检查文件后再试。")
 
 
 def _recharge_target_user_id(context: RequestContext, target_user_id: str | None) -> str:
@@ -2366,13 +2652,14 @@ async def _record_usage(
     )
 
 
-def _account_response(snapshot) -> AccountResponse:
+def _account_response(snapshot, *, role: str = "user") -> AccountResponse:
     return AccountResponse(
         tenant_id=snapshot.tenant_id,
         user_id=snapshot.user_id,
         display_name=snapshot.display_name,
         email=snapshot.email,
         platform=snapshot.platform,
+        role=role,
         trial_uses_remaining=snapshot.trial_uses_remaining,
         credit_balance=str(snapshot.credit_balance),
         credit_balance_micros=snapshot.credit_balance_micros,

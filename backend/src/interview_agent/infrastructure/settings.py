@@ -37,8 +37,17 @@ class AppSettings:
     admin_api_tokens: str = ""
     auth_token_secret: str = "dev-secret-change-me"
     auth_token_ttl_seconds: int = 7 * 24 * 60 * 60
+    auth_refresh_token_ttl_seconds: int = 30 * 24 * 60 * 60
     auth_dev_login_enabled: bool = True
     auth_mock_provider_login_enabled: bool = False
+    auth_max_failed_attempts_per_hour: int = 8
+    auth_alert_failed_attempts_per_hour: int = 5
+    security_alert_log_path: Path = Path(".interview_agent/security_alerts.log")
+    prompt_injection_block_enabled: bool = True
+    prompt_injection_block_score: int = 70
+    upload_content_scan_enabled: bool = True
+    upload_antivirus_enabled: bool = False
+    upload_antivirus_command: str = "clamscan --no-summary -"
     allow_mock_recharge: bool = True
     payment_webhook_secret: str = ""
     public_web_base_url: str = "http://127.0.0.1:5173"
@@ -117,8 +126,19 @@ def load_settings() -> AppSettings:
         admin_api_tokens=os.getenv("INTERVIEW_ADMIN_API_TOKENS", ""),
         auth_token_secret=os.getenv("INTERVIEW_AUTH_TOKEN_SECRET", "dev-secret-change-me"),
         auth_token_ttl_seconds=int(os.getenv("INTERVIEW_AUTH_TOKEN_TTL_SECONDS", str(7 * 24 * 60 * 60))),
+        auth_refresh_token_ttl_seconds=int(
+            os.getenv("INTERVIEW_AUTH_REFRESH_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60))
+        ),
         auth_dev_login_enabled=_env_bool("INTERVIEW_AUTH_DEV_LOGIN_ENABLED", True),
         auth_mock_provider_login_enabled=_env_bool("INTERVIEW_AUTH_MOCK_PROVIDER_LOGIN_ENABLED", False),
+        auth_max_failed_attempts_per_hour=int(os.getenv("INTERVIEW_AUTH_MAX_FAILED_ATTEMPTS_PER_HOUR", "8")),
+        auth_alert_failed_attempts_per_hour=int(os.getenv("INTERVIEW_AUTH_ALERT_FAILED_ATTEMPTS_PER_HOUR", "5")),
+        security_alert_log_path=Path(os.getenv("INTERVIEW_SECURITY_ALERT_LOG", ".interview_agent/security_alerts.log")),
+        prompt_injection_block_enabled=_env_bool("INTERVIEW_PROMPT_INJECTION_BLOCK_ENABLED", True),
+        prompt_injection_block_score=int(os.getenv("INTERVIEW_PROMPT_INJECTION_BLOCK_SCORE", "70")),
+        upload_content_scan_enabled=_env_bool("INTERVIEW_UPLOAD_CONTENT_SCAN_ENABLED", True),
+        upload_antivirus_enabled=_env_bool("INTERVIEW_UPLOAD_ANTIVIRUS_ENABLED", False),
+        upload_antivirus_command=os.getenv("INTERVIEW_UPLOAD_ANTIVIRUS_COMMAND", "clamscan --no-summary -"),
         allow_mock_recharge=_env_bool("INTERVIEW_ALLOW_MOCK_RECHARGE", True),
         payment_webhook_secret=os.getenv("INTERVIEW_PAYMENT_WEBHOOK_SECRET", ""),
         public_web_base_url=os.getenv("PUBLIC_WEB_BASE_URL", "http://127.0.0.1:5173"),

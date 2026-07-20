@@ -171,6 +171,7 @@ def issue_client_token(
     user_id: str,
     platform: str,
     display_name: str = "",
+    role: str = "user",
     now: float | None = None,
 ) -> tuple[str, int]:
     if not _valid_tenant_id(tenant_id):
@@ -184,7 +185,7 @@ def issue_client_token(
         "tenant_id": tenant_id,
         "user_id": user_id,
         "platform": _clean_platform(platform),
-        "role": "user",
+        "role": _clean_role(role),
         "jti": secrets.token_urlsafe(16),
         "display_name": display_name[:80],
         "iat": issued_at,
@@ -248,7 +249,7 @@ def _clean_platform(value: str) -> str:
 
 def _clean_role(value: str) -> str:
     cleaned = value.strip().lower()
-    return cleaned if cleaned in {"user", "server", "admin"} else "user"
+    return cleaned if cleaned in {"user", "support", "server", "admin"} else "user"
 
 
 def _clean_request_id(value: str | None) -> str | None:

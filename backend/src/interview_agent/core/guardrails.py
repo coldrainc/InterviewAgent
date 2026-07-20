@@ -4,6 +4,9 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
+from interview_agent.infrastructure.content_security import scan_prompt_injection
+from interview_agent.infrastructure.settings import load_settings
+
 
 class GuardrailAction(str, Enum):
     ALLOW = "allow"
@@ -71,6 +74,20 @@ class HarnessGuardrails:
                     code="input_secret_redacted",
                     message="候选人输入疑似包含密钥或 token，已脱敏。",
                     action=GuardrailAction.REPAIR,
+                )
+            )
+        settings = load_settings()
+        injection_scan = scan_prompt_injection(
+            cleaned,
+            block_score=settings.prompt_injection_block_score,
+            enabled=settings.prompt_injection_block_enabled,
+        )
+        for finding in injection_scan.findings:
+            findings.append(
+                GuardrailFinding(
+                    code=finding.code,
+                    message=finding.message,
+                    action=GuardrailAction.BLOCK if injection_scan.blocked else GuardrailAction.REPAIR,
                 )
             )
         return GuardrailResult(text=cleaned, findings=findings)

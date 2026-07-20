@@ -4,6 +4,8 @@ const path = require("path");
 
 const API_BASE_URL = process.env.INTERVIEW_AGENT_API_URL || "http://127.0.0.1:8020";
 let apiToken = process.env.INTERVIEW_AGENT_API_TOKEN || process.env.INTERVIEW_API_TOKEN || "";
+let apiRefreshToken = "";
+let apiTenantId = "default";
 const RENDERER_DEV_URL = process.env.INTERVIEW_RENDERER_DEV_URL;
 const API_RETRY_COUNT = 8;
 const API_RETRY_DELAY_MS = 350;
@@ -206,6 +208,8 @@ ipcMain.handle("auth:register", async (_event, payload) => {
     body: JSON.stringify(payload || {})
   });
   apiToken = response.access_token || apiToken;
+  apiRefreshToken = response.refresh_token || apiRefreshToken;
+  apiTenantId = response.tenant_id || apiTenantId;
   return response;
 });
 
@@ -215,6 +219,8 @@ ipcMain.handle("auth:login", async (_event, payload) => {
     body: JSON.stringify(payload || {})
   });
   apiToken = response.access_token || apiToken;
+  apiRefreshToken = response.refresh_token || apiRefreshToken;
+  apiTenantId = response.tenant_id || apiTenantId;
   return response;
 });
 
@@ -224,11 +230,25 @@ ipcMain.handle("auth:dev-login", async (_event, payload) => {
     body: JSON.stringify(payload || {})
   });
   apiToken = response.access_token || apiToken;
+  apiRefreshToken = response.refresh_token || apiRefreshToken;
+  apiTenantId = response.tenant_id || apiTenantId;
   return response;
 });
 
 ipcMain.handle("auth:logout", async () => {
+  const refreshToken = apiRefreshToken;
+  if (apiToken && refreshToken) {
+    try {
+      await requestJson("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+    } catch (_error) {
+      // Logout must still clear local tokens even if the server session is gone.
+    }
+  }
   apiToken = "";
+  apiRefreshToken = "";
   return { ok: true };
 });
 
@@ -243,6 +263,28 @@ ipcMain.handle("settings:get", async () => {
 ipcMain.handle("settings:update", async (_event, payload) => {
   return requestJson("/settings", {
     method: "PUT",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("admin:security-events", async () => {
+  return requestJson("/admin/security/events?limit=50");
+});
+
+ipcMain.handle("admin:roles", async () => {
+  return requestJson("/admin/roles");
+});
+
+ipcMain.handle("admin:grant-role", async (_event, payload) => {
+  return requestJson("/admin/roles/grant", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("admin:revoke-role", async (_event, payload) => {
+  return requestJson("/admin/roles/revoke", {
+    method: "POST",
     body: JSON.stringify(payload || {})
   });
 });
@@ -628,6 +670,10 @@ async function requestJson(route, options = {}, attempt = 0) {
     });
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};
+    if (response.status === 401 && attempt === 0 && apiRefreshToken && route !== "/auth/refresh") {
+      await refreshApiToken();
+      return requestJson(route, options, attempt + 1);
+    }
     if (
       data
       && typeof data === "object"
@@ -652,7 +698,34 @@ async function requestJson(route, options = {}, attempt = 0) {
   }
 }
 
-async function requestEventStream(route, options = {}, onEvent, streamId) {
+async function refreshApiToken() {
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ refresh_token: apiRefreshToken, tenant_id: apiTenantId })
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+  const payload = (
+    data
+    && typeof data === "object"
+    && Object.prototype.hasOwnProperty.call(data, "code")
+    && Object.prototype.hasOwnProperty.call(data, "data")
+  )
+    ? data.data
+    : data;
+  if (!response.ok || !payload?.access_token || !payload?.refresh_token) {
+    apiToken = "";
+    apiRefreshToken = "";
+    throw new Error(payload?.message || payload?.detail || "登录状态刷新失败，请重新登录。");
+  }
+  apiToken = payload.access_token;
+  apiRefreshToken = payload.refresh_token;
+  apiTenantId = payload.tenant_id || apiTenantId;
+  return apiToken;
+}
+
+async function requestEventStream(route, options = {}, onEvent, streamId, attempt = 0) {
   const controller = new AbortController();
   streamControllers.set(streamId, controller);
   try {
@@ -665,6 +738,10 @@ async function requestEventStream(route, options = {}, onEvent, streamId) {
       headers,
       signal: controller.signal
     });
+    if (response.status === 401 && attempt === 0 && apiRefreshToken) {
+      await refreshApiToken();
+      return requestEventStream(route, options, onEvent, streamId, attempt + 1);
+    }
     if (!response.ok) {
       const text = await response.text();
       const data = text ? JSON.parse(text) : {};

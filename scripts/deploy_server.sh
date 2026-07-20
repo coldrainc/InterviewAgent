@@ -137,6 +137,11 @@ configure_nginx() {
     "$APP_DIR/scripts/configure_nginx_web.sh"
 }
 
+configure_security() {
+  log "配置服务器安全加固：Nginx WAF/限流 + fail2ban"
+  sudo "$APP_DIR/scripts/configure_security_hardening.sh"
+}
+
 deploy_all() {
   run_git_pull
   deploy_backend
@@ -161,8 +166,9 @@ choose_action() {
   2) 只更新后端：依赖按需安装 + 迁移 + 重启服务
   3) 只更新前端：依赖按需安装 + build + Nginx reload
   4) 配置 Nginx：www.aivago.cn + /api 同源代理
-  5) 只 git pull
-  6) 查看状态
+  5) 安全加固：Nginx WAF/限流 + fail2ban
+  6) 只 git pull
+  7) 查看状态
   0) 退出
 MENU
   read -r -p "输入选项: " choice
@@ -171,8 +177,9 @@ MENU
     2) run_git_pull; deploy_backend ;;
     3) run_git_pull; deploy_frontend ;;
     4) configure_nginx ;;
-    5) run_git_pull ;;
-    6) show_status ;;
+    5) configure_security ;;
+    6) run_git_pull ;;
+    7) show_status ;;
     0) exit 0 ;;
     *) echo "未知选项：$choice" >&2; exit 2 ;;
   esac
@@ -184,6 +191,7 @@ case "${1:-menu}" in
   backend) run_git_pull; deploy_backend ;;
   frontend) run_git_pull; deploy_frontend ;;
   nginx) configure_nginx ;;
+  security) configure_security ;;
   pull) run_git_pull ;;
   status) show_status ;;
   *)
@@ -194,6 +202,7 @@ case "${1:-menu}" in
   $0 backend    # 更新并重启后端
   $0 frontend   # 更新并构建前端
   $0 nginx      # 配置 Nginx Web 同源代理
+  $0 security   # 配置 Nginx WAF/限流 + fail2ban
   $0 pull       # 只拉代码
   $0 status     # 查看状态
 

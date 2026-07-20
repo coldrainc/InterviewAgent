@@ -1187,6 +1187,7 @@ button {
   background: rgba(248, 250, 252, 0.76);
 }
 
+.account-block.wide,
 .study-block.wide,
 .setup-block.wide,
 .ops-block.wide {
@@ -1678,6 +1679,58 @@ button {
 .auth-benefits {
   display: grid;
   gap: 10px;
+}
+
+.admin-role-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 140px auto;
+  gap: 10px;
+}
+
+.admin-role-form input,
+.admin-role-form select {
+  min-height: 34px;
+  border: 1px solid #cadbd4;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: var(--text);
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-list {
+  border: 1px solid #dce7e2;
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 9px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid #edf3f0;
+  padding-top: 8px;
+  min-width: 0;
+}
+
+.admin-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-row small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .profile-item {
@@ -2173,6 +2226,11 @@ button {
   }
 
   .ops-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid,
+  .admin-role-form {
     grid-template-columns: 1fr;
   }
 

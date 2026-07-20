@@ -1,6 +1,6 @@
 const { config } = require("./config");
 
-function request(path, options = {}) {
+function request(path, options = {}, attempt = 0) {
   const headers = {
     "Content-Type": "application/json",
     ...(options.header || {})
@@ -18,6 +18,12 @@ function request(path, options = {}) {
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) {
           resolve(unwrapResponse(response.data));
+          return;
+        }
+        if (response.statusCode === 401 && attempt === 0 && config.refreshToken && path !== "/auth/refresh") {
+          refreshAccessToken()
+            .then(() => request(path, options, attempt + 1).then(resolve).catch(reject))
+            .catch(reject);
           return;
         }
         reject(new Error(response.data?.message || response.data?.detail || `HTTP ${response.statusCode}`));
@@ -41,7 +47,11 @@ function unwrapResponse(payload) {
 
 function restoreToken() {
   const token = wx.getStorageSync(config.storageKeys.token);
+  const refreshToken = wx.getStorageSync(config.storageKeys.refreshToken);
+  const tenantId = wx.getStorageSync(config.storageKeys.tenantId);
   setApiToken(token || "");
+  config.refreshToken = refreshToken || "";
+  config.tenantId = tenantId || "default";
   return config.apiToken;
 }
 
@@ -79,6 +89,37 @@ function setApiToken(token) {
   } else {
     wx.removeStorageSync(config.storageKeys.token);
   }
+}
+
+function setAuthTokens(auth = {}) {
+  setApiToken(auth.access_token || "");
+  config.refreshToken = auth.refresh_token || "";
+  config.tenantId = auth.tenant_id || "default";
+  if (config.refreshToken) {
+    wx.setStorageSync(config.storageKeys.refreshToken, config.refreshToken);
+  } else {
+    wx.removeStorageSync(config.storageKeys.refreshToken);
+  }
+  if (config.tenantId) {
+    wx.setStorageSync(config.storageKeys.tenantId, config.tenantId);
+  }
+}
+
+function refreshAccessToken() {
+  return request("/auth/refresh", {
+    method: "POST",
+    data: {
+      refresh_token: config.refreshToken,
+      tenant_id: config.tenantId
+    },
+    header: {}
+  }, 1).then((auth) => {
+    setAuthTokens(auth);
+    return auth.access_token;
+  }).catch((error) => {
+    setAuthTokens({});
+    throw error;
+  });
 }
 
 function me() {
@@ -168,6 +209,7 @@ module.exports = {
   devLogin,
   wechatLogin,
   setApiToken,
+  setAuthTokens,
   me,
   account,
   recharge,
