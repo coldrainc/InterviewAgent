@@ -1012,6 +1012,17 @@ function App() {
     setSelectedModelId(mode.modelId);
   }
 
+  function changeScreen(nextScreen) {
+    if (nextScreen === "study") {
+      setStudyFilters((current) => ({
+        ...current,
+        category: profile.industry || "internet",
+        subject: ""
+      }));
+    }
+    setScreen(nextScreen);
+  }
+
   return (
     <main className="app-shell">
       <Sidebar
@@ -1026,7 +1037,7 @@ function App() {
         onReloadSessions={loadSessionHistory}
         onRestoreSession={restoreSession}
         onDeleteSession={deleteSession}
-        onScreenChange={setScreen}
+        onScreenChange={changeScreen}
       />
 
       <section className="workspace">
@@ -1113,6 +1124,8 @@ function App() {
             onFilterChange={updateStudyFilters}
             onReload={loadStudyCenter}
             onImportQuestions={importPracticeQuestionBank}
+            activeInterviewType={profile.industry}
+            activeInterviewLabel={currentIndustry(industryOptions, profile.industry)?.label}
             onBack={() => setScreen("chat")}
           />
         ) : (

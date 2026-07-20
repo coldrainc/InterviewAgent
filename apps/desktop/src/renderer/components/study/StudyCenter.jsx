@@ -11,6 +11,14 @@ const subjectOptions = [
   { value: "frontend", label: "前端工程" },
   { value: "database", label: "数据库" },
   { value: "security", label: "应用安全" },
+  { value: "recommendation", label: "推荐系统" },
+  { value: "customer_service", label: "智能客服" },
+  { value: "risk_control", label: "风控" },
+  { value: "compliance", label: "合规" },
+  { value: "audit", label: "审计" },
+  { value: "multi_tenant", label: "多租户" },
+  { value: "rbac", label: "RBAC 权限" },
+  { value: "integration", label: "系统集成" },
   { value: "rag", label: "RAG" },
   { value: "agent_harness", label: "Agent Harness" },
   { value: "agentops", label: "AgentOps" },
@@ -28,11 +36,13 @@ const subjectOptions = [
 ];
 
 const categoryOptions = [
-  { value: "", label: "全部类型" },
-  { value: "internet", label: "互联网面试" },
-  { value: "ai_engineering", label: "AI 工程" },
-  { value: "civil_service", label: "考公" },
-  { value: "interview", label: "通用面试" }
+  { value: "", label: "全部面试类型", description: "混合查看所有面试类型的默认题和自定义题。", subjects: [] },
+  { value: "internet", label: "互联网行业", description: "高并发、系统设计、项目深挖和工程稳定性。", subjects: ["project", "system_design", "algorithm", "backend", "frontend", "database", "security"] },
+  { value: "ai_application", label: "AI 应用 / 大模型", description: "RAG、Agent、评测、工具调用和安全治理。", subjects: ["rag", "agent_harness", "agentops", "search", "multi_agent", "workflow", "async_workflow", "long_running_tasks", "evaluation"] },
+  { value: "ecommerce", label: "电商 / 本地生活", description: "商品搜索、导购客服、交易转化和售后风控。", subjects: ["search", "recommendation", "customer_service", "risk_control", "system_design"] },
+  { value: "fintech", label: "金融科技", description: "金融知识库、合规、风控、审计和高可靠。", subjects: ["rag", "risk_control", "compliance", "audit", "system_design"] },
+  { value: "enterprise_saas", label: "企业 SaaS / ToB", description: "多租户、权限、工作流、系统集成和私有化交付。", subjects: ["multi_tenant", "rbac", "workflow", "integration", "audit"] },
+  { value: "civil_service", label: "考公 / 公职考试", description: "行测、申论、结构化面试和公共服务表达。", subjects: ["xingce", "shenlun", "interview"] }
 ];
 
 export function StudyCenter({
@@ -41,22 +51,35 @@ export function StudyCenter({
   onFilterChange,
   onReload,
   onImportQuestions,
+  activeInterviewType,
+  activeInterviewLabel,
   onBack
 }) {
   const questions = studyState.questions?.items || [];
   const total = studyState.questions?.total || 0;
   const categories = normalizeCategoryOptions(studyState.categories);
+  const activeCategory = categories.find((item) => item.value === studyFilters.category);
+  const visibleSubjectOptions = subjectOptionsForCategory(activeCategory);
   return (
     <section className="study-center">
       <div className="study-hero">
         <div>
           <span className="eyebrow">Practice Center</span>
           <h3>面试刷题</h3>
-          <p>面试训练和题库练习一体化管理。考公、互联网、AI 工程都只是训练类型，可以上传自己的 JSON 或 CSV 题库。</p>
+          <p>刷题类型和面试配置保持一致。先选面试类型，再按对应科目做题、复盘和上传补充题库。</p>
         </div>
         <div className="setup-hero-actions">
           <button type="button" className="secondary-action inline" onClick={onBack}>返回工作台</button>
         </div>
+      </div>
+
+      <div className="practice-context">
+        <span>当前面试配置：{activeInterviewLabel || categoryLabel(activeInterviewType) || "未选择"}</span>
+        {activeInterviewType && studyFilters.category !== activeInterviewType && (
+          <button type="button" onClick={() => onFilterChange({ category: activeInterviewType, subject: "" })}>
+            同步到当前面试类型
+          </button>
+        )}
       </div>
 
       <div className="practice-category-tabs" aria-label="刷题类型">
@@ -113,7 +136,7 @@ export function StudyCenter({
           <div className="study-filters">
             <label>
               <span>训练类型</span>
-              <select value={studyFilters.category} onChange={(event) => onFilterChange({ category: event.target.value })}>
+              <select value={studyFilters.category} onChange={(event) => onFilterChange({ category: event.target.value, subject: "" })}>
                 {categories.map((item) => <option key={item.value || "all"} value={item.value}>{item.label}</option>)}
               </select>
             </label>
@@ -129,7 +152,7 @@ export function StudyCenter({
             <label>
               <span>科目</span>
               <select value={studyFilters.subject} onChange={(event) => onFilterChange({ subject: event.target.value })}>
-                {subjectOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                {visibleSubjectOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>
             <label>
@@ -145,7 +168,7 @@ export function StudyCenter({
           {studyState.error && <p className="resume-hint error">{studyState.error}</p>}
           {studyState.seedMessage && <p className="resume-hint success">{studyState.seedMessage}</p>}
           {studyState.importMessage && <p className="resume-hint success">{studyState.importMessage}</p>}
-          <p className="resume-hint">当前筛选共 {total} 道题，已包含互联网、AI 工程、考公和通用面试默认题库。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
+          <p className="resume-hint">当前筛选共 {total} 道题，题库类型与面试配置保持同一套分类。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
           <div className="question-list">
             {questions.length ? questions.map((question) => (
               <QuestionCard key={question.id} question={question} />
@@ -202,11 +225,12 @@ function categoryLabel(value) {
 function normalizeCategoryOptions(categories) {
   const backendOptions = Array.isArray(categories) ? categories : [];
   const merged = [
-    { value: "", label: "全部类型", description: "混合查看所有默认题和自定义题。" },
+    categoryOptions[0],
     ...backendOptions.map((item) => ({
       value: item.value || "",
       label: item.label || categoryLabel(item.value),
-      description: item.description || ""
+      description: item.description || "",
+      subjects: Array.isArray(item.subjects) ? item.subjects : []
     }))
   ];
   const seen = new Set();
@@ -218,4 +242,12 @@ function normalizeCategoryOptions(categories) {
     seen.add(item.value);
     return true;
   });
+}
+
+function subjectOptionsForCategory(category) {
+  if (!category?.subjects?.length) {
+    return subjectOptions;
+  }
+  const allowed = new Set(["", ...category.subjects, "general", "behavioral", "communication"]);
+  return subjectOptions.filter((item) => allowed.has(item.value));
 }

@@ -46,6 +46,34 @@ export const fallbackIndustries = [
     recommended_focus_areas: []
   },
   {
+    value: "ai_application",
+    label: "AI 应用 / 大模型",
+    description: "面向 Agent、RAG、LLMOps、AI Copilot 和行业知识助手。",
+    production_signals: ["忠实度", "检索命中率", "工具成功率"],
+    recommended_focus_areas: ["RAG / Agent 生产化", "质量评估", "安全护栏"]
+  },
+  {
+    value: "ecommerce",
+    label: "电商 / 本地生活",
+    description: "面向搜索推荐、导购客服、交易链路、履约售后。",
+    production_signals: ["CTR", "CVR", "GMV"],
+    recommended_focus_areas: ["商品搜索", "智能客服", "交易风控"]
+  },
+  {
+    value: "fintech",
+    label: "金融科技",
+    description: "面向金融投研、风控、合规、客服和运营自动化。",
+    production_signals: ["准确率", "审计覆盖率", "人工复核通过率"],
+    recommended_focus_areas: ["合规风控", "金融知识库", "审计留痕"]
+  },
+  {
+    value: "enterprise_saas",
+    label: "企业 SaaS / ToB",
+    description: "面向企业知识库、办公协作、CRM/ERP/工单等工作流。",
+    production_signals: ["租户隔离通过率", "SLA", "工具调用成功率"],
+    recommended_focus_areas: ["多租户权限", "业务工作流", "系统集成"]
+  },
+  {
     value: "civil_service",
     label: "考公 / 公职考试",
     description: "面向公务员、事业单位和选调备考，覆盖行测、申论和结构化面试。",

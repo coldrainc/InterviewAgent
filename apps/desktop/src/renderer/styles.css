@@ -1200,6 +1200,31 @@ button {
   margin-bottom: 14px;
 }
 
+.practice-context {
+  min-height: 42px;
+  border: 1px solid #d9e5df;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #ffffff;
+  color: #4e625b;
+}
+
+.practice-context button {
+  min-height: 30px;
+  border: 1px solid #8fb8ff;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #234ed1;
+  background: #eef5ff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .practice-category-tabs button {
   min-height: 88px;
   border: 1px solid #d9e5df;
@@ -2140,6 +2165,11 @@ button {
 
   .practice-category-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .practice-context {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .ops-row {

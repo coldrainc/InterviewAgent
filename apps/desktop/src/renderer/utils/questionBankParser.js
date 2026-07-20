@@ -132,11 +132,26 @@ function normalizeCategory(value) {
     "civil-service": "civil_service",
     "civil service": "civil_service",
     "互联网": "internet",
+    "互联网行业": "internet",
     "技术面试": "internet",
-    "ai": "ai_engineering",
-    "ai工程": "ai_engineering",
-    "ai 工程": "ai_engineering",
-    "面试": "interview"
+    "ai": "ai_application",
+    "ai工程": "ai_application",
+    "ai 工程": "ai_application",
+    "ai应用": "ai_application",
+    "ai 应用": "ai_application",
+    "大模型": "ai_application",
+    "ai_engineering": "ai_application",
+    "电商": "ecommerce",
+    "本地生活": "ecommerce",
+    "电商 / 本地生活": "ecommerce",
+    "金融": "fintech",
+    "金融科技": "fintech",
+    "tob": "enterprise_saas",
+    "to b": "enterprise_saas",
+    "企业saas": "enterprise_saas",
+    "企业 saas": "enterprise_saas",
+    "面试": "internet",
+    "通用面试": "internet"
   };
   return aliases[cleaned] || cleaned || "internet";
 }
@@ -153,6 +168,19 @@ function normalizeSubject(value) {
     "数据库": "database",
     "应用安全": "security",
     "安全": "security",
+    "推荐": "recommendation",
+    "推荐系统": "recommendation",
+    "客服": "customer_service",
+    "智能客服": "customer_service",
+    "风控": "risk_control",
+    "风险控制": "risk_control",
+    "合规": "compliance",
+    "审计": "audit",
+    "多租户": "multi_tenant",
+    "权限": "rbac",
+    "rbac": "rbac",
+    "系统集成": "integration",
+    "集成": "integration",
     "算法": "algorithm",
     "数据结构": "algorithm",
     "agent harness": "agent_harness",
@@ -187,7 +215,7 @@ function inferCategory(row) {
     return "civil_service";
   }
   if (/ai|rag|agent|llm/.test(examName)) {
-    return "ai_engineering";
+    return "ai_application";
   }
   return "internet";
 }

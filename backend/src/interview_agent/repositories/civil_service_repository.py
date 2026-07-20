@@ -60,7 +60,8 @@ class CivilServiceQuestionRepository:
             CivilServiceQuestionModel.user_id == self.user_id,
         ]
         if category:
-            filters.append(CivilServiceQuestionModel.practice_category == normalize_practice_category(category))
+            normalized_category = normalize_practice_category(category)
+            filters.append(CivilServiceQuestionModel.practice_category.in_(practice_category_filter_values(normalized_category)))
         if year:
             filters.append(CivilServiceQuestionModel.exam_year == year)
         if subject:
@@ -136,7 +137,8 @@ def normalize_subject(value: Any) -> str:
         "行测": "xingce",
         "行政职业能力测验": "xingce",
         "申论": "shenlun",
-        "面试": "interview",
+        "面试": "internet",
+        "通用面试": "internet",
         "结构化面试": "interview",
         "项目深挖": "project",
         "系统设计": "system_design",
@@ -147,6 +149,19 @@ def normalize_subject(value: Any) -> str:
         "数据库": "database",
         "应用安全": "security",
         "安全": "security",
+        "推荐": "recommendation",
+        "推荐系统": "recommendation",
+        "客服": "customer_service",
+        "智能客服": "customer_service",
+        "风控": "risk_control",
+        "风险控制": "risk_control",
+        "合规": "compliance",
+        "审计": "audit",
+        "多租户": "multi_tenant",
+        "权限": "rbac",
+        "rbac": "rbac",
+        "系统集成": "integration",
+        "集成": "integration",
         "算法": "algorithm",
         "数据结构": "algorithm",
         "agent harness": "agent_harness",
@@ -182,14 +197,37 @@ def normalize_practice_category(value: Any) -> str:
         "civil service": "civil_service",
         "互联网": "internet",
         "互联网面试": "internet",
+        "互联网行业": "internet",
         "技术面试": "internet",
-        "面试": "interview",
-        "ai": "ai_engineering",
-        "ai工程": "ai_engineering",
-        "ai 工程": "ai_engineering",
-        "ai工程面试": "ai_engineering",
+        "面试": "internet",
+        "通用面试": "internet",
+        "ai": "ai_application",
+        "ai工程": "ai_application",
+        "ai 工程": "ai_application",
+        "ai工程面试": "ai_application",
+        "ai应用": "ai_application",
+        "ai 应用": "ai_application",
+        "ai应用 / 大模型": "ai_application",
+        "大模型": "ai_application",
+        "ai_engineering": "ai_application",
+        "电商": "ecommerce",
+        "本地生活": "ecommerce",
+        "电商 / 本地生活": "ecommerce",
+        "金融": "fintech",
+        "金融科技": "fintech",
+        "tob": "enterprise_saas",
+        "to b": "enterprise_saas",
+        "企业saas": "enterprise_saas",
+        "企业 saas": "enterprise_saas",
+        "企业 SaaS / ToB": "enterprise_saas",
     }
     return aliases.get(cleaned, cleaned or "internet")[:64]
+
+
+def practice_category_filter_values(category: str) -> list[str]:
+    if category == "ai_application":
+        return ["ai_application", "ai_engineering"]
+    return [category]
 
 
 def infer_practice_category(payload: dict[str, Any]) -> str:
@@ -202,7 +240,7 @@ def infer_practice_category(payload: dict[str, Any]) -> str:
     if any(marker in joined_tags for marker in ("考公", "国考", "省考", "申论", "行测")):
         return "civil_service"
     if any(marker in exam_name for marker in ("ai", "agent", "rag", "llm")):
-        return "ai_engineering"
+        return "ai_application"
     return "internet"
 
 
@@ -276,10 +314,11 @@ def apply_question_payload(model: CivilServiceQuestionModel, payload: dict[str, 
 
 
 def question_to_dict(model: CivilServiceQuestionModel) -> dict[str, Any]:
+    category = normalize_practice_category(model.practice_category)
     return {
         "id": str(model.id),
-        "practice_category": model.practice_category,
-        "category": model.practice_category,
+        "practice_category": category,
+        "category": category,
         "source": model.source,
         "source_url": model.source_url,
         "exam_year": model.exam_year,

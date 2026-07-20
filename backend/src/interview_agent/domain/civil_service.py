@@ -6,13 +6,13 @@ from typing import Any
 PRACTICE_CATEGORIES: list[dict[str, Any]] = [
     {
         "value": "internet",
-        "label": "互联网面试",
-        "description": "后端、前端、系统设计、算法、数据库、稳定性和项目深挖。",
+        "label": "互联网行业",
+        "description": "高并发、低延迟、增长指标、内容安全、多端体验和项目深挖。",
         "subjects": ["project", "system_design", "algorithm", "backend", "frontend", "database", "security"],
     },
     {
-        "value": "ai_engineering",
-        "label": "AI 工程",
+        "value": "ai_application",
+        "label": "AI 应用 / 大模型",
         "description": "RAG、Agent Harness、AgentOps、搜索、多 Agent、工作流、长任务和质量评估。",
         "subjects": [
             "rag",
@@ -27,16 +27,28 @@ PRACTICE_CATEGORIES: list[dict[str, Any]] = [
         ],
     },
     {
-        "value": "civil_service",
-        "label": "考公",
-        "description": "行测、申论、结构化面试和材料分析。",
-        "subjects": ["xingce", "shenlun", "interview"],
+        "value": "ecommerce",
+        "label": "电商 / 本地生活",
+        "description": "商品搜索、智能导购、客服助手、交易转化、履约售后和营销合规。",
+        "subjects": ["search", "recommendation", "customer_service", "risk_control", "system_design"],
     },
     {
-        "value": "interview",
-        "label": "通用面试",
-        "description": "自我介绍、行为面试、沟通协作、职业规划和压力面。",
-        "subjects": ["general", "behavioral", "communication"],
+        "value": "fintech",
+        "label": "金融科技",
+        "description": "金融知识库、风控、合规、投研、审计、权限和高可靠。",
+        "subjects": ["rag", "risk_control", "compliance", "audit", "system_design"],
+    },
+    {
+        "value": "enterprise_saas",
+        "label": "企业 SaaS / ToB",
+        "description": "多租户、RBAC、企业知识库、工作流、审计、系统集成和私有化交付。",
+        "subjects": ["multi_tenant", "rbac", "workflow", "integration", "audit"],
+    },
+    {
+        "value": "civil_service",
+        "label": "考公 / 公职考试",
+        "description": "行测、申论、结构化面试和材料分析。",
+        "subjects": ["xingce", "shenlun", "interview"],
     },
 ]
 
@@ -46,12 +58,12 @@ PRACTICE_LEARNING_PLAN: list[dict[str, Any]] = [
         "stage": "基础诊断",
         "title": "先确定训练类型和能力短板",
         "description": "把目标拆成面试表达、知识点刷题、真题复盘三个层面，先建立正确率和回答质量基线。",
-        "tasks": ["选择训练类型：互联网、AI 工程、考公等", "记录每题耗时和错因", "把错因分为知识点、表达、方法、时间不足"],
+        "tasks": ["先选择和面试配置一致的面试类型", "记录每题耗时和错因", "把错因分为知识点、表达、方法、时间不足"],
     },
     {
         "stage": "模块训练",
         "title": "按题型建立方法库",
-        "description": "互联网和 AI 工程可以按项目深挖、系统设计、算法、RAG、Agent Harness、AgentOps、搜索、多 Agent 协作、异步工作流和质量评估拆；考公可以按行测、申论、结构化面试拆。",
+        "description": "刷题科目跟随面试类型拆分：互联网看工程与项目，AI 应用看 RAG/Agent/评测，电商看搜索导购交易，金融看合规风控审计，ToB 看多租户权限集成，考公看行测申论结构化。",
         "tasks": ["每类题沉淀答题模板", "把高频知识点做成错题集", "同一题型连续练到稳定再切换"],
     },
     {
@@ -219,12 +231,11 @@ INTERNET_SEED_QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
-INTERVIEW_SEED_QUESTIONS: list[dict[str, Any]] = [
+COMMON_INTERVIEW_BASE_QUESTIONS: list[dict[str, Any]] = [
     {
         "source": "built_in_sample",
-        "practice_category": "interview",
         "exam_year": 2026,
-        "exam_name": "通用面试训练样题",
+        "exam_name": "通用表达训练样题",
         "subject": "behavioral",
         "question_type": "行为面试",
         "prompt": "请讲一个你和他人意见不一致但最终推动事情落地的案例。你如何沟通、取舍和复盘？",
@@ -236,9 +247,8 @@ INTERVIEW_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "interview",
         "exam_year": 2026,
-        "exam_name": "通用面试训练样题",
+        "exam_name": "通用表达训练样题",
         "subject": "general",
         "question_type": "自我介绍",
         "prompt": "请做一个 2 分钟自我介绍，要求结合目标岗位突出你的项目经验、核心能力和求职动机。",
@@ -251,10 +261,17 @@ INTERVIEW_SEED_QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
+COMMON_INTERVIEW_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {**question, "practice_category": category["value"], "exam_name": f"{category['label']}通用表达训练样题"}
+    for category in PRACTICE_CATEGORIES
+    for question in COMMON_INTERVIEW_BASE_QUESTIONS
+]
+
+
 AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "rag",
@@ -268,7 +285,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "agent_harness",
@@ -282,7 +299,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "agent_harness",
@@ -296,7 +313,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "agentops",
@@ -310,7 +327,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "search",
@@ -324,7 +341,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "multi_agent",
@@ -338,7 +355,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "workflow",
@@ -352,7 +369,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "async_workflow",
@@ -366,7 +383,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "long_running_tasks",
@@ -380,7 +397,7 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "source": "built_in_sample",
-        "practice_category": "ai_engineering",
+        "practice_category": "ai_application",
         "exam_year": 2026,
         "exam_name": "AI 工程面试训练样题",
         "subject": "evaluation",
@@ -395,9 +412,108 @@ AI_ENGINEERING_SEED_QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
+ECOMMERCE_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "ecommerce",
+        "exam_year": 2026,
+        "exam_name": "电商 / 本地生活面试训练样题",
+        "subject": "search",
+        "question_type": "商品搜索",
+        "prompt": "设计一个商品搜索排序系统。请说明关键词召回、向量召回、类目/价格/库存过滤、重排、个性化和线上指标。",
+        "choices": [],
+        "answer": "可覆盖 BM25、向量召回、混合召回、类目过滤、库存价格实时校验、rerank、个性化特征、CTR/CVR/GMV 和延迟指标。",
+        "explanation": "电商搜索题要把相关性、实时业务约束和交易指标放在一起讲。",
+        "difficulty": "hard",
+        "tags": ["电商", "搜索", "排序", "转化"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "ecommerce",
+        "exam_year": 2026,
+        "exam_name": "电商 / 本地生活面试训练样题",
+        "subject": "customer_service",
+        "question_type": "智能客服",
+        "prompt": "AI 客服回答商品价格、库存和售后政策时，如何避免编造和错误承诺？请设计知识来源、实时校验、兜底和转人工策略。",
+        "choices": [],
+        "answer": "需要区分静态知识和实时业务数据，价格库存走实时 API，政策有版本引用，高风险话术转人工，保留审计和客诉反馈。",
+        "explanation": "交易场景的 AI 答案会影响用户决策，必须强调实时数据、合规话术和责任边界。",
+        "difficulty": "hard",
+        "tags": ["客服助手", "实时数据", "售后", "风控"],
+    },
+]
+
+
+FINTECH_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "fintech",
+        "exam_year": 2026,
+        "exam_name": "金融科技面试训练样题",
+        "subject": "compliance",
+        "question_type": "合规风控",
+        "prompt": "金融场景下的大模型助手如何避免输出投资建议或误导性结论？请说明权限、引用、免责声明、人工复核和审计。",
+        "choices": [],
+        "answer": "需要限制模型边界，使用可信来源和引用，敏感问题触发免责声明和人工复核，全链路留痕审计，避免直接替代合规决策。",
+        "explanation": "金融科技题重点是高风险场景治理，回答要保守、可解释、可追溯。",
+        "difficulty": "hard",
+        "tags": ["金融", "合规", "审计", "风险控制"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "fintech",
+        "exam_year": 2026,
+        "exam_name": "金融科技面试训练样题",
+        "subject": "rag",
+        "question_type": "金融知识库",
+        "prompt": "设计一个金融投研知识库 RAG。如何保证资料来源可信、版本可追溯、权限隔离和答案引用准确？",
+        "choices": [],
+        "answer": "可从数据来源准入、文档版本、ACL 过滤、检索引用、答案忠实度评测、审计日志和人工复核流程展开。",
+        "explanation": "金融 RAG 不是普通文档问答，必须把可信来源、权限和留痕作为核心设计。",
+        "difficulty": "hard",
+        "tags": ["金融 RAG", "权限", "引用", "可信来源"],
+    },
+]
+
+
+ENTERPRISE_SAAS_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "enterprise_saas",
+        "exam_year": 2026,
+        "exam_name": "企业 SaaS / ToB 面试训练样题",
+        "subject": "multi_tenant",
+        "question_type": "多租户架构",
+        "prompt": "企业知识库 AI 助手如何设计多租户隔离、RBAC 权限、审计日志和私有化部署？",
+        "choices": [],
+        "answer": "需要覆盖租户隔离模型、用户/角色/资源权限、检索前 ACL 过滤、操作审计、配置中心、私有化部署和数据生命周期。",
+        "explanation": "ToB 场景面试重点是权限、隔离、审计和交付运维，不只是功能可用。",
+        "difficulty": "hard",
+        "tags": ["ToB", "多租户", "RBAC", "审计"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "enterprise_saas",
+        "exam_year": 2026,
+        "exam_name": "企业 SaaS / ToB 面试训练样题",
+        "subject": "workflow",
+        "question_type": "业务工作流",
+        "prompt": "Agent 要调用 CRM、工单和审批系统完成业务动作。你如何设计人工确认、权限校验、失败补偿和回滚？",
+        "choices": [],
+        "answer": "可以设计工具白名单、参数校验、RBAC、双确认、高风险审批、幂等键、补偿任务、审计日志和失败告警。",
+        "explanation": "企业 Agent 的核心是动作安全和可追责，不能让模型直接无边界操作业务系统。",
+        "difficulty": "hard",
+        "tags": ["Agent", "工作流", "工具调用", "补偿回滚"],
+    },
+]
+
+
 DEFAULT_PRACTICE_QUESTIONS: list[dict[str, Any]] = [
     *INTERNET_SEED_QUESTIONS,
     *AI_ENGINEERING_SEED_QUESTIONS,
+    *ECOMMERCE_SEED_QUESTIONS,
+    *FINTECH_SEED_QUESTIONS,
+    *ENTERPRISE_SAAS_SEED_QUESTIONS,
     *CIVIL_SERVICE_SEED_QUESTIONS,
-    *INTERVIEW_SEED_QUESTIONS,
+    *COMMON_INTERVIEW_SEED_QUESTIONS,
 ]
