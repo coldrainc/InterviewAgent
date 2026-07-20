@@ -76,6 +76,30 @@ server {
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
+    location ~ ^/api/(sessions/[^/]+/stream)$ {
+        rewrite ^/api/(.*)$ /\$1 break;
+        proxy_pass $API_UPSTREAM;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host api.aivago.cn;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Request-ID \$request_id;
+        proxy_set_header Connection "";
+        proxy_set_header Accept-Encoding "";
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 600;
+        proxy_connect_timeout 60;
+        proxy_send_timeout 600;
+
+        add_header X-Accel-Buffering no always;
+        add_header Cache-Control "no-cache, no-transform" always;
+    }
+
     location /api/ {
         proxy_pass $API_UPSTREAM/;
         proxy_http_version 1.1;
@@ -86,13 +110,14 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header X-Request-ID \$request_id;
         proxy_set_header Connection "";
+        proxy_set_header Accept-Encoding "";
 
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_cache off;
-        proxy_read_timeout 300;
+        proxy_read_timeout 600;
         proxy_connect_timeout 60;
-        proxy_send_timeout 300;
+        proxy_send_timeout 600;
 
         add_header X-Accel-Buffering no always;
     }

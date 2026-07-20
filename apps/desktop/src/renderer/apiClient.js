@@ -143,7 +143,11 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
       options.signal.addEventListener("abort", abortFromExternalSignal, { once: true });
     }
   }
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  let timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const resetTimeout = () => {
+    window.clearTimeout(timeout);
+    timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  };
   try {
     const response = await fetch(url, {
       method,
@@ -227,6 +231,7 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      resetTimeout();
       buffer += decoder.decode(value, { stream: true });
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
@@ -234,6 +239,9 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
         const event = parseSseChunk(chunk);
         if (!event) continue;
         onEvent?.(event);
+        if (event.event === "message.error") {
+          throw new Error(event.data?.message || "流式生成失败。");
+        }
         if (event.event === "message.done") {
           finalPayload = event.data;
         }
@@ -243,6 +251,9 @@ async function executeEventStreamRequest(route, options = {}, onEvent) {
       const event = parseSseChunk(buffer);
       if (event) {
         onEvent?.(event);
+        if (event.event === "message.error") {
+          throw new Error(event.data?.message || "流式生成失败。");
+        }
         if (event.event === "message.done") {
           finalPayload = event.data;
         }

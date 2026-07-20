@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -62,9 +63,16 @@ class AgentLoop:
     def step(self, candidate_response: str) -> LoopResult:
         return self.handle_input(candidate_response)
 
-    def handle_input(self, candidate_input: str) -> LoopResult:
+    def step_stream(self, candidate_response: str, on_delta: Callable[[str], None]) -> LoopResult:
+        return self.handle_input(candidate_response, on_delta=on_delta)
+
+    def handle_input(
+        self,
+        candidate_input: str,
+        on_delta: Callable[[str], None] | None = None,
+    ) -> LoopResult:
         if self.config.mode == InterviewMode.CANDIDATE:
-            return self._handle_interviewer_question(candidate_input)
+            return self._handle_interviewer_question(candidate_input, on_delta=on_delta)
 
         if self.state.completed:
             return LoopResult(self.state, "Interview already completed.", advanced=False)
@@ -84,9 +92,17 @@ class AgentLoop:
         cleaned_input = input_check.text
         input_kind = self._classify_input(cleaned_input)
         if input_kind == InputKind.CLARIFYING_QUESTION:
-            harness_result = self.harness.respond_to_candidate_question_result(
-                cleaned_input, self.state
-            )
+            if on_delta:
+                harness_result = self.harness.respond_to_candidate_question_result_stream(
+                    cleaned_input,
+                    self.state,
+                    on_delta,
+                )
+            else:
+                harness_result = self.harness.respond_to_candidate_question_result(
+                    cleaned_input,
+                    self.state,
+                )
             return LoopResult(
                 self.state,
                 harness_result.text,
@@ -115,7 +131,10 @@ class AgentLoop:
             f"{'建议继续深挖当前方向' if assessment.needs_more_depth else '可以在给出阶段性判断后切换方向'}。"
         )
         next_stage = self._next_stage(assessment)
-        harness_result = self.harness.generate_result(next_stage, self.state)
+        if on_delta:
+            harness_result = self.harness.generate_result_stream(next_stage, self.state, on_delta)
+        else:
+            harness_result = self.harness.generate_result(next_stage, self.state)
         message = harness_result.text
         self.state.stage = next_stage
         self.state.add_interviewer_message(next_stage, message)
@@ -131,7 +150,11 @@ class AgentLoop:
             usage=harness_result.usage,
         )
 
-    def _handle_interviewer_question(self, interviewer_input: str) -> LoopResult:
+    def _handle_interviewer_question(
+        self,
+        interviewer_input: str,
+        on_delta: Callable[[str], None] | None = None,
+    ) -> LoopResult:
         if self.state.completed:
             return LoopResult(self.state, "Interview already completed.", advanced=False)
         if not self.state.turns:
@@ -152,7 +175,14 @@ class AgentLoop:
             return LoopResult(self.state, "请先输入面试问题。", advanced=False)
 
         self.state.add_interviewer_message(InterviewStage.QUESTIONING, cleaned_input)
-        harness_result = self.harness.generate_result(InterviewStage.QUESTIONING, self.state)
+        if on_delta:
+            harness_result = self.harness.generate_result_stream(
+                InterviewStage.QUESTIONING,
+                self.state,
+                on_delta,
+            )
+        else:
+            harness_result = self.harness.generate_result(InterviewStage.QUESTIONING, self.state)
         message = harness_result.text
         self.state.stage = InterviewStage.QUESTIONING
         self.state.add_candidate_message(message)

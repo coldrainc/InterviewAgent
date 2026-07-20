@@ -1,5 +1,27 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+function streamMessage(payload, onEvent) {
+  const streamId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const listener = (_event, incomingStreamId, streamEvent) => {
+    if (incomingStreamId === streamId) {
+      onEvent?.(streamEvent);
+    }
+  };
+  const abort = () => {
+    ipcRenderer.invoke("api:stream-cancel", streamId).catch(() => {});
+  };
+  ipcRenderer.on("api:stream-event", listener);
+  payload?.signal?.addEventListener?.("abort", abort, { once: true });
+  return ipcRenderer.invoke("api:stream-message", {
+    sessionId: payload?.sessionId,
+    message: payload?.message,
+    streamId
+  }).finally(() => {
+    ipcRenderer.removeListener("api:stream-event", listener);
+    payload?.signal?.removeEventListener?.("abort", abort);
+  });
+}
+
 contextBridge.exposeInMainWorld("interviewAgent", {
   health: () => ipcRenderer.invoke("api:health"),
   listIndustries: (targetRole) => ipcRenderer.invoke("metadata:industries", targetRole),
@@ -28,5 +50,6 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   importResume: () => ipcRenderer.invoke("resume:import"),
   parseDocument: () => ipcRenderer.invoke("document:parse"),
   createSession: (payload) => ipcRenderer.invoke("api:create-session", payload),
-  sendMessage: (payload) => ipcRenderer.invoke("api:send-message", payload)
+  sendMessage: (payload) => ipcRenderer.invoke("api:send-message", payload),
+  streamMessage
 });

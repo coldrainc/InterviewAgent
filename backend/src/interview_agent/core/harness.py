@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any, Protocol
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -25,11 +26,27 @@ class InterviewHarness(Protocol):
     def generate_result(self, stage: InterviewStage, state: InterviewState) -> HarnessResult:
         ...
 
+    def generate_result_stream(
+        self,
+        stage: InterviewStage,
+        state: InterviewState,
+        on_delta: Callable[[str], None],
+    ) -> HarnessResult:
+        ...
+
     def respond_to_candidate_question(self, question: str, state: InterviewState) -> str:
         ...
 
     def respond_to_candidate_question_result(
         self, question: str, state: InterviewState
+    ) -> HarnessResult:
+        ...
+
+    def respond_to_candidate_question_result_stream(
+        self,
+        question: str,
+        state: InterviewState,
+        on_delta: Callable[[str], None],
     ) -> HarnessResult:
         ...
 
@@ -50,6 +67,17 @@ class BaseInterviewHarness(ABC):
     def generate(self, stage: InterviewStage, state: InterviewState) -> str:
         return self.generate_result(stage, state).text
 
+    def generate_result_stream(
+        self,
+        stage: InterviewStage,
+        state: InterviewState,
+        on_delta: Callable[[str], None],
+    ) -> HarnessResult:
+        result = self.generate_result(stage, state)
+        if result.text:
+            on_delta(result.text)
+        return result
+
     @abstractmethod
     def respond_to_candidate_question_result(
         self, question: str, state: InterviewState
@@ -58,6 +86,17 @@ class BaseInterviewHarness(ABC):
 
     def respond_to_candidate_question(self, question: str, state: InterviewState) -> str:
         return self.respond_to_candidate_question_result(question, state).text
+
+    def respond_to_candidate_question_result_stream(
+        self,
+        question: str,
+        state: InterviewState,
+        on_delta: Callable[[str], None],
+    ) -> HarnessResult:
+        result = self.respond_to_candidate_question_result(question, state)
+        if result.text:
+            on_delta(result.text)
+        return result
 
 
 class LangChainInterviewHarness(BaseInterviewHarness):
@@ -111,9 +150,38 @@ class LangChainInterviewHarness(BaseInterviewHarness):
         ]
         return self._safe_invoke(messages, fallback=self._fallback_message(stage, state))
 
+    def generate_result_stream(
+        self,
+        stage: InterviewStage,
+        state: InterviewState,
+        on_delta: Callable[[str], None],
+    ) -> HarnessResult:
+        messages = [
+            SystemMessage(content=self._system_prompt()),
+            HumanMessage(content=self._stage_prompt(stage, state)),
+        ]
+        return self._safe_stream(messages, fallback=self._fallback_message(stage, state), on_delta=on_delta)
+
     def respond_to_candidate_question_result(
         self, question: str, state: InterviewState
     ) -> HarnessResult:
+        messages, fallback = self._candidate_question_messages(question, state)
+        return self._safe_invoke(messages, fallback=fallback)
+
+    def respond_to_candidate_question_result_stream(
+        self,
+        question: str,
+        state: InterviewState,
+        on_delta: Callable[[str], None],
+    ) -> HarnessResult:
+        messages, fallback = self._candidate_question_messages(question, state)
+        return self._safe_stream(messages, fallback=fallback, on_delta=on_delta)
+
+    def _candidate_question_messages(
+        self,
+        question: str,
+        state: InterviewState,
+    ) -> tuple[list[Any], str]:
         focus = self._current_focus(state)
         query = self._context_query(state.stage, state, focus, extra=question)
         knowledge_context = self._knowledge_context(query)
@@ -149,7 +217,7 @@ class LangChainInterviewHarness(BaseInterviewHarness):
             f"简单说，{question} 是一个澄清问题。面试里建议先给定义，再讲流程、取舍和风险。"
             f"请你继续回答当前题目：{active_question}"
         )
-        return self._safe_invoke(messages, fallback=fallback)
+        return messages, fallback
 
     def _system_prompt(self) -> str:
         context = self.config.to_prompt_context()
@@ -357,6 +425,20 @@ class LangChainInterviewHarness(BaseInterviewHarness):
                 return "\n".join(parts).strip()
         return str(content).strip()
 
+    def _content_to_delta(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+            if parts:
+                return "".join(parts)
+        return str(content) if content is not None else ""
+
     def _safe_invoke(self, messages: list[Any], fallback: str) -> HarnessResult:
         try:
             response = self.llm.invoke(messages)
@@ -369,6 +451,37 @@ class LangChainInterviewHarness(BaseInterviewHarness):
             )
         except Exception:
             checked = self.guardrails.check_model_output(fallback)
+            return HarnessResult(text=checked.text, findings=checked.findings, fallback_used=True)
+
+    def _safe_stream(
+        self,
+        messages: list[Any],
+        *,
+        fallback: str,
+        on_delta: Callable[[str], None],
+    ) -> HarnessResult:
+        chunks: list[Any] = []
+        parts: list[str] = []
+        try:
+            for chunk in self.llm.stream(messages):
+                chunks.append(chunk)
+                delta = self._content_to_delta(getattr(chunk, "content", ""))
+                if delta:
+                    parts.append(delta)
+                    on_delta(delta)
+            raw_text = "".join(parts)
+            if not raw_text.strip():
+                raise RuntimeError("stream returned empty content")
+            checked = self.guardrails.check_model_output(raw_text)
+            return HarnessResult(
+                text=checked.text,
+                findings=checked.findings,
+                usage=_extract_stream_token_usage(chunks),
+            )
+        except Exception:
+            checked = self.guardrails.check_model_output(fallback)
+            if checked.text:
+                on_delta(checked.text)
             return HarnessResult(text=checked.text, findings=checked.findings, fallback_used=True)
 
     def _fallback_message(self, stage: InterviewStage, state: InterviewState) -> str:
@@ -420,6 +533,14 @@ def _extract_token_usage(response: Any) -> TokenUsage | None:
             usage = _usage_from_mapping(nested)
             if usage is not None:
                 return usage
+    return None
+
+
+def _extract_stream_token_usage(chunks: list[Any]) -> TokenUsage | None:
+    for chunk in reversed(chunks):
+        usage = _extract_token_usage(chunk)
+        if usage is not None:
+            return usage
     return None
 
 

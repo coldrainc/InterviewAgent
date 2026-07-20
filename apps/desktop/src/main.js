@@ -8,6 +8,7 @@ const RENDERER_DEV_URL = process.env.INTERVIEW_RENDERER_DEV_URL;
 const API_RETRY_COUNT = 8;
 const API_RETRY_DELAY_MS = 350;
 const APP_ICON_PATH = path.join(__dirname, "assets", "app-icon.png");
+const streamControllers = new Map();
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -266,6 +267,32 @@ ipcMain.handle("api:send-message", async (_event, payload) => {
   });
 });
 
+ipcMain.handle("api:stream-message", async (event, payload) => {
+  const streamId = payload?.streamId;
+  if (!streamId) {
+    throw new Error("stream id missing");
+  }
+  return requestEventStream(
+    `/sessions/${payload.sessionId}/stream`,
+    {
+      method: "POST",
+      body: JSON.stringify({ message: payload.message })
+    },
+    (streamEvent) => {
+      event.sender.send("api:stream-event", streamId, streamEvent);
+    },
+    streamId
+  );
+});
+
+ipcMain.handle("api:stream-cancel", async (_event, streamId) => {
+  const controller = streamControllers.get(streamId);
+  if (controller) {
+    controller.abort();
+  }
+  return { ok: true };
+});
+
 function parseQuestionBankFile(filename, text) {
   const cleanedText = String(text || "").trim();
   if (!cleanedText) {
@@ -425,6 +452,93 @@ async function requestJson(route, options = {}, attempt = 0) {
       return requestJson(route, options, attempt + 1);
     }
     throw new Error(formatApiError(error));
+  }
+}
+
+async function requestEventStream(route, options = {}, onEvent, streamId) {
+  const controller = new AbortController();
+  streamControllers.set(streamId, controller);
+  try {
+    const headers = { "Content-Type": "application/json", Accept: "text/event-stream", ...(options.headers || {}) };
+    if (apiToken) {
+      headers.Authorization = `Bearer ${apiToken}`;
+    }
+    const response = await fetch(`${API_BASE_URL}${route}`, {
+      ...options,
+      headers,
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+    }
+    if (!response.body) {
+      throw new Error("当前运行环境不支持流式响应。");
+    }
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let buffer = "";
+    let finalPayload = null;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() || "";
+      for (const chunk of chunks) {
+        const streamEvent = parseSseChunk(chunk);
+        if (!streamEvent) continue;
+        onEvent?.(streamEvent);
+        if (streamEvent.event === "message.error") {
+          throw new Error(streamEvent.data?.message || "流式生成失败。");
+        }
+        if (streamEvent.event === "message.done") {
+          finalPayload = streamEvent.data;
+        }
+      }
+    }
+    if (buffer.trim()) {
+      const streamEvent = parseSseChunk(buffer);
+      if (streamEvent) {
+        onEvent?.(streamEvent);
+        if (streamEvent.event === "message.error") {
+          throw new Error(streamEvent.data?.message || "流式生成失败。");
+        }
+        if (streamEvent.event === "message.done") {
+          finalPayload = streamEvent.data;
+        }
+      }
+    }
+    return finalPayload || {};
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const stoppedError = new Error("请求已停止。");
+      stoppedError.name = "AbortError";
+      throw stoppedError;
+    }
+    throw new Error(formatApiError(error));
+  } finally {
+    streamControllers.delete(streamId);
+  }
+}
+
+function parseSseChunk(chunk) {
+  let event = "message";
+  const dataLines = [];
+  for (const line of chunk.split("\n")) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+  if (!dataLines.length) return null;
+  const rawData = dataLines.join("\n");
+  try {
+    return { event, data: JSON.parse(rawData) };
+  } catch (_error) {
+    return { event, data: { message: rawData } };
   }
 }
 

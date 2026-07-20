@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal
+from queue import Empty, Queue
 from urllib.parse import parse_qs
 from uuid import uuid4
 
@@ -1425,11 +1426,19 @@ def create_app(
                 session.model_id,
                 len(message_request.message),
             )
+            yield _sse("stream.ready", {"request_id": request_id, "session_id": session_id})
             yield _sse("tool.notice", {"message": "开始分析回答。"})
             previous_state = session.loop.state.model_copy(deep=True)
             llm_started = time.perf_counter()
-            heartbeat_interval_seconds = 5
+            heartbeat_interval_seconds = 3
             heartbeat_count = 0
+            delta_count = 0
+            delta_queue: Queue[str] = Queue()
+
+            def publish_delta(text: str) -> None:
+                if text:
+                    delta_queue.put(text)
+
             logger.info(
                 "stream_llm_start request_id=%s session_id=%s model_id=%s turn_count=%s",
                 request_id,
@@ -1437,12 +1446,27 @@ def create_app(
                 session.model_id,
                 len(previous_state.turns),
             )
-            llm_task = asyncio.create_task(asyncio.to_thread(session.loop.step, message_request.message))
+            llm_task = asyncio.create_task(
+                asyncio.to_thread(session.loop.step_stream, message_request.message, publish_delta)
+            )
             try:
-                while not llm_task.done():
-                    await asyncio.sleep(heartbeat_interval_seconds)
+                while True:
+                    while True:
+                        try:
+                            delta = delta_queue.get_nowait()
+                        except Empty:
+                            break
+                        delta_count += 1
+                        if not await http_request.is_disconnected():
+                            yield _sse("message.delta", {"text": delta})
                     if llm_task.done():
                         break
+                    try:
+                        await asyncio.wait_for(asyncio.shield(llm_task), timeout=heartbeat_interval_seconds)
+                    except asyncio.TimeoutError:
+                        pass
+                    if llm_task.done():
+                        continue
                     heartbeat_count += 1
                     elapsed_seconds = round(time.perf_counter() - llm_started, 1)
                     disconnected = await http_request.is_disconnected()
@@ -1462,8 +1486,16 @@ def create_app(
                                 "elapsed_seconds": elapsed_seconds,
                             },
                         )
+                while True:
+                    try:
+                        delta = delta_queue.get_nowait()
+                    except Empty:
+                        break
+                    delta_count += 1
+                    if not await http_request.is_disconnected():
+                        yield _sse("message.delta", {"text": delta})
                 result = await llm_task
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "stream_llm_error request_id=%s session_id=%s model_id=%s duration_ms=%s",
                     request_id,
@@ -1471,9 +1503,18 @@ def create_app(
                     session.model_id,
                     round((time.perf_counter() - llm_started) * 1000, 2),
                 )
-                raise
+                if not await http_request.is_disconnected():
+                    yield _sse(
+                        "message.error",
+                        {
+                            "message": "模型生成失败，请稍后重试。",
+                            "detail": str(exc)[:240],
+                            "request_id": request_id,
+                        },
+                    )
+                return
             logger.info(
-                "stream_llm_done request_id=%s session_id=%s model_id=%s duration_ms=%s fallback_used=%s completed=%s heartbeats=%s",
+                "stream_llm_done request_id=%s session_id=%s model_id=%s duration_ms=%s fallback_used=%s completed=%s heartbeats=%s deltas=%s",
                 request_id,
                 session_id,
                 session.model_id,
@@ -1481,6 +1522,7 @@ def create_app(
                 result.fallback_used,
                 result.state.completed,
                 heartbeat_count,
+                delta_count,
             )
             client_disconnected = await http_request.is_disconnected()
             if client_disconnected:

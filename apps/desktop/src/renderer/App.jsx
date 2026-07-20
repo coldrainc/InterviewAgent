@@ -710,6 +710,7 @@ function App() {
         signal
       });
     }
+    let streamedText = "";
     try {
       return await api.streamMessage(
         {
@@ -719,7 +720,13 @@ function App() {
         },
         (event) => {
           if (event.event === "tool.notice" && event.data?.message) {
-            updateMessage(agentMessageId, { text: event.data.message });
+            if (!streamedText) {
+              updateMessage(agentMessageId, { text: event.data.message });
+            }
+          }
+          if (event.event === "message.delta" && event.data?.text) {
+            streamedText += event.data.text;
+            updateMessage(agentMessageId, { text: streamedText });
           }
           if (event.event === "guardrail.notice" && event.data?.message) {
             appendMessage("system", `Harness 护栏：${event.data.message}`);
