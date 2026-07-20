@@ -90,6 +90,13 @@ function hasPendingCachedMessage(messages) {
   ));
 }
 
+function shouldUseCachedMessages(cachedMessages, restoredMessages) {
+  if (!cachedMessages.length) return false;
+  if (hasPendingCachedMessage(cachedMessages)) return false;
+  if (restoredMessages.length > cachedMessages.length) return false;
+  return true;
+}
+
 function App() {
   const [screen, setScreen] = useState("chat");
   const [health, setHealth] = useState({ status: "checking" });
@@ -438,7 +445,7 @@ function App() {
     setSessionId(detail.id);
     setLastSessionId(detail.id);
     setCompleted(detail.status === "completed");
-    setMessages(cachedMessages.length && !hasPendingCachedMessage(cachedMessages) ? cachedMessages : restoredMessages);
+    setMessages(shouldUseCachedMessages(cachedMessages, restoredMessages) ? cachedMessages : restoredMessages);
     return detail;
   }
 
@@ -556,6 +563,7 @@ function App() {
         turnIndex: response.turn_index || null
       });
       setCompleted(Boolean(response.completed));
+      await refreshSessionMessagesFromServer(activeSessionId);
       await loadAccount();
       loadSessionHistory();
     } catch (error) {
@@ -630,6 +638,21 @@ function App() {
         }
         throw fallbackError;
       }
+    }
+  }
+
+  async function refreshSessionMessagesFromServer(targetSessionId) {
+    if (!targetSessionId) return;
+    try {
+      const detail = await api.getSession(targetSessionId);
+      const restoredMessages = turnsToMessages(detail.turns || [], detail.mode);
+      setSessionId(detail.id);
+      setLastSessionId(detail.id);
+      setCompleted(detail.status === "completed");
+      setMessages(restoredMessages);
+      setCachedSessionMessages(detail.id, restoredMessages);
+    } catch (_error) {
+      // The optimistic message already rendered; leave it in place if a read-back fails.
     }
   }
 
