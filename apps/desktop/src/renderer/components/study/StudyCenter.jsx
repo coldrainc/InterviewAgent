@@ -7,6 +7,10 @@ const subjectOptions = [
   { value: "project", label: "项目深挖" },
   { value: "system_design", label: "系统设计" },
   { value: "algorithm", label: "算法 / 数据结构" },
+  { value: "backend", label: "后端工程" },
+  { value: "frontend", label: "前端工程" },
+  { value: "database", label: "数据库" },
+  { value: "security", label: "应用安全" },
   { value: "rag", label: "RAG" },
   { value: "agent_harness", label: "Agent Harness" },
   { value: "agentops", label: "AgentOps" },
@@ -16,6 +20,8 @@ const subjectOptions = [
   { value: "async_workflow", label: "异步工作流" },
   { value: "long_running_tasks", label: "长任务执行平台" },
   { value: "evaluation", label: "质量评估" },
+  { value: "behavioral", label: "行为面试" },
+  { value: "communication", label: "沟通协作" },
   { value: "xingce", label: "行测" },
   { value: "shenlun", label: "申论" },
   { value: "interview", label: "结构化面试" }
@@ -23,7 +29,7 @@ const subjectOptions = [
 
 const categoryOptions = [
   { value: "", label: "全部类型" },
-  { value: "internet", label: "互联网" },
+  { value: "internet", label: "互联网面试" },
   { value: "ai_engineering", label: "AI 工程" },
   { value: "civil_service", label: "考公" },
   { value: "interview", label: "通用面试" }
@@ -39,6 +45,7 @@ export function StudyCenter({
 }) {
   const questions = studyState.questions?.items || [];
   const total = studyState.questions?.total || 0;
+  const categories = normalizeCategoryOptions(studyState.categories);
   return (
     <section className="study-center">
       <div className="study-hero">
@@ -50,6 +57,20 @@ export function StudyCenter({
         <div className="setup-hero-actions">
           <button type="button" className="secondary-action inline" onClick={onBack}>返回工作台</button>
         </div>
+      </div>
+
+      <div className="practice-category-tabs" aria-label="刷题类型">
+        {categories.map((item) => (
+          <button
+            key={item.value || "all"}
+            type="button"
+            className={studyFilters.category === item.value ? "active" : ""}
+            onClick={() => onFilterChange({ category: item.value, subject: "" })}
+          >
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </button>
+        ))}
       </div>
 
       <div className="study-grid">
@@ -93,7 +114,7 @@ export function StudyCenter({
             <label>
               <span>训练类型</span>
               <select value={studyFilters.category} onChange={(event) => onFilterChange({ category: event.target.value })}>
-                {categoryOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                {categories.map((item) => <option key={item.value || "all"} value={item.value}>{item.label}</option>)}
               </select>
             </label>
             <label>
@@ -124,7 +145,7 @@ export function StudyCenter({
           {studyState.error && <p className="resume-hint error">{studyState.error}</p>}
           {studyState.seedMessage && <p className="resume-hint success">{studyState.seedMessage}</p>}
           {studyState.importMessage && <p className="resume-hint success">{studyState.importMessage}</p>}
-          <p className="resume-hint">当前筛选共 {total} 道题，已包含系统默认题库。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
+          <p className="resume-hint">当前筛选共 {total} 道题，已包含互联网、AI 工程、考公和通用面试默认题库。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
           <div className="question-list">
             {questions.length ? questions.map((question) => (
               <QuestionCard key={question.id} question={question} />
@@ -176,4 +197,25 @@ function QuestionCard({ question }) {
 
 function categoryLabel(value) {
   return categoryOptions.find((item) => item.value === value)?.label || value || "通用";
+}
+
+function normalizeCategoryOptions(categories) {
+  const backendOptions = Array.isArray(categories) ? categories : [];
+  const merged = [
+    { value: "", label: "全部类型", description: "混合查看所有默认题和自定义题。" },
+    ...backendOptions.map((item) => ({
+      value: item.value || "",
+      label: item.label || categoryLabel(item.value),
+      description: item.description || ""
+    }))
+  ];
+  const seen = new Set();
+  const source = merged.length > 1
+    ? merged
+    : categoryOptions.map((item) => ({ ...item, description: item.value ? "按该类型查看默认题和上传题。" : "混合查看所有题。" }));
+  return source.filter((item) => {
+    if (seen.has(item.value)) return false;
+    seen.add(item.value);
+    return true;
+  });
 }

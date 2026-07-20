@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld("interviewAgent", {
   seedCivilServiceQuestions: () => ipcRenderer.invoke("civil-service:seed"),
   importCivilServiceQuestionBank: () => ipcRenderer.invoke("civil-service:import-file"),
   getPracticeLearningPlan: () => ipcRenderer.invoke("practice:learning-plan"),
+  listPracticeCategories: () => ipcRenderer.invoke("practice:categories"),
   listPracticeQuestions: (filters) => ipcRenderer.invoke("practice:questions", filters),
   seedPracticeQuestions: () => ipcRenderer.invoke("practice:seed"),
   importPracticeQuestionBank: () => ipcRenderer.invoke("practice:import-file"),

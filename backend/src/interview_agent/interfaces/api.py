@@ -34,7 +34,12 @@ from interview_agent.interfaces.cli import (
 from interview_agent.core.config import CandidateProfile, InterviewConfig, InterviewMode, InterviewStage
 from interview_agent.core.industry import Industry, industry_options
 from interview_agent.domain.billing import DEFAULT_CHAT_MODEL, micros_to_credits
-from interview_agent.domain.civil_service import CIVIL_SERVICE_LEARNING_PLAN, CIVIL_SERVICE_SEED_QUESTIONS
+from interview_agent.domain.civil_service import (
+    CIVIL_SERVICE_SEED_QUESTIONS,
+    DEFAULT_PRACTICE_QUESTIONS,
+    PRACTICE_CATEGORIES,
+    PRACTICE_LEARNING_PLAN,
+)
 from interview_agent.infrastructure.auth_providers import AuthProviderError, exchange_wechat_code
 from interview_agent.infrastructure.codex_config import load_codex_model_config
 from interview_agent.infrastructure.db.session import (
@@ -1079,7 +1084,7 @@ def create_app(
         context: RequestContext = Depends(request_context),
     ) -> list[dict]:
         _require_authenticated(context)
-        return CIVIL_SERVICE_LEARNING_PLAN
+        return PRACTICE_LEARNING_PLAN
 
     @app.get("/practice/learning-plan")
     async def practice_learning_plan(
@@ -1092,6 +1097,13 @@ def create_app(
         context: RequestContext = Depends(request_context),
     ) -> list[dict]:
         return await _practice_learning_plan(context)
+
+    @app.get("/practice/categories")
+    async def practice_categories(
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        return PRACTICE_CATEGORIES
 
     async def _list_practice_questions(
         category: str | None = None,
@@ -1176,6 +1188,7 @@ def create_app(
         return await _import_practice_questions(request, context)
 
     async def _seed_practice_questions(
+        questions: list[dict] | None = None,
         context: RequestContext = Depends(request_context),
     ) -> ImportResultResponse:
         _require_authenticated(context)
@@ -1184,20 +1197,20 @@ def create_app(
                 db,
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
-            ).upsert_many(CIVIL_SERVICE_SEED_QUESTIONS)
+            ).upsert_many(questions or DEFAULT_PRACTICE_QUESTIONS)
         return ImportResultResponse(**result)
 
     @app.post("/practice/questions/seed", response_model=ImportResultResponse)
     async def seed_practice_questions(
         context: RequestContext = Depends(request_context),
     ) -> ImportResultResponse:
-        return await _seed_practice_questions(context)
+        return await _seed_practice_questions(DEFAULT_PRACTICE_QUESTIONS, context)
 
     @app.post("/civil-service/questions/seed", response_model=ImportResultResponse)
     async def seed_civil_service_questions(
         context: RequestContext = Depends(request_context),
     ) -> ImportResultResponse:
-        return await _seed_practice_questions(context)
+        return await _seed_practice_questions(CIVIL_SERVICE_SEED_QUESTIONS, context)
 
     @app.post("/jobs")
     async def create_job(

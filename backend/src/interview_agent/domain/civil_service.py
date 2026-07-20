@@ -3,7 +3,45 @@ from __future__ import annotations
 from typing import Any
 
 
-CIVIL_SERVICE_LEARNING_PLAN: list[dict[str, Any]] = [
+PRACTICE_CATEGORIES: list[dict[str, Any]] = [
+    {
+        "value": "internet",
+        "label": "互联网面试",
+        "description": "后端、前端、系统设计、算法、数据库、稳定性和项目深挖。",
+        "subjects": ["project", "system_design", "algorithm", "backend", "frontend", "database", "security"],
+    },
+    {
+        "value": "ai_engineering",
+        "label": "AI 工程",
+        "description": "RAG、Agent Harness、AgentOps、搜索、多 Agent、工作流、长任务和质量评估。",
+        "subjects": [
+            "rag",
+            "agent_harness",
+            "agentops",
+            "search",
+            "multi_agent",
+            "workflow",
+            "async_workflow",
+            "long_running_tasks",
+            "evaluation",
+        ],
+    },
+    {
+        "value": "civil_service",
+        "label": "考公",
+        "description": "行测、申论、结构化面试和材料分析。",
+        "subjects": ["xingce", "shenlun", "interview"],
+    },
+    {
+        "value": "interview",
+        "label": "通用面试",
+        "description": "自我介绍、行为面试、沟通协作、职业规划和压力面。",
+        "subjects": ["general", "behavioral", "communication"],
+    },
+]
+
+
+PRACTICE_LEARNING_PLAN: list[dict[str, Any]] = [
     {
         "stage": "基础诊断",
         "title": "先确定训练类型和能力短板",
@@ -29,6 +67,8 @@ CIVIL_SERVICE_LEARNING_PLAN: list[dict[str, Any]] = [
         "tasks": ["每周至少一次限时训练", "错题 24 小时内复做", "建立高频考点和易错方法清单"],
     },
 ]
+
+CIVIL_SERVICE_LEARNING_PLAN = PRACTICE_LEARNING_PLAN
 
 
 CIVIL_SERVICE_SEED_QUESTIONS: list[dict[str, Any]] = [
@@ -105,6 +145,108 @@ INTERNET_SEED_QUESTIONS: list[dict[str, Any]] = [
         "explanation": "项目深挖题要体现真实工程经验，回答里最好有指标、个人职责、关键判断和复盘闭环。",
         "difficulty": "medium",
         "tags": ["项目深挖", "线上故障", "稳定性", "STAR"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网后端面试训练样题",
+        "subject": "backend",
+        "question_type": "后端工程",
+        "prompt": "一个接口偶发超时，你会如何从客户端、网关、应用、数据库、缓存和第三方依赖逐层定位？请说明你会看哪些指标和日志。",
+        "choices": [],
+        "answer": "从请求链路、trace id、网关耗时、应用日志、慢 SQL、缓存命中率、线程池/连接池、第三方耗时和错误率逐层排查。",
+        "explanation": "后端排障题重点是链路化定位，而不是只说看日志。最好能讲出指标、证据和止血手段。",
+        "difficulty": "medium",
+        "tags": ["后端", "排障", "链路追踪", "性能"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网前端面试训练样题",
+        "subject": "frontend",
+        "question_type": "前端工程",
+        "prompt": "首屏加载很慢，你会如何优化？请从资源体积、缓存、网络、渲染、代码拆分和监控指标说明。",
+        "choices": [],
+        "answer": "可以从 bundle 分析、懒加载、CDN、HTTP 缓存、图片优化、SSR/预渲染、减少阻塞脚本、LCP/FCP/INP 指标监控回答。",
+        "explanation": "前端性能题要结合用户体验指标和工程手段，避免只回答压缩代码。",
+        "difficulty": "medium",
+        "tags": ["前端", "性能优化", "首屏", "监控"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网数据库面试训练样题",
+        "subject": "database",
+        "question_type": "数据库设计",
+        "prompt": "订单表数据量很大，查询变慢。你会如何设计索引、分库分表、冷热分层和归档策略？",
+        "choices": [],
+        "answer": "需要结合查询模式设计联合索引，评估分页方式、读写分离、分区/分表、冷热数据、归档任务和迁移风险。",
+        "explanation": "数据库题不能只说加索引，要结合业务查询、写入成本、数据生命周期和运维复杂度。",
+        "difficulty": "hard",
+        "tags": ["数据库", "索引", "分表", "归档"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网算法面试训练样题",
+        "subject": "algorithm",
+        "question_type": "算法思维",
+        "prompt": "给定一个字符串，找出不含重复字符的最长子串长度。请说明滑动窗口思路、复杂度和边界情况。",
+        "choices": [],
+        "answer": "使用左右指针和哈希表记录字符最近位置，遇到重复字符移动左边界，时间复杂度 O(n)，空间复杂度 O(k)。",
+        "explanation": "算法题面试时要先讲清楚状态、窗口移动条件、复杂度，再写代码。",
+        "difficulty": "medium",
+        "tags": ["算法", "滑动窗口", "哈希表"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "internet",
+        "exam_year": 2026,
+        "exam_name": "互联网安全面试训练样题",
+        "subject": "security",
+        "question_type": "应用安全",
+        "prompt": "你会如何防止登录接口被撞库和暴力破解？请从限流、验证码、设备指纹、风控、告警和用户体验说明。",
+        "choices": [],
+        "answer": "可设计账号/IP/设备维度限流、失败次数策略、验证码/二次验证、风险评分、黑名单、审计日志、告警和渐进式拦截。",
+        "explanation": "安全题要体现纵深防御和误伤控制，不能只靠单一验证码。",
+        "difficulty": "hard",
+        "tags": ["安全", "风控", "限流", "登录"],
+    },
+]
+
+
+INTERVIEW_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "interview",
+        "exam_year": 2026,
+        "exam_name": "通用面试训练样题",
+        "subject": "behavioral",
+        "question_type": "行为面试",
+        "prompt": "请讲一个你和他人意见不一致但最终推动事情落地的案例。你如何沟通、取舍和复盘？",
+        "choices": [],
+        "answer": "可以用 STAR 结构回答，突出目标一致、事实依据、方案比较、沟通动作、结果和复盘。",
+        "explanation": "行为面试题要避免泛泛而谈，需要讲真实冲突、个人动作和可验证结果。",
+        "difficulty": "medium",
+        "tags": ["行为面试", "沟通协作", "STAR"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "interview",
+        "exam_year": 2026,
+        "exam_name": "通用面试训练样题",
+        "subject": "general",
+        "question_type": "自我介绍",
+        "prompt": "请做一个 2 分钟自我介绍，要求结合目标岗位突出你的项目经验、核心能力和求职动机。",
+        "choices": [],
+        "answer": "建议按背景、核心项目、能力标签、岗位匹配和动机收尾组织。",
+        "explanation": "自我介绍要服务于目标岗位，重点不是简历流水账，而是建立面试官继续追问的线索。",
+        "difficulty": "easy",
+        "tags": ["自我介绍", "岗位匹配", "表达"],
     },
 ]
 
@@ -257,4 +399,5 @@ DEFAULT_PRACTICE_QUESTIONS: list[dict[str, Any]] = [
     *INTERNET_SEED_QUESTIONS,
     *AI_ENGINEERING_SEED_QUESTIONS,
     *CIVIL_SERVICE_SEED_QUESTIONS,
+    *INTERVIEW_SEED_QUESTIONS,
 ]

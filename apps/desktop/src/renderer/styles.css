@@ -1193,6 +1193,48 @@ button {
   grid-column: 1 / -1;
 }
 
+.practice-category-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.practice-category-tabs button {
+  min-height: 88px;
+  border: 1px solid #d9e5df;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  text-align: left;
+  color: var(--text);
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.practice-category-tabs button:hover,
+.practice-category-tabs button.active {
+  border-color: rgba(47, 99, 232, 0.48);
+  background: #eef5ff;
+  box-shadow: 0 8px 18px rgba(47, 99, 232, 0.08);
+}
+
+.practice-category-tabs strong {
+  color: #12302a;
+}
+
+.practice-category-tabs span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .learning-plan {
   display: grid;
   gap: 10px;
@@ -2096,6 +2138,10 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .practice-category-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ops-row {
     grid-template-columns: 1fr;
   }
@@ -2169,6 +2215,10 @@ button {
   }
 
   .field-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-category-tabs {
     grid-template-columns: 1fr;
   }
 

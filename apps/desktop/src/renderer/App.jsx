@@ -118,6 +118,7 @@ function App() {
   const [studyState, setStudyState] = useState({
     status: "idle",
     plan: [],
+    categories: [],
     questions: { items: [], total: 0, limit: 30, offset: 0 },
     importMessage: "",
     seedMessage: ""
@@ -450,8 +451,9 @@ function App() {
     if (!getLearningPlan || !listQuestions) return;
     try {
       setStudyState((current) => ({ ...current, status: "loading", error: "" }));
-      const [plan, questions] = await Promise.all([
+      const [plan, categories, questions] = await Promise.all([
         getLearningPlan(),
+        api.listPracticeCategories ? api.listPracticeCategories() : Promise.resolve([]),
         listQuestions({
           category: studyFilters.category,
           year: studyFilters.year.trim(),
@@ -465,6 +467,7 @@ function App() {
         ...current,
         status: "idle",
         plan: Array.isArray(plan) ? plan : [],
+        categories: Array.isArray(categories) ? categories : [],
         questions: questions || { items: [], total: 0, limit: 30, offset: 0 }
       }));
     } catch (error) {

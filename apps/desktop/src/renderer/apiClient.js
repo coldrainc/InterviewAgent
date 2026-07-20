@@ -395,6 +395,7 @@ const browserClient = {
   },
   listModels: () => requestJson("/metadata/models"),
   getPracticeLearningPlan: () => requestJson("/practice/learning-plan"),
+  listPracticeCategories: () => requestJson("/practice/categories"),
   listJobs: () => requestJson("/jobs"),
   getJob: (jobId) => requestJson(`/jobs/${encodeURIComponent(jobId)}`),
   createJob: (payload) =>

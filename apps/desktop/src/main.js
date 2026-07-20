@@ -70,6 +70,10 @@ ipcMain.handle("practice:learning-plan", async () => {
   return requestJson("/practice/learning-plan");
 });
 
+ipcMain.handle("practice:categories", async () => {
+  return requestJson("/practice/categories");
+});
+
 ipcMain.handle("practice:questions", async (_event, filters = {}) => {
   const params = new URLSearchParams();
   if (filters.category) params.set("category", filters.category);
@@ -530,6 +534,13 @@ function normalizeSubject(value) {
   const aliases = {
     "项目深挖": "project",
     "系统设计": "system_design",
+    "后端": "backend",
+    "后端工程": "backend",
+    "前端": "frontend",
+    "前端工程": "frontend",
+    "数据库": "database",
+    "应用安全": "security",
+    "安全": "security",
     "算法": "algorithm",
     "数据结构": "algorithm",
     "agent harness": "agent_harness",
@@ -548,6 +559,8 @@ function normalizeSubject(value) {
     "长任务执行平台": "long_running_tasks",
     "质量评估": "evaluation",
     "评估": "evaluation",
+    "行为面试": "behavioral",
+    "沟通协作": "communication",
     "行测": "xingce",
     "申论": "shenlun",
     "结构化面试": "interview"
