@@ -294,7 +294,11 @@ async function executeEventStreamRequest(route, options = {}, onEvent, attempt =
       options.signal.addEventListener("abort", abortFromExternalSignal, { once: true });
     }
   }
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  let timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const resetTimeout = () => {
+    window.clearTimeout(timeout);
+    timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  };
   try {
     const response = await fetch(url, {
       method,
