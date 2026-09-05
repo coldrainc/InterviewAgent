@@ -83,6 +83,17 @@ struct AccountView: View {
             InfoRow(label: "用户", value: viewModel.account?.userID ?? "-")
             InfoRow(label: "平台", value: viewModel.account?.platform ?? "-")
             InfoRow(label: "服务", value: viewModel.healthText)
+            InfoRow(label: "默认模式", value: viewModel.settings?.defaultInterviewMode == "candidate" ? "Agent 回答我" : "Agent 面试我")
+            HStack(spacing: 8) {
+                Button("默认面试我") {
+                    Task { await viewModel.updateDefaultMode(.interviewer) }
+                }
+                .buttonStyle(.bordered)
+                Button("默认回答我") {
+                    Task { await viewModel.updateDefaultMode(.candidate) }
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .cardStyle()
     }

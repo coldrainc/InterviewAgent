@@ -1,0 +1,140 @@
+name: Harness CI / PR Gate
+
+# 触发：PR 同步触发 test 门禁；main 合入触发 image 构建
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+
+env:
+  REGISTRY: ${{ secrets.HARBOR_REGISTRY || 'registry.example.com/ai' }}
+  IMAGE_NAME: workflow-harness
+  MONGO_URI: mongodb://root:test@127.0.0.1:27017/harness?authSource=admin&directConnection=true
+  JWT_SECRET: test-jwt-secret-please-change-xxxxxxxxxxxx
+  LLM_API_KEY: ""                         # 留空：CI 走 dummy LLM 模式，无需真 key
+  OTEL_ENABLED: "false"
+  ENV: test
+
+jobs:
+  # ============================================================
+  # lint + typecheck + 单测
+  # ============================================================
+  lint-test:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: demos/workflow-harness-production}}
+    services:
+      mongo:
+        image: mongo:7
+        env: {MONGO_INITDB_ROOT_USERNAME: root, MONGO_INITDB_ROOT_PASSWORD: test}
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install poetry & deps
+        run: |
+          pip install -U pip poetry
+          poetry install --no-interaction
+      - name: Ruff
+        run: poetry run ruff check app/ || true  # PR 阶段不阻断，只提示
+      - name: MyPy
+        run: poetry run mypy app || true
+      - name: Seed scenarios + Smoke test harness gate
+        run: |
+          # 1) 从 demo scenarios 导入
+          poetry run python -m app.scripts.seed_scenarios ../../../demos/workflow-harness/scenarios/*.yml || true
+          # 2) 直接调 run_manager 跑 2 条 scenario
+          cat > /tmp/ci_gate.py <<'PY'
+          import asyncio, json
+          from app.main import create_app  # 初始化 lifespan 外依赖
+          from app.services.run_manager import RunManager
+          async def main():
+              # 手动过一遍初始化（因为没起 uvicorn lifespan）
+              from motor.motor_asyncio import AsyncIOMotorClient
+              from beanie import init_beanie
+              from app.models.mongo import ScenarioDoc,RunDoc,SpanDoc,BaselineDoc,AnalyzerFindingDoc,AuditLogDoc
+              from app.config import get_settings
+              s=get_settings()
+              c=AsyncIOMotorClient(s.MONGO_URI.get_secret_value())
+              await init_beanie(database=getattr(c, s.MONGO_DB_NAME),
+                  document_models=[ScenarioDoc,RunDoc,SpanDoc,BaselineDoc,AnalyzerFindingDoc,AuditLogDoc])
+              rm=RunManager(settings=s)
+              # 创建 v1 baseline
+              from app.models.mongo import BaselineDoc as BD
+              base=BD(baseline_id="default", version="ci-v1",
+                      metrics={"task_success_rate":0.80, "tool_selection_acc":0.80,
+                                "3d_overall":0.50, "total_cost_usd":999.0, "tool_error_rate":0.10},
+                      scenario_count=2, note="ci baseline")
+              await base.insert()
+              for sid in ["diag-sandbox-toml-damage", "rag-business-qa"]:
+                  r=await rm.run_scenario(scenario_id=sid, gate_level="test", triggered_by="ci")
+                  print(json.dumps({"scenario":sid, "passed":r.gate_passed, "reasons":r.gate_reasons,
+                                    "metrics":{k:r.metrics.get(k) for k in ["task_success_rate","tool_selection_acc","3d_overall","total_cost_usd","tool_error_rate"]}}, ensure_ascii=False))
+          asyncio.run(main())
+          PY
+          poetry run python /tmp/ci_gate.py
+
+  # ============================================================
+  # 构建 & 推送镜像（push 到 main 时）
+  # ============================================================
+  build-and-push:
+    needs: lint-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: demos/workflow-harness-production}}
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASS }}
+      - id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+      - name: Build & Push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: demos/workflow-harness-production
+          file:    demos/workflow-harness-production/infra/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+      - id: meta-worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build & Push Worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: demos/workflow-harness-production
+          file:    demos/workflow-harness-production/infra/Dockerfile.worker
+          push: true
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ============================================================
+  # （可选）Nightly：每天凌晨 02:00 跑全量 + HTML 报告 + Slack
+  #  （建议单独建一个 .github/workflows/harness-nightly.yml）
+  # ============================================================

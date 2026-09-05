@@ -1,5 +1,6 @@
 package com.interviewagent.data
 
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -41,6 +42,17 @@ class InterviewApiClient(
         return parseAccount(request("/account"))
     }
 
+    fun settings(): UserSettingsResponse {
+        val json = JSONObject(request("/settings"))
+        return UserSettingsResponse(defaultInterviewMode = json.optString("default_interview_mode", "interviewer"))
+    }
+
+    fun updateDefaultInterviewMode(mode: String): UserSettingsResponse {
+        val body = JSONObject().put("default_interview_mode", mode)
+        val json = JSONObject(request("/settings", "PUT", body.toString()))
+        return UserSettingsResponse(defaultInterviewMode = json.optString("default_interview_mode", mode))
+    }
+
     fun recharge(amountCredits: String): AccountResponse {
         val body = JSONObject()
             .put("amount_credits", amountCredits)
@@ -70,6 +82,58 @@ class InterviewApiClient(
         }
     }
 
+    fun listPracticeCategories(): List<PracticeCategory> {
+        val array = JSONArray(request("/practice/categories"))
+        return (0 until array.length()).map { index ->
+            val item = array.getJSONObject(index)
+            PracticeCategory(
+                value = item.optString("value"),
+                label = item.optString("label"),
+                description = item.optString("description"),
+                subjects = item.optJSONArray("subjects").toStringList()
+            )
+        }
+    }
+
+    fun listPracticeQuestions(category: String, limit: Int = 50): PracticeQuestionListResponse {
+        val encoded = URLEncoder.encode(category, StandardCharsets.UTF_8.name())
+        val json = JSONObject(request("/practice/questions?category=$encoded&limit=$limit"))
+        val items = json.optJSONArray("items")
+        return PracticeQuestionListResponse(
+            items = (0 until (items?.length() ?: 0)).map { index -> parsePracticeQuestion(items?.getJSONObject(index) ?: JSONObject()) },
+            total = json.optInt("total"),
+            limit = json.optInt("limit"),
+            offset = json.optInt("offset")
+        )
+    }
+
+    fun seedPracticeQuestions(): ImportResultResponse {
+        val json = JSONObject(request("/practice/questions/seed", "POST"))
+        return ImportResultResponse(
+            created = json.optInt("created"),
+            updated = json.optInt("updated"),
+            total = json.optInt("total")
+        )
+    }
+
+    fun submitPracticeAttempt(questionId: String, answer: String, elapsedSeconds: Int): PracticeAttemptResponse {
+        val body = JSONObject()
+            .put("question_id", questionId)
+            .put("answer", answer)
+            .put("elapsed_seconds", elapsedSeconds)
+        val json = JSONObject(request("/practice/attempt", "POST", body.toString()))
+        return PracticeAttemptResponse(
+            questionId = json.optString("question_id"),
+            correct = if (json.isNull("correct")) null else json.optBoolean("correct"),
+            score = json.optInt("score"),
+            feedback = json.optString("feedback"),
+            referenceAnswer = json.optString("reference_answer"),
+            explanation = json.optString("explanation"),
+            suggestions = json.optJSONArray("suggestions").toStringList(),
+            elapsedSeconds = if (json.isNull("elapsed_seconds")) null else json.optInt("elapsed_seconds")
+        )
+    }
+
     fun createSession(request: CreateSessionRequest): ChatResponse {
         val body = JSONObject()
             .put("offline", request.offline)
@@ -80,7 +144,65 @@ class InterviewApiClient(
             .put("seniority", request.seniority)
             .put("interview_goal", request.interviewGoal)
             .put("focus_areas", JSONArray(request.focusAreas))
+        if (!request.resumeId.isNullOrBlank()) {
+            body.put("resume_id", request.resumeId)
+        }
         return parseChatResponse(request("/sessions", "POST", body.toString()))
+    }
+
+    fun listResumes(): List<ResumeRecord> {
+        val array = JSONArray(request("/resumes"))
+        return (0 until array.length()).map { index -> parseResume(array.getJSONObject(index)) }
+    }
+
+    fun importResume(filename: String, text: String): ResumeRecord {
+        val encoded = Base64.encodeToString(text.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+        val body = JSONObject()
+            .put("filename", filename)
+            .put("content_base64", encoded)
+        return parseResume(JSONObject(request("/resumes", "POST", body.toString())))
+    }
+
+    fun deleteResume(id: String): Boolean {
+        return JSONObject(request("/resumes/$id", "DELETE")).optBoolean("deleted")
+    }
+
+    fun listSessions(limit: Int = 50): List<SessionSummary> {
+        val array = JSONArray(request("/sessions?limit=$limit"))
+        return (0 until array.length()).map { index ->
+            val item = array.getJSONObject(index)
+            SessionSummary(
+                id = item.getString("id"),
+                resumeId = item.optString("resume_id").ifBlank { null },
+                mode = item.optString("mode"),
+                industry = item.optString("industry"),
+                candidateName = item.optString("candidate_name"),
+                targetRole = item.optString("target_role"),
+                seniority = item.optString("seniority"),
+                status = item.optString("status"),
+                createdAt = item.optString("created_at"),
+                updatedAt = item.optString("updated_at")
+            )
+        }
+    }
+
+    fun getSession(id: String): SessionDetail {
+        val json = JSONObject(request("/sessions/$id"))
+        val turns = json.optJSONArray("turns")
+        return SessionDetail(
+            id = json.getString("id"),
+            turns = (0 until (turns?.length() ?: 0)).map { index ->
+                val item = turns?.getJSONObject(index) ?: JSONObject()
+                TurnPayload(
+                    interviewer = item.optString("interviewer").ifBlank { null },
+                    candidate = item.optString("candidate").ifBlank { null }
+                )
+            }
+        )
+    }
+
+    fun deleteSession(id: String): Boolean {
+        return JSONObject(request("/sessions/$id", "DELETE")).optBoolean("deleted")
     }
 
     fun sendMessage(sessionId: String, message: String): ChatResponse {
@@ -118,6 +240,35 @@ class InterviewApiClient(
         )
     }
 
+    private fun parseResume(json: JSONObject): ResumeRecord {
+        return ResumeRecord(
+            id = json.getString("id"),
+            filename = json.optString("filename"),
+            fileType = json.optString("file_type"),
+            summary = json.optString("summary"),
+            text = json.optString("text"),
+            truncated = json.optBoolean("truncated"),
+            createdAt = json.optString("created_at"),
+            updatedAt = json.optString("updated_at")
+        )
+    }
+
+    private fun parsePracticeQuestion(json: JSONObject): PracticeQuestion {
+        return PracticeQuestion(
+            id = json.optString("id"),
+            practiceCategory = json.optString("practice_category"),
+            examYear = json.optInt("exam_year"),
+            examName = json.optString("exam_name"),
+            subject = json.optString("subject"),
+            questionType = json.optString("question_type"),
+            prompt = json.optString("prompt"),
+            choices = json.optJSONArray("choices").toStringList(),
+            answer = json.optString("answer").ifBlank { null },
+            explanation = json.optString("explanation").ifBlank { null },
+            difficulty = json.optString("difficulty")
+        )
+    }
+
     private fun request(path: String, method: String = "GET", body: String? = null): String {
         val connection = URL("$baseUrl$path").openConnection() as HttpURLConnection
         connection.requestMethod = method
@@ -134,9 +285,11 @@ class InterviewApiClient(
 
         val status = connection.responseCode
         val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-        val text = BufferedReader(InputStreamReader(stream, StandardCharsets.UTF_8)).use { reader ->
-            reader.readText()
-        }
+        val text = stream?.let {
+            BufferedReader(InputStreamReader(it, StandardCharsets.UTF_8)).use { reader ->
+                reader.readText()
+            }
+        }.orEmpty()
         if (status !in 200..299) {
             val detail = runCatching { JSONObject(text).optString("detail") }.getOrDefault("")
             throw IllegalStateException(detail.ifBlank { "HTTP $status" })

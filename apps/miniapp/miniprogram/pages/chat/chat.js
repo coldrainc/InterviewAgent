@@ -163,7 +163,7 @@ Page({
   },
 
   openSetupPage() {
-    wx.switchTab({ url: "/pages/setup/setup" });
+    wx.navigateTo({ url: "/pages/setup/setup" });
   },
 
   openHistoryPage() {

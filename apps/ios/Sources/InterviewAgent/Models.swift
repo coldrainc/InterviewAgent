@@ -71,6 +71,14 @@ struct AccountResponse: Codable {
     }
 }
 
+struct UserSettingsResponse: Codable {
+    let defaultInterviewMode: String
+
+    enum CodingKeys: String, CodingKey {
+        case defaultInterviewMode = "default_interview_mode"
+    }
+}
+
 struct IndustryOption: Codable, Identifiable {
     var id: String { value }
     let value: String
@@ -85,6 +93,117 @@ struct IndustryOption: Codable, Identifiable {
         case description
         case productionSignals = "production_signals"
         case recommendedFocusAreas = "recommended_focus_areas"
+    }
+}
+
+struct ResumeRecord: Codable, Identifiable, Equatable {
+    let id: String
+    let filename: String
+    let fileType: String
+    let summary: String
+    let text: String
+    let truncated: Bool
+    let createdAt: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case filename
+        case fileType = "file_type"
+        case summary
+        case text
+        case truncated
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct ResumeImportRequest: Codable {
+    let filename: String
+    let contentBase64: String
+    let sourcePath: String?
+
+    enum CodingKeys: String, CodingKey {
+        case filename
+        case contentBase64 = "content_base64"
+        case sourcePath = "source_path"
+    }
+}
+
+struct PracticeCategory: Codable, Identifiable, Equatable {
+    var id: String { value }
+    let value: String
+    let label: String
+    let description: String
+    let subjects: [String]
+}
+
+struct PracticeQuestion: Codable, Identifiable, Equatable {
+    let id: String
+    let practiceCategory: String
+    let examYear: Int
+    let examName: String
+    let subject: String
+    let questionType: String
+    let prompt: String
+    let choices: [String]
+    let answer: String?
+    let explanation: String?
+    let difficulty: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case practiceCategory = "practice_category"
+        case examYear = "exam_year"
+        case examName = "exam_name"
+        case subject
+        case questionType = "question_type"
+        case prompt
+        case choices
+        case answer
+        case explanation
+        case difficulty
+    }
+}
+
+struct PracticeQuestionListResponse: Codable {
+    let items: [PracticeQuestion]
+    let total: Int
+    let limit: Int
+    let offset: Int
+}
+
+struct PracticeAttemptRequest: Codable {
+    let questionID: String
+    let answer: String
+    let elapsedSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case questionID = "question_id"
+        case answer
+        case elapsedSeconds = "elapsed_seconds"
+    }
+}
+
+struct PracticeAttemptResponse: Codable {
+    let questionID: String
+    let correct: Bool?
+    let score: Int
+    let feedback: String
+    let referenceAnswer: String
+    let explanation: String
+    let suggestions: [String]
+    let elapsedSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case questionID = "question_id"
+        case correct
+        case score
+        case feedback
+        case referenceAnswer = "reference_answer"
+        case explanation
+        case suggestions
+        case elapsedSeconds = "elapsed_seconds"
     }
 }
 
@@ -110,6 +229,58 @@ struct CreateSessionRequest: Codable {
         case focusAreas = "focus_areas"
         case resumeID = "resume_id"
     }
+}
+
+struct SessionSummary: Codable, Identifiable, Equatable {
+    let id: String
+    let resumeID: String?
+    let mode: String
+    let industry: String
+    let candidateName: String
+    let targetRole: String
+    let seniority: String
+    let status: String
+    let createdAt: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case resumeID = "resume_id"
+        case mode
+        case industry
+        case candidateName = "candidate_name"
+        case targetRole = "target_role"
+        case seniority
+        case status
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct SessionDetail: Codable {
+    let id: String
+    let state: InterviewStatePayload
+    let turns: [TurnPayload]
+}
+
+struct InterviewStatePayload: Codable {
+    let completed: Bool?
+}
+
+struct TurnPayload: Codable {
+    let stage: String?
+    let interviewer: String?
+    let candidate: String?
+}
+
+struct DeleteResponse: Codable {
+    let deleted: Bool
+}
+
+struct ImportResultResponse: Codable {
+    let created: Int
+    let updated: Int
+    let total: Int
 }
 
 struct ChatResponse: Codable {

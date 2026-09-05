@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { PanelLeftOpen } from "lucide-react";
 import "./styles.css";
 import { getInterviewAgentClient } from "./apiClient";
 import { fallbackIndustries, fallbackModels, llmModes } from "./constants/interview";
@@ -7,7 +8,11 @@ import Sidebar from "./components/sidebar/Sidebar";
 import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
 import { SettingsCenter } from "./components/settings/SettingsCenter";
 import { SetupCenter } from "./components/setup/SetupCenter";
-import { StudyCenter } from "./components/study/StudyCenter";
+import { HomePage } from "./components/home/HomePage";
+import { ReportsPage } from "./components/interview/ReportsPage";
+import { TrainingPage } from "./components/training/TrainingPage";
+import { ReviewSitePage } from "./components/study/ReviewSitePage";
+import { PlanGeneratorPage } from "./components/study/PlanGeneratorPage";
 import { OperationsCenter } from "./components/operations/OperationsCenter";
 import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
 import {
@@ -23,6 +28,19 @@ import {
 const api = getInterviewAgentClient();
 const LAST_SESSION_STORAGE_KEY = "interview-agent-last-session-id";
 const SESSION_MESSAGES_STORAGE_PREFIX = "interview-agent-session-messages:";
+const THEME_STORAGE_KEY = "interview-agent-theme";
+
+function readStoredTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+try {
+  document.documentElement.dataset.theme = readStoredTheme();
+} catch {}
 
 function getLastSessionId() {
   try {
@@ -100,7 +118,36 @@ function shouldUseCachedMessages(cachedMessages, restoredMessages) {
 }
 
 function App() {
-  const [screen, setScreen] = useState("chat");
+  const [screen, setScreen] = useState("home");
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem("interview-agent-sidebar-open") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("interview-agent-sidebar-open", sidebarOpen ? "1" : "0");
+    } catch {}
+  }, [sidebarOpen]);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setSidebarOpen((v) => !v);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  const [theme, setTheme] = useState(readStoredTheme);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {}
+  }, [theme]);
   const [health, setHealth] = useState({ status: "checking" });
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState([]);
@@ -115,14 +162,7 @@ function App() {
   const [selectedResumeId, setSelectedResumeId] = useState("");
   const [sessionHistory, setSessionHistory] = useState([]);
   const [historyState, setHistoryState] = useState({ status: "idle" });
-  const [studyState, setStudyState] = useState({
-    status: "idle",
-    plan: [],
-    categories: [],
-    questions: { items: [], total: 0, limit: 30, offset: 0 },
-    importMessage: "",
-    seedMessage: ""
-  });
+  const [reportScores, setReportScores] = useState({});
   const [opsState, setOpsState] = useState({
     status: "idle",
     jobs: [],
@@ -131,7 +171,6 @@ function App() {
     metrics: {},
     message: ""
   });
-  const [studyFilters, setStudyFilters] = useState({ category: "", year: "", subject: "", questionType: "" });
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
   const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
@@ -172,12 +211,6 @@ function App() {
   useEffect(() => {
     loadIndustryOptions(profile.targetRole);
   }, [profile.targetRole]);
-
-  useEffect(() => {
-    if (screen === "study" && account) {
-      loadStudyCenter();
-    }
-  }, [screen, account, studyFilters.category, studyFilters.year, studyFilters.subject, studyFilters.questionType]);
 
   useEffect(() => {
     if (screen === "ops" && account) {
@@ -235,8 +268,8 @@ function App() {
       await loadUserSettings();
       await loadResumeLibrary();
       await loadSessionHistory();
+      await loadReportScores();
       await restoreLastSession();
-      await loadStudyCenter();
       await loadOperationsCenter();
     }
   }
@@ -377,7 +410,8 @@ function App() {
     setSessionHistory([]);
     setOpsState({ status: "idle", jobs: [], traces: [], evalRuns: [], metrics: {}, message: "" });
     setAdminState({ status: "idle", roles: [], events: [], userId: "", role: "support", error: "" });
-    setScreen("chat");
+    setReportScores({});
+    setScreen("home");
   }
 
   async function loadAdminSecurity() {
@@ -503,33 +537,19 @@ function App() {
     }
   }
 
-  async function loadStudyCenter() {
-    const getLearningPlan = api.getPracticeLearningPlan || api.getCivilServiceLearningPlan;
-    const listQuestions = api.listPracticeQuestions || api.listCivilServiceQuestions;
-    if (!getLearningPlan || !listQuestions) return;
+  async function loadReportScores() {
     try {
-      setStudyState((current) => ({ ...current, status: "loading", error: "" }));
-      const [plan, categories, questions] = await Promise.all([
-        getLearningPlan(),
-        api.listPracticeCategories ? api.listPracticeCategories() : Promise.resolve([]),
-        listQuestions({
-          category: studyFilters.category,
-          year: studyFilters.year.trim(),
-          subject: studyFilters.subject,
-          questionType: studyFilters.questionType.trim(),
-          limit: 30,
-          offset: 0
-        })
-      ]);
-      setStudyState((current) => ({
-        ...current,
-        status: "idle",
-        plan: Array.isArray(plan) ? plan : [],
-        categories: Array.isArray(categories) ? categories : [],
-        questions: questions || { items: [], total: 0, limit: 30, offset: 0 }
-      }));
-    } catch (error) {
-      setStudyState((current) => ({ ...current, status: "error", error: `学习数据加载失败：${normalizeDesktopError(error.message)}` }));
+      const result = await api.study?.listReports?.(50);
+      const reports = Array.isArray(result?.reports) ? result.reports : [];
+      const scoreMap = {};
+      for (const report of reports) {
+        if (report.session_id && typeof report.total_score === "number") {
+          scoreMap[report.session_id] = report.total_score;
+        }
+      }
+      setReportScores(scoreMap);
+    } catch (_error) {
+      setReportScores({});
     }
   }
 
@@ -563,7 +583,6 @@ function App() {
       const baseInput = {
         session_id: sessionId || undefined,
         category: profile.industry || "internet",
-        subject: studyFilters.subject || undefined,
         target_role: profile.targetRole,
         seniority: profile.seniority,
         profile: {
@@ -613,50 +632,6 @@ function App() {
       await loadOperationsCenter();
     } catch (error) {
       setOpsState((current) => ({ ...current, status: "error", error: `取消任务失败：${normalizeDesktopError(error.message)}` }));
-    }
-  }
-
-  function updateStudyFilters(patch) {
-    setStudyFilters((current) => ({ ...current, ...patch }));
-  }
-
-  async function seedPracticeQuestions() {
-    if (!requireAccount("初始化练习样题前需要先登录账号。")) return;
-    const seedQuestions = api.seedPracticeQuestions || api.seedCivilServiceQuestions;
-    if (!seedQuestions) return;
-    try {
-      setStudyState((current) => ({ ...current, status: "loading", error: "", seedMessage: "" }));
-      const result = await seedQuestions();
-      setStudyState((current) => ({
-        ...current,
-        status: "idle",
-        seedMessage: `题库已初始化：新增 ${result.created}，更新 ${result.updated}。`
-      }));
-      await loadStudyCenter();
-    } catch (error) {
-      setStudyState((current) => ({ ...current, status: "error", error: `初始化样题失败：${normalizeDesktopError(error.message)}` }));
-    }
-  }
-
-  async function importPracticeQuestionBank() {
-    if (!requireAccount("上传题库前需要先登录账号。")) return;
-    const importQuestionBank = api.importPracticeQuestionBank || api.importCivilServiceQuestionBank;
-    if (!importQuestionBank) return;
-    try {
-      setStudyState((current) => ({ ...current, status: "loading", error: "", importMessage: "", seedMessage: "" }));
-      const result = await importQuestionBank();
-      if (result?.canceled) {
-        setStudyState((current) => ({ ...current, status: "idle" }));
-        return;
-      }
-      setStudyState((current) => ({
-        ...current,
-        status: "idle",
-        importMessage: `题库已上传：新增 ${result.created}，更新 ${result.updated}。`
-      }));
-      await loadStudyCenter();
-    } catch (error) {
-      setStudyState((current) => ({ ...current, status: "error", error: `上传题库失败：${normalizeDesktopError(error.message)}` }));
     }
   }
 
@@ -721,7 +696,7 @@ function App() {
     }
   }
 
-  async function createSession(seedMessage = "") {
+  async function createSession(seedMessage = "", extraPayload = {}) {
     if (busy) return;
     if (!requireAccount("开始面试前需要先登录账号。登录后会保存会话、简历和用量记录。")) return;
     setBusy(true);
@@ -731,7 +706,7 @@ function App() {
       const response = await api.createSession({
         offline,
         web_search: webSearch,
-        mode: profile.mode,
+        mode: extraPayload.mode || profile.mode,
         industry: profile.industry,
         candidate_name: profile.candidateName,
         target_role: profile.targetRole,
@@ -744,7 +719,8 @@ function App() {
         resume_id: selectedResumeId || undefined,
         model_id: selectedModelId,
         thinking_enabled: currentLlmMode()?.thinkingEnabled,
-        reasoning_effort: currentLlmMode()?.reasoningEffort
+        reasoning_effort: currentLlmMode()?.reasoningEffort,
+        ...extraPayload
       });
       setSessionId(response.session_id);
       setLastSessionId(response.session_id);
@@ -851,6 +827,9 @@ function App() {
       await refreshSessionMessagesFromServer(activeSessionId);
       await loadAccount();
       loadSessionHistory();
+      if (response.completed) {
+        loadReportScores();
+      }
     } catch (error) {
       if (isAbortError(error)) {
         updateMessage(agentMessageId, {
@@ -1102,18 +1081,17 @@ function App() {
   }
 
   function changeScreen(nextScreen) {
-    if (nextScreen === "study") {
-      setStudyFilters((current) => ({
-        ...current,
-        category: profile.industry || "internet",
-        subject: ""
-      }));
-    }
     setScreen(nextScreen);
   }
 
+  async function openReportSession(sessionId) {
+    if (!sessionId) return;
+    await restoreSession(sessionId);
+    setScreen("chat");
+  }
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
       <Sidebar
         screen={screen}
         profile={profile}
@@ -1122,12 +1100,23 @@ function App() {
         historyState={historyState}
         activeSessionId={sessionId}
         busy={busy}
+        reportScores={reportScores}
         onNewSession={() => createSession()}
         onReloadSessions={loadSessionHistory}
         onRestoreSession={restoreSession}
         onDeleteSession={deleteSession}
         onScreenChange={changeScreen}
+        onToggleSidebar={() => setSidebarOpen(false)}
       />
+      <button
+        type="button"
+        className="sidebar-fab"
+        onClick={() => setSidebarOpen(true)}
+        title="展开菜单 (⌘B / Ctrl+B)"
+        aria-label="展开菜单"
+      >
+        <PanelLeftOpen size={17} />
+      </button>
 
       <section className="workspace">
         <Topbar
@@ -1140,6 +1129,8 @@ function App() {
           model={currentModel(modelOptions, selectedModelId)}
           account={account}
           screen={screen}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
           onOpenAccount={() => setScreen("account")}
           onOpenChat={() => setScreen("chat")}
         />
@@ -1212,16 +1203,37 @@ function App() {
             onSelectLlmMode={selectLlmMode}
             onBack={() => setScreen("chat")}
           />
-        ) : screen === "study" ? (
-          <StudyCenter
-            studyState={studyState}
-            studyFilters={studyFilters}
-            onFilterChange={updateStudyFilters}
-            onReload={loadStudyCenter}
-            onImportQuestions={importPracticeQuestionBank}
-            activeInterviewType={profile.industry}
-            activeInterviewLabel={currentIndustry(industryOptions, profile.industry)?.label}
-            onBack={() => setScreen("chat")}
+        ) : screen === "home" ? (
+          <HomePage
+            account={account}
+            profile={profile}
+            onRequireAuth={() => setAuthDialog({ open: true, reason: "登录后才能同步学习数据。" })}
+            onNavigate={changeScreen}
+            onStartInterview={(seed, extra) => createSession(seed, extra)}
+            onOpenSession={openReportSession}
+          />
+        ) : screen === "reports" ? (
+          <ReportsPage
+            account={account}
+            onRequireAuth={() => setAuthDialog({ open: true, reason: "登录后才能查看面试报告。" })}
+            onOpenSession={openReportSession}
+            onNavigate={changeScreen}
+            onChat={() => setScreen("chat")}
+          />
+        ) : screen === "practice" ? (
+          <TrainingPage
+            account={account}
+            onRequireAuth={() => setAuthDialog({ open: true, reason: "登录后作答才会记录进度与错题。" })}
+          />
+        ) : screen === "review-site" ? (
+          <ReviewSitePage
+            onBack={() => setScreen("home")}
+            onOpenPlanner={() => setScreen("planner")}
+          />
+        ) : screen === "planner" ? (
+          <PlanGeneratorPage
+            onBack={() => setScreen("review-site")}
+            onGenerated={() => setScreen("review-site")}
           />
         ) : (
           <section className="chat-panel">

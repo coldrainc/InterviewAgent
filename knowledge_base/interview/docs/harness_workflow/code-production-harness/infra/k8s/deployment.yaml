@@ -1,0 +1,241 @@
+# ============================================================
+#  Harness K8s 部署清单（生产）。
+#  替换所有 <REPLACE_xxx> 占位：
+#    <REPLACE_IMAGE_REGISTRY>   镜像仓（如 registry.cn-hangzhou.aliyuncs.com/my-org）
+#    <REPLACE_MONGO_URI>       连接串（mongodb://user:pass@rs0.mongo:27017/...）
+#    <REPLACE_JWT_SECRET>      32+ 随机字符串
+#    <REPLACE_LLM_API_KEY>     LLM 访问 key（建议用 Vault/云 KMS 注入）
+#    <REPLACE_INGRESS_HOST>    对外域名
+# ============================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: harness
+  labels: {team: ai-platform, env: prod}
+
+---
+# ===== ConfigMap =====
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: harness-cfg, namespace: harness}
+data:
+  ENV: "prod"
+  LOG_LEVEL: "INFO"
+  MONGO_DB_NAME: "harness"
+  MONGO_MIN_POOL: "10"
+  MONGO_MAX_POOL: "80"
+  REDIS_URI: "redis://redis-svc.harness.svc:6379/0"
+  CELERY_BROKER: "redis://redis-svc.harness.svc:6379/1"
+  CELERY_BACKEND: "redis://redis-svc.harness.svc:6379/2"
+  OTEL_ENABLED: "true"
+  OTEL_SERVICE_NAME: "workflow-harness"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc:4317"
+  RUN_MAX_TIMEOUT_SEC: "900"
+  RUN_MAX_RETRIES: "2"
+  GATE_ENABLED: "true"
+  DEFERRED_LLM_AS_PASS: "false"
+
+---
+# 敏感配置；生产建议替换为 ExternalSecret / Vault
+apiVersion: v1
+kind: Secret
+metadata: {name: harness-secrets, namespace: harness}
+type: Opaque
+stringData:
+  MONGO_URI: "<REPLACE_MONGO_URI>"
+  JWT_SECRET: "<REPLACE_JWT_SECRET>"
+  LLM_API_KEY: "<REPLACE_LLM_API_KEY>"
+
+---
+# ===== API Deployment =====
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harness-api
+  namespace: harness
+  labels: {app: harness-api}
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}   # 零可用损失
+  selector: {matchLabels: {app: harness-api}}
+  template:
+    metadata:
+      labels: {app: harness-api}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+    spec:
+      serviceAccountName: harness-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: api
+          image: <REPLACE_IMAGE_REGISTRY>/workflow-harness:${GIT_TAG:-latest}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: prometheus
+              containerPort: 9464
+          envFrom:
+            - configMapRef: {name: harness-cfg}
+            - secretRef: {name: harness-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8000}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8000}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+          resources:
+            requests: {cpu: "2", memory: "4Gi"}
+            limits:   {cpu: "4", memory: "8Gi"}
+          volumeMounts: []
+      volumes: []
+
+---
+# HPA：根据 CPU + Kafka run_queue lag 混合扩缩
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: harness-api-hpa, namespace: harness}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: harness-api}
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Resource
+      resource: {name: memory, target: {type: Utilization, averageUtilization: 75}}
+
+---
+apiVersion: v1
+kind: Service
+metadata: {name: harness-api-svc, namespace: harness}
+spec:
+  type: ClusterIP
+  selector: {app: harness-api}
+  ports:
+    - {name: http, port: 80, targetPort: 8000}
+    - {name: metrics, port: 9464, targetPort: 9464}
+
+---
+# ===== Runner Worker Deployment =====
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: harness-runner, namespace: harness, labels: {app: harness-runner}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: harness-runner}}
+  template:
+    metadata: {labels: {app: harness-runner}}
+    spec:
+      serviceAccountName: harness-sa
+      containers:
+        - name: worker
+          image: <REPLACE_IMAGE_REGISTRY>/workflow-harness-worker:${GIT_TAG:-latest}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/bin/tini
+            - --
+            - celery
+            - -A
+            - app.tasks.runner_worker.celery_app
+            - worker
+            - -Q
+            - run_queue
+            - -c
+            - "4"
+            - --without-heartbeat
+          envFrom:
+            - configMapRef: {name: harness-cfg}
+            - secretRef: {name: harness-secrets}
+          resources:
+            requests: {cpu: "4", memory: "8Gi"}
+            limits:   {cpu: "8", memory: "16Gi"}
+
+# KEDA 基于 queue length 的扩缩（需要先装 KEDA），可选：
+# ---
+# apiVersion: keda.sh/v1alpha1
+# kind: ScaledObject
+# metadata: {name: runner-scale, namespace: harness}
+# spec:
+#   scaleTargetRef: {name: harness-runner}
+#   minReplicaCount: 2
+#   maxReplicaCount: 30
+#   triggers:
+#     - type: redis
+#       metadata:
+#         addressFromEnv: CELERY_BROKER
+#         listName: run_queue             # Celery 使用 list 名；或换成 redis streams
+#         listLength: "100"               # 每 100 个待处理增一台
+
+---
+# ===== Analyzer Worker Deployment =====
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: harness-analyzer, namespace: harness, labels: {app: harness-analyzer}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: harness-analyzer}}
+  template:
+    metadata: {labels: {app: harness-analyzer}}
+    spec:
+      containers:
+        - name: worker
+          image: <REPLACE_IMAGE_REGISTRY>/workflow-harness-worker:${GIT_TAG:-latest}
+          command:
+            - /usr/bin/tini
+            - --
+            - celery
+            - -A
+            - app.tasks.analyzer_worker.celery_app
+            - worker
+            - -Q
+            - analyzer_queue
+            - -c
+            - "2"
+            - --without-heartbeat
+          envFrom:
+            - configMapRef: {name: harness-cfg}
+            - secretRef: {name: harness-secrets}
+          resources:
+            requests: {cpu: "2", memory: "4Gi"}
+            limits:   {cpu: "4", memory: "8Gi"}
+
+---
+# ===== Ingress（HTTP API 对外）=====
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: harness-ingress
+  namespace: harness
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts: ["<REPLACE_INGRESS_HOST>"]
+      secretName: harness-tls
+  rules:
+    - host: <REPLACE_INGRESS_HOST>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: {service: {name: harness-api-svc, port: {number: 80}}}
+
+---
+# ServiceAccount 最小权限
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: harness-sa, namespace: harness}

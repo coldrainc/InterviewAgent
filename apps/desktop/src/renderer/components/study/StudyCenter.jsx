@@ -37,7 +37,8 @@ const subjectOptions = [
 
 const categoryOptions = [
   { value: "", label: "全部面试类型", description: "混合查看所有面试类型的默认题和自定义题。", subjects: [] },
-  { value: "internet", label: "互联网行业", description: "高并发、系统设计、项目深挖和工程稳定性。", subjects: ["project", "system_design", "algorithm", "backend", "frontend", "database", "security"] },
+  { value: "internet", label: "互联网行业", description: "高并发、系统设计、项目深挖、算法表达和工程稳定性。", subjects: ["project", "system_design", "algorithm", "leetcode", "backend", "frontend", "database", "security"] },
+  { value: "leetcode", label: "力扣算法", description: "数组、哈希、双指针、滑窗、栈、链表、树和动态规划。", subjects: ["array", "hash_table", "two_pointers", "sliding_window", "stack", "linked_list", "binary_tree", "dynamic_programming"] },
   { value: "ai_application", label: "AI 应用 / 大模型", description: "RAG、Agent、评测、工具调用和安全治理。", subjects: ["rag", "agent_harness", "agentops", "search", "multi_agent", "workflow", "async_workflow", "long_running_tasks", "evaluation"] },
   { value: "ecommerce", label: "电商 / 本地生活", description: "商品搜索、导购客服、交易转化和售后风控。", subjects: ["search", "recommendation", "customer_service", "risk_control", "system_design"] },
   { value: "fintech", label: "金融科技", description: "金融知识库、合规、风控、审计和高可靠。", subjects: ["rag", "risk_control", "compliance", "audit", "system_design"] },

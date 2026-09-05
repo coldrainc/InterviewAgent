@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="scroll-smooth">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>陈雨寒 · 面试复习站｜14 天分阶段</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
+<style>
+/* ============================================================
+   设计 Token 体系 v2.1 —— 统一间距/字体/玻璃/焦点/动效
+   ============================================================ */
+:root{
+  /* 背景三层 + 玻璃层级 */
+  --bg-0: #070b18;
+  --bg-1: #0d1428;
+  --bg-2: #141c36;
+  --surface: rgba(255,255,255,0.05);
+  --surface-hover: rgba(255,255,255,0.09);
+  --surface-elev: rgba(255,255,255,0.07);
+  --glass: rgba(255,255,255,0.04);
+  --glass-deep: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.09);
+  --border-strong: rgba(255,255,255,0.18);
+  --border-glow: rgba(99,102,241,0.45);
+
+  /* 文字四档 */
+  --text-0: #f8fafc;
+  --text-1: #e2e8f0;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+
+  /* 间距 8 级 (4/8/12/16/20/24/32/48) */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 48px;
+
+  /* 字体 6 级 + 行高 */
+  --fs-xs: 11px;  --fs-sm: 12.5px; --fs-md: 14px;
+  --fs-lg: 16px;  --fs-xl: 20px;   --fs-2xl: 26px;  --fs-3xl: 32px;
+  --lh-tight: 1.25; --lh-normal: 1.6; --lh-loose: 1.8;
+  --fw-reg: 400; --fw-med: 500; --fw-sb: 600; --fw-b: 700; --fw-xb: 800;
+
+  /* 圆角 5 档 */
+  --radius-xs: 8px;  --radius-sm: 10px; --radius: 16px;
+  --radius-lg: 22px; --radius-xl: 28px;
+
+  /* 阴影 5 档 + 发光 */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.28);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.04);
+  --shadow: 0 10px 30px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05);
+  --shadow-lg: 0 24px 60px rgba(0,0,0,0.48);
+  --shadow-glow: 0 0 0 1px var(--border-glow), 0 8px 28px rgba(99,102,241,0.25);
+
+  /* 四阶段色 */
+  --p1: #38bdf8;  --p2: #a855f7;  --p3: #10b981;  --p4: #f59e0b;
+  --p1-grad: linear-gradient(135deg,#0ea5e9 0%,#6366f1 100%);
+  --p2-grad: linear-gradient(135deg,#8b5cf6 0%,#ec4899 100%);
+  --p3-grad: linear-gradient(135deg,#10b981 0%,#06b6d4 100%);
+  --p4-grad: linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);
+  --brand-grad: linear-gradient(135deg,#22d3ee 0%,#6366f1 45%,#a855f7 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(34,211,238,0.18), rgba(99,102,241,0.22) 45%, rgba(168,85,247,0.18));
+
+  /* 信号色 */
+  --ok: #22c55e;  --warn: #f59e0b;  --err: #ef4444;
+
+  /* 动效曲线三档 */
+  --ease: cubic-bezier(.22,1,.36,1);          /* 标准 (Material Standard) */
+  --ease-emph: cubic-bezier(.05,.85,.2,1.001); /* 强调 (出入带弹性) */
+  --ease-spring: cubic-bezier(.34,1.56,.64,1); /* 弹性回弹 */
+  --dur-fast: .18s; --dur: .28s; --dur-slow: .55s;
+
+  /* focus / selection */
+  --focus-ring: 0 0 0 3px rgba(99,102,241,0.35);
+  --ring-transition: box-shadow var(--dur-fast) var(--ease), outline-color var(--dur-fast);
+}
+html.light{
+  --bg-0: #f5f7fb;  --bg-1: #ffffff;  --bg-2: #eef2ff;
+  --surface: rgba(255,255,255,0.85); --surface-hover: rgba(255,255,255,1);
+  --surface-elev: rgba(255,255,255,0.95);
+  --glass: rgba(255,255,255,0.72); --glass-deep: rgba(255,255,255,0.92);
+  --border: rgba(15,23,42,0.08); --border-strong: rgba(15,23,42,0.18);
+  --text-0: #0f172a; --text-1: #334155; --text-2: #64748b; --text-3: #94a3b8;
+  --shadow-sm: 0 4px 14px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.7);
+  --shadow: 0 10px 32px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.75);
+  --shadow-lg: 0 24px 60px rgba(15,23,42,0.16);
+}
+
+/* ============================================================
+   通用基础 & 无障碍 & 全局美化
+   ============================================================ */
+*,*::before,*::after{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; background:var(--bg-0); color:var(--text-1); scroll-behavior: smooth; }
+body{
+  font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-feature-settings: "cv02","cv03","cv04","cv11","tnum";
+  font-size: var(--fs-md); line-height: var(--lh-normal);
+  background:
+    radial-gradient(1100px 550px at 8% -8%, rgba(99,102,241,0.20), transparent 60%),
+    radial-gradient(950px 520px at 112% 2%, rgba(236,72,153,0.14), transparent 60%),
+    radial-gradient(850px 500px at 52% 112%, rgba(16,185,129,0.11), transparent 60%),
+    var(--bg-0);
+  min-height:100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x:hidden;
+}
+/* 动态网格底纹（桌面可见，省性能） */
+@media (min-width: 1025px){
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse at top, #000 30%, transparent 75%);
+    opacity: .55;
+  }
+}
+html.light body{
+  background:
+    radial-gradient(1000px 500px at 10% -10%, rgba(99,102,241,0.10), transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, rgba(236,72,153,0.07), transparent 60%),
+    var(--bg-0);
+}
+a{ color:inherit; text-decoration:none; }
+
+/* 选中文字 */
+::selection{ background: rgba(99,102,241,0.35); color: var(--text-0); }
+html.light ::selection{ background: rgba(99,102,241,0.22); }
+
+/* 统一 focus 环（无障碍） */
+:focus-visible{
+  outline: 2px solid transparent;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar{ width: 10px; height: 10px; }
+::-webkit-scrollbar-track{ background: transparent; }
+::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, rgba(148,163,184,0.25), rgba(99,102,241,0.3));
+  border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover{
+  background: linear-gradient(180deg, rgba(148,163,184,0.4), rgba(99,102,241,0.5));
+  background-clip: padding-box; border: 2px solid transparent;
+}
+
+/* ============================================================
+   顶部滚动进度条（新增 ✨）
+   ============================================================ */
+.scroll-progress{
+  position:fixed; top:0; left:0; right:0; height: 3px; z-index: 200;
+  background: transparent; pointer-events:none;
+}
+.scroll-progress > .bar{
+  height:100%; width:0%;
+  background: var(--brand-grad);
+  box-shadow: 0 0 14px rgba(99,102,241,0.65);
+  transition: width .1s linear;
+}
+
+/* ============================================================
+   入场动画（IntersectionObserver 触发）✨
+   ============================================================ */
+.reveal{
+  opacity: 0; transform: translateY(18px) scale(.985);
+  transition: opacity var(--dur-slow) var(--ease-emph), transform var(--dur-slow) var(--ease-emph);
+  will-change: transform, opacity;
+}
+.reveal.in{
+  opacity: 1; transform: none;
+}
+/* 错峰入场：每行 60ms delay */
+.reveal[data-delay="1"]{ transition-delay: .06s; }
+.reveal[data-delay="2"]{ transition-delay: .12s; }
+.reveal[data-delay="3"]{ transition-delay: .18s; }
+.reveal[data-delay="4"]{ transition-delay: .24s; }
+.reveal[data-delay="5"]{ transition-delay: .30s; }
+.reveal[data-delay="6"]{ transition-delay: .36s; }
+.reveal[data-delay="7"]{ transition-delay: .42s; }
+.reveal[data-delay="8"]{ transition-delay: .48s; }
+
+/* ============================================================
+   按钮体系 v2（涟漪点击 + 弹性缩放 + 焦点）
+   ============================================================ */
+.btn{
+  position: relative; overflow: hidden;
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 14px; border-radius: 12px;
+  border:1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-1);
+  font-size: var(--fs-sm); font-weight: var(--fw-med); line-height: 1;
+  cursor:pointer; user-select:none;
+  transition: transform var(--dur) var(--ease-spring),
+              box-shadow var(--dur) var(--ease),
+              background var(--dur-fast) linear,
+              border-color var(--dur-fast) linear,
+              color var(--dur-fast) linear;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn .ic{ display:inline-grid; place-items:center; }
+.btn:hover{
+  background: var(--surface-hover); border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.btn:active{ transform: translateY(0) scale(.97); }
+.btn:focus-visible{ box-shadow: var(--shadow-sm), var(--focus-ring); }
+
+.btn-primary{
+  background: var(--brand-grad);
+  border-color: transparent;
+  color:#fff;
+  box-shadow: 0 10px 22px rgba(99,102,241,0.30);
+}
+.btn-primary:hover{
+  box-shadow: 0 14px 32px rgba(99,102,241,0.42);
+  transform: translateY(-2px);
+}
+.btn-ghost{ background: transparent; }
+.btn-sm{ padding:6px 10px; font-size: var(--fs-xs); border-radius: var(--radius-sm); }
+.btn-ok{ background: linear-gradient(135deg,#16a34a,#22c55e); color:#fff; border-color: transparent; box-shadow: 0 8px 20px rgba(34,197,94,0.25);}
+.btn-warn{ background: linear-gradient(135deg,#b45309,#f59e0b); color:#fff; border-color: transparent; box-shadow: 0 8px 20px rgba(245,158,11,0.25);}
+.btn-err{ background: linear-gradient(135deg,#b91c1c,#ef4444); color:#fff; border-color: transparent; box-shadow: 0 8px 20px rgba(239,68,68,0.25);}
+.btn-sm:active{ transform: scale(.96); }
+/* 涟漪 */
+.btn .ripple{
+  position:absolute; border-radius: 50%; transform: scale(0);
+  background: rgba(255,255,255,0.35);
+  animation: rippleAnim .6s linear; pointer-events:none;
+}
+.btn-primary .ripple, .btn-ok .ripple, .btn-warn .ripple, .btn-err .ripple{ background: rgba(255,255,255,0.5); }
+@keyframes rippleAnim{ to{ transform: scale(4); opacity: 0; } }
+
+/* ============================================================
+   标签 Chip v2（渐变描边 + 弹性 hover）
+   ============================================================ */
+.chip{
+  display:inline-flex; align-items:center; gap:4px;
+  padding: 3px 10px; border-radius: 9999px;
+  font-size: var(--fs-xs); font-weight: var(--fw-med);
+  border:1px solid var(--border);
+  color: var(--text-2);
+  background: var(--surface);
+  transition: all var(--dur-fast) var(--ease);
+}
+.chip:hover{ transform: translateY(-1px); border-color: var(--border-strong); }
+.chip-p1{ color:#bae6fd; border-color:rgba(56,189,248,0.32); background: rgba(56,189,248,0.10); }
+.chip-p2{ color:#e9d5ff; border-color:rgba(168,85,247,0.32); background: rgba(168,85,247,0.10); }
+.chip-p3{ color:#a7f3d0; border-color:rgba(16,185,129,0.32); background: rgba(16,185,129,0.10); }
+.chip-p4{ color:#fde68a; border-color:rgba(245,158,11,0.32); background: rgba(245,158,11,0.10); }
+.chip-base{ color:#cbd5f5; border-color:rgba(129,140,248,0.3); background: rgba(129,140,248,0.08);}
+.chip-ks{ color:#f5d0fe; border-color:rgba(232,121,249,0.3); background: rgba(232,121,249,0.08);}
+.chip-ant{ color:#bbf7d0; border-color:rgba(52,211,153,0.3); background: rgba(52,211,153,0.08);}
+.chip.border{ border-width: 1px; }
+
+/* 徽标点（呼吸光效 ✨）*/
+.badge-dot{ width:8px; height:8px; border-radius:9999px; background:var(--text-3); display:inline-block; }
+.badge-dot.ok{ background: var(--ok); box-shadow:0 0 0 3px rgba(34,197,94,0.2); animation: breathe 2.2s var(--ease) infinite; }
+.badge-dot.warn{ background: var(--warn); box-shadow:0 0 0 3px rgba(245,158,11,0.2); animation: breathe 2.2s var(--ease) infinite; }
+.badge-dot.err{ background: var(--err); box-shadow:0 0 0 3px rgba(239,68,68,0.2); animation: breathe 2.2s var(--ease) infinite; }
+@keyframes breathe{
+  0%,100%{ box-shadow: 0 0 0 3px currentColor; opacity: .35;}
+  50%    { box-shadow: 0 0 0 6px currentColor; opacity: .15;}
+}
+
+/* ============================================================
+   卡片体系 v2（边框渐变 + 内外光影 + reveal 入场）
+   ============================================================ */
+.card{
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  transition: transform var(--dur) var(--ease-spring),
+              box-shadow var(--dur) var(--ease),
+              border-color var(--dur-fast) linear;
+  overflow: hidden;
+}
+/* 顶部高光内描边 */
+.card::before{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), transparent 30%),
+    linear-gradient(135deg, rgba(255,255,255,0.03), transparent 50%);
+  border-radius: inherit;
+}
+/* 角落渐变光斑 */
+.card::after{
+  content:""; position:absolute; top:-40%; right:-30%; width: 240px; height:240px;
+  background: var(--brand-grad); filter: blur(50px); opacity: .09; pointer-events:none;
+  transition: opacity var(--dur) var(--ease);
+}
+.card:hover{
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+}
+.card:hover::after{ opacity: .16; }
+.card .card-corner{
+  position:absolute; top:0; right:0; width:80px; height:80px;
+  background: var(--brand-grad); opacity:0.12;
+  border-bottom-left-radius: 80px;
+  filter: blur(12px);
+}
+
+/* Phase 卡（渐变左条 + hover 辉光）*/
+.phase-card{
+  border-left: 3px solid transparent;
+  position: relative;
+}
+.phase-card::before{ /* 左条发光 */
+  content:""; position:absolute; left:0; top:10%; bottom:10%; width: 4px;
+  filter: blur(6px); opacity: 0; transition: opacity var(--dur) var(--ease);
+  border-radius: 4px;
+}
+.phase-card.p1{ border-left-color: var(--p1); }
+.phase-card.p1::before{ background: var(--p1); }
+.phase-card.p2{ border-left-color: var(--p2); }
+.phase-card.p2::before{ background: var(--p2); }
+.phase-card.p3{ border-left-color: var(--p3); }
+.phase-card.p3::before{ background: var(--p3); }
+.phase-card.p4{ border-left-color: var(--p4); }
+.phase-card.p4::before{ background: var(--p4); }
+.phase-card:hover::before{ opacity: .8; }
+
+.phase-chip{
+  display:inline-flex; align-items:center; gap:6px;
+  padding: 4px 12px; border-radius: 9999px;
+  color:#fff; font-weight: var(--fw-sb); font-size: var(--fs-xs);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.22);
+  letter-spacing: .2px;
+}
+.phase-chip.p1{ background: var(--p1-grad); }
+.phase-chip.p2{ background: var(--p2-grad); }
+.phase-chip.p3{ background: var(--p3-grad); }
+.phase-chip.p4{ background: var(--p4-grad); }
+.phase-chip i{ filter: drop-shadow(0 1px 2px rgba(0,0,0,.25));}
+
+/* ============================================================
+   进度条/环 v2（多层叠加发光 + 弹性增长）
+   ============================================================ */
+.progress{
+  height: 8px; background: rgba(148,163,184,0.14);
+  border-radius: 9999px; overflow:hidden;
+  position:relative;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.25);
+}
+.progress > .bar{
+  height:100%;
+  background: var(--brand-grad);
+  transition: width .65s var(--ease-emph);
+  position:relative;
+  box-shadow: 0 0 12px rgba(99,102,241,0.55);
+}
+.progress > .bar::after{
+  content:""; position:absolute; inset:0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+  animation: shimmer 2.2s linear infinite;
+}
+@keyframes shimmer{ 0%{ transform: translateX(-100%);} 100%{ transform: translateX(100%);} }
+
+.ring{
+  --p: 0%; --c: var(--p1);
+  width: 180px; height: 180px; border-radius: 50%;
+  background:
+    conic-gradient(from 0deg, var(--c) calc(var(--p)*1%), rgba(148,163,184,0.12) 0%);
+  display:grid; place-items:center; position:relative;
+  transition: background 1s var(--ease-emph);
+  filter: drop-shadow(0 8px 22px rgba(99,102,241,0.25));
+}
+/* conic 外发光晕 */
+.ring::before{
+  content:""; position:absolute; inset:-6px; border-radius:50%;
+  background: inherit; filter: blur(16px); opacity: .28; z-index: 0;
+}
+.ring::after{
+  content:""; position:absolute; inset:10px; border-radius:50%;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.25);
+  z-index: 1;
+}
+.ring > .ring-inner{ position: relative; z-index:2; text-align:center;}
+.ring .pct{
+  font-size: 36px; font-weight: var(--fw-xb); color: var(--text-0); line-height: 1;
+  background: var(--brand-grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+}
+.ring .lbl{ color: var(--text-2); font-size: var(--fs-xs); margin-top: 5px; font-weight: var(--fw-med);}
+
+/* ============================================================
+   每日完成度单元格 v2（水波纹 + 水位渐变层）
+   ============================================================ */
+.day-cell{
+  position: relative; text-align:center;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display:flex; flex-direction:column;
+  justify-content: space-between;
+  padding: 6px 4px;
+  transition: all var(--dur) var(--ease-spring);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+.day-cell:hover{
+  transform: translateY(-4px) scale(1.03);
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow-glow);
+  z-index: 2;
+}
+.day-cell .fill{
+  position:absolute; left:0; right:0; bottom:0; height: 0%;
+  transition: height .6s var(--ease-emph);
+}
+/* 水位波光 */
+.day-cell .fill::after{
+  content:""; position:absolute; left:-20%; right:-20%; top:-6px; height: 14px;
+  background: inherit; filter: blur(4px); opacity: .6;
+  border-radius: 50%;
+  animation: waveMove 3.4s ease-in-out infinite;
+}
+@keyframes waveMove{
+  0%,100%{ transform: translateX(0);}
+  50%    { transform: translateX(10%);}
+}
+.day-cell.p1 .fill{ background: var(--p1-grad); opacity: .5; }
+.day-cell.p2 .fill{ background: var(--p2-grad); opacity: .5; }
+.day-cell.p3 .fill{ background: var(--p3-grad); opacity: .5; }
+.day-cell.p4 .fill{ background: var(--p4-grad); opacity: .5; }
+.day-cell .d{ font-size: var(--fs-xs); font-weight: var(--fw-sb); color:var(--text-0); z-index:1; }
+.day-cell .p{ font-size: 10px; color: var(--text-2); z-index:1; font-variant-numeric: tabular-nums;}
+.day-cell.done{
+  border-color: rgba(34,197,94,0.4);
+  box-shadow: 0 0 0 1px rgba(34,197,94,0.35), 0 6px 18px rgba(34,197,94,0.18);
+}
+.day-cell.done .d::after{
+  content:" \f00c"; font-family:"Font Awesome 6 Free"; font-weight:900; color: var(--ok);
+  margin-left: 2px;
+  animation: popIn .45s var(--ease-spring);
+}
+
+/* ============================================================
+   导航 v2（侧栏玻璃质感 + 图标 pulse + 移动端毛玻璃）
+   ============================================================ */
+.app{ display: grid; grid-template-columns: 280px 1fr; min-height:100vh; position:relative; z-index:1; }
+.sidebar{
+  position: sticky; top:0; align-self: start;
+  height: 100vh;
+  padding: var(--space-6) var(--space-4);
+  border-right: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, var(--glass), transparent 55%),
+    var(--bg-1);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  display: flex; flex-direction: column; gap: var(--space-5);
+  overflow-y: auto;
+  z-index: 40;
+}
+.brand{ display:flex; align-items:center; gap: 12px; }
+.brand .logo{
+  width: 46px; height:46px; border-radius: 14px;
+  background: var(--brand-grad);
+  display:grid; place-items:center; color:#fff;
+  font-weight: var(--fw-xb); font-size: 18px;
+  box-shadow: 0 12px 28px rgba(99,102,241,0.42);
+  position: relative;
+  animation: logoFloat 4.5s var(--ease-emph) infinite;
+}
+.brand .logo::after{
+  content:""; position:absolute; inset:-4px; border-radius: 18px;
+  background: var(--brand-grad); filter: blur(14px); opacity:.35; z-index:-1;
+}
+@keyframes logoFloat{
+  0%,100%{ transform: translateY(0);}
+  50%    { transform: translateY(-3px);}
+}
+.brand .t1{ color: var(--text-0); font-weight: var(--fw-b); font-size: var(--fs-md); line-height:1.2; letter-spacing: -.01em;}
+.brand .t2{ color: var(--text-3); font-size: var(--fs-xs); margin-top: 2px;}
+
+.nav-group .nav-title{
+  color: var(--text-3); font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase;
+  padding: 12px 12px 6px; font-weight: var(--fw-sb);
+}
+.nav-link{
+  display:flex; align-items:center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  color: var(--text-1); text-decoration:none;
+  font-size: 13.5px; font-weight: var(--fw-med);
+  cursor:pointer; border: 1px solid transparent;
+  transition: all var(--dur-fast) var(--ease);
+  position: relative;
+}
+.nav-link .icn{
+  width: 18px; text-align:center; color: var(--text-2);
+  transition: transform var(--dur) var(--ease-spring), color var(--dur-fast);
+}
+.nav-link:hover{ background: var(--surface); color: var(--text-0); }
+.nav-link:hover .icn{ color: var(--text-0); transform: scale(1.15); }
+.nav-link.active{
+  background: var(--brand-grad-soft);
+  border-color: rgba(99,102,241,0.3);
+  color: var(--text-0);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(99,102,241,0.15);
+}
+.nav-link.active::before{
+  content:""; position:absolute; left: -18px; top:50%; transform: translateY(-50%);
+  width: 4px; height: 22px; border-radius: 4px;
+  background: var(--brand-grad);
+  box-shadow: 0 0 12px rgba(99,102,241,0.6);
+}
+.nav-link.active .icn{
+  color: #818cf8;
+  animation: iconPulse 2s var(--ease) infinite;
+}
+@keyframes iconPulse{
+  0%,100%{ transform: scale(1);}
+  50%    { transform: scale(1.18);}
+}
+.nav-link .mini-progress{
+  margin-left: auto; font-size: 10.5px; color: var(--text-3); font-weight: var(--fw-sb);
+  background: var(--surface); padding: 2px 8px;
+  border-radius: 9999px; border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-bottom{ margin-top: auto; display:flex; flex-direction: column; gap: var(--space-3); }
+
+/* 移动端顶部导航（毛玻璃 + 渐入）*/
+.mobile-top{
+  display:none; position:sticky; top:0; z-index: 50;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(13,20,40,0.72);
+  backdrop-filter: blur(18px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+  border-bottom: 1px solid var(--border);
+}
+html.light .mobile-top{ background: rgba(255,255,255,0.82);}
+.mobile-top .row1{ display:flex; align-items:center; justify-content:space-between; }
+.mobile-tabs{
+  display:none; overflow-x:auto; margin-top: var(--space-3);
+  gap: 6px; padding-bottom: 4px;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-tabs::-webkit-scrollbar{ display:none; }
+.mobile-tabs .mtab{
+  flex: 0 0 auto;
+  padding: 7px 13px; border-radius: 9999px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text-1); white-space: nowrap;
+  transition: all var(--dur-fast) var(--ease-spring);
+  cursor: pointer;
+}
+.mobile-tabs .mtab:active{ transform: scale(.96); }
+.mobile-tabs .mtab.on{
+  background: var(--brand-grad); color:#fff; border-color: transparent;
+  box-shadow: 0 6px 16px rgba(99,102,241,0.32);
+}
+
+/* 主内容容器 */
+.content{ padding: var(--space-7) var(--space-7) var(--space-8); max-width: 1280px; margin: 0 auto; width: 100%; position: relative; z-index: 1;}
+
+/* ============================================================
+   Hero v2（动态光斑 + 栅格 + SVG 装饰 + 数字滚动）
+   ============================================================ */
+.hero{
+  position: relative;
+  border-radius: var(--radius-xl);
+  padding: 36px;
+  background:
+    linear-gradient(135deg, rgba(34,211,238,0.12), rgba(99,102,241,0.18) 50%, rgba(168,85,247,0.12)),
+    radial-gradient(700px 350px at 82% 125%, rgba(236,72,153,0.22), transparent 60%),
+    var(--bg-1);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+/* 右上装饰光团 */
+.hero::before{
+  content:""; position:absolute; top:-60%; right:-20%; width: 620px; height: 620px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(34,211,238,0.25), transparent 45%),
+    radial-gradient(circle at 70% 70%, rgba(236,72,153,0.25), transparent 50%);
+  filter: blur(40px);
+  animation: heroOrb 16s var(--ease) infinite alternate;
+}
+@keyframes heroOrb{
+  0%  { transform: translate(0,0) rotate(0deg) scale(1);}
+  50% { transform: translate(-20px, 20px) rotate(6deg) scale(1.05);}
+  100%{ transform: translate(10px, -10px) rotate(-4deg) scale(.98);}
+}
+/* 栅格纹理 */
+.hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+  opacity: .5;
+}
+.hero-grid{
+  display:grid; grid-template-columns: 1.2fr 1fr; gap: 28px;
+  align-items:center; position: relative; z-index: 1;
+}
+.hero h1{
+  font-size: var(--fs-3xl); line-height: var(--lh-tight);
+  margin: 0 0 var(--space-3); color: var(--text-0);
+  font-weight: var(--fw-xb); letter-spacing: -0.02em;
+}
+.hero h1 .grad{
+  background: var(--brand-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(99,102,241,0.3));
+}
+.hero p.lead{
+  color: var(--text-2); font-size: var(--fs-md);
+  margin: 0 0 var(--space-5); max-width: 560px; line-height: var(--lh-loose);
+}
+.hero-meta{ display:flex; flex-wrap:wrap; gap: var(--space-2); }
+.hero-right{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Stat 统计卡 v2 */
+.stat{
+  background: var(--glass-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  backdrop-filter: blur(10px);
+  transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur) var(--ease);
+  position: relative; overflow: hidden;
+}
+.stat::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background: var(--brand-grad); opacity: .6; transform: scaleX(0); transform-origin: left;
+  transition: transform var(--dur-slow) var(--ease-emph);
+}
+.stat:hover{ transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.stat:hover::before{ transform: scaleX(1); }
+.stat .v{
+  font-size: var(--fs-xl); font-weight: var(--fw-xb);
+  color: var(--text-0); line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  background: linear-gradient(180deg, var(--text-0), var(--text-1));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.stat .v small{ font-size: 13px; color: var(--text-2); margin-left: 2px; font-weight: var(--fw-sb); -webkit-text-fill-color: var(--text-2);}
+.stat .l{ color: var(--text-2); font-size: var(--fs-xs); margin-top: 6px; display:flex; align-items:center; gap:6px; font-weight: var(--fw-med);}
+.stat .l i{ color: #818cf8; }
+.stat.rp{ grid-column: span 2; }
+
+/* 章节标题 v2（渐变分隔 + 数字徽章） */
+.section-head{
+  display:flex; align-items: center; justify-content: space-between;
+  margin: var(--space-8) 0 var(--space-5); padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.section-head::after{
+  content:""; position:absolute; bottom:-1px; left:0;
+  width: 80px; height: 2px;
+  background: var(--brand-grad);
+  border-radius: 2px;
+  box-shadow: 0 0 14px rgba(99,102,241,0.45);
+}
+.section-head h2{
+  margin:0; font-size: var(--fs-2xl); font-weight: var(--fw-xb); color: var(--text-0);
+  display:flex; align-items:center; gap: 10px;
+  letter-spacing: -.01em;
+}
+.section-head h2 .icn{
+  width: 36px; height: 36px; border-radius: 11px;
+  background: var(--brand-grad); color:#fff;
+  display: inline-grid; place-items:center; font-size: 15px;
+  box-shadow: 0 8px 20px rgba(99,102,241,0.35);
+  position: relative;
+}
+.section-head h2 .icn::after{
+  content:""; position:absolute; inset:-4px; border-radius: 14px;
+  background: var(--brand-grad); filter: blur(12px); opacity: .35; z-index:-1;
+}
+.section-head .extra{ color: var(--text-2); font-size: var(--fs-sm); }
+.section-head select{
+  padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text-1);
+  border: 1px solid var(--border); font-size: var(--fs-xs); font-weight: var(--fw-med);
+  cursor: pointer;
+}
+
+/* ============================================================
+   任务列表 v2（渐入 + 勾选粒子 + 警告高亮）
+   ============================================================ */
+.task-list{ display:flex; flex-direction:column; gap: 6px; margin-top: var(--space-4); }
+.task-item{
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  transition: all var(--dur-fast) var(--ease);
+  position: relative;
+}
+.task-item:hover{
+  background: var(--surface); border-color: var(--border);
+  border-left-color: rgba(99,102,241,0.5);
+  transform: translateX(2px);
+}
+.task-item.done{ opacity: 0.6; }
+.task-item.done:hover{ opacity: .78; }
+.task-item.done .task-text{ text-decoration: line-through; text-decoration-color: rgba(148,163,184,0.4); }
+
+.task-check{ position: relative; top: 3px; }
+.task-check input{
+  appearance:none; width: 18px; height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-strong);
+  cursor: pointer; transition: all var(--dur-fast) var(--ease-spring);
+  position: relative;
+}
+.task-check input:hover{ border-color: #818cf8; transform: scale(1.08); }
+.task-check input:checked{
+  background: var(--brand-grad); border-color: transparent;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.22), 0 4px 12px rgba(99,102,241,0.28);
+  transform: scale(1.02);
+}
+.task-check input:checked::after{
+  content:"\f00c"; font-family:"Font Awesome 6 Free"; font-weight:900;
+  color:#fff; position:absolute; inset:0;
+  display:grid; place-items:center; font-size: 11px;
+  animation: popIn .35s var(--ease-spring);
+}
+@keyframes popIn{
+  0%  { transform: scale(0.25) rotate(-20deg); opacity: 0;}
+  65% { transform: scale(1.18) rotate(4deg);  opacity: 1;}
+  100%{ transform: scale(1) rotate(0);       opacity: 1;}
+}
+
+.task-text{ font-size: var(--fs-md); line-height: var(--lh-normal); color: var(--text-1); }
+.task-text a.doc{
+  color: #818cf8; font-weight: var(--fw-med);
+  text-decoration:none;
+  border-bottom: 1px dashed rgba(129,140,248,0.4);
+  transition: all var(--dur-fast);
+}
+.task-text a.doc:hover{
+  color: #e0e7ff; border-bottom-color: #e0e7ff;
+  text-shadow: 0 0 8px rgba(129,140,248,0.3);
+}
+.task-meta{ display:flex; flex-wrap:wrap; gap: 5px; justify-content: flex-end; }
+
+/* ============================================================
+   QA 刷题 v2（卡片辉光 + 手风琴顺滑 + 代码高亮）
+   ============================================================ */
+.toolbar{
+  display:flex; flex-wrap:wrap; gap: 8px; align-items:center;
+  margin-bottom: var(--space-4);
+}
+.toolbar .btn.active{
+  background: var(--brand-grad); color:#fff; border-color: transparent;
+  box-shadow: 0 8px 20px rgba(99,102,241,0.3);
+}
+.toolbar .spacer{ flex: 1; }
+.toolbar .count{ color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-med);}
+.toolbar .count b{ color: var(--text-0); font-size: var(--fs-md); font-variant-numeric: tabular-nums;}
+
+.qa-card{
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all var(--dur) var(--ease);
+}
+.qa-card:hover{
+  border-color: var(--border-strong);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-sm);
+}
+.qa-card[open]{
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow-glow);
+}
+.qa-head{
+  padding: var(--space-4);
+  cursor:pointer; user-select:none;
+  display:flex; align-items:flex-start; gap: var(--space-3);
+  list-style: none;
+  transition: background var(--dur-fast);
+}
+.qa-head::-webkit-details-marker{ display: none; }
+.qa-card[open] .qa-head{ background: var(--glass); }
+
+.qa-head .chev{
+  width: 28px; height: 28px; border-radius: 9px;
+  display: grid; place-items: center; flex: 0 0 auto;
+  background: var(--surface-hover); color: var(--text-2); font-size: 12px;
+  transition: transform .35s var(--ease-spring), background .2s, color .2s, box-shadow .25s;
+}
+.qa-card[open] .chev{
+  transform: rotate(90deg);
+  background: var(--brand-grad); color:#fff;
+  box-shadow: 0 6px 16px rgba(99,102,241,0.38);
+}
+.qa-head .q{
+  font-size: var(--fs-md); font-weight: var(--fw-sb);
+  color: var(--text-0); line-height: 1.6;
+  display:flex; align-items:flex-start; gap: 8px; flex-wrap:wrap;
+}
+.qa-body{
+  padding: 0 var(--space-4) var(--space-4) 56px;
+  animation: slideDown .4s var(--ease-emph);
+}
+@keyframes slideDown{
+  from{ opacity: 0; transform: translateY(-6px);}
+  to  { opacity: 1; transform: none;}
+}
+.qa-actions{
+  display:flex; flex-wrap:wrap; gap: 8px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+}
+
+/* 代码块美化 */
+.code{
+  background: #020617; color: #e2e8f0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "JetBrains Mono", monospace;
+  font-size: 12px; line-height: 1.75;
+  overflow-x: auto;
+  border: 1px solid rgba(148,163,184,0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 20px rgba(0,0,0,0.22);
+  position: relative;
+}
+.code::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:24px;
+  background: linear-gradient(180deg, rgba(99,102,241,0.08), transparent);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  pointer-events: none;
+}
+html.light .code{
+  background: #f8fafc; color:#0f172a;
+  box-shadow: inset 0 1px 0 rgba(15,23,42,0.03), 0 4px 14px rgba(15,23,42,0.06);
+}
+
+/* QA 统计卡 */
+.qa-stats{
+  display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin-bottom: var(--space-4);
+}
+.qa-stat{
+  padding: var(--space-4); border-radius: var(--radius);
+  background: var(--glass-deep);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  transition: transform var(--dur) var(--ease-spring);
+  position: relative; overflow: hidden;
+}
+.qa-stat::after{
+  content:""; position:absolute; top:0; right:0; width: 80px; height: 80px;
+  filter: blur(30px); opacity: .3;
+}
+.qa-stat:nth-child(1)::after{ background: #6366f1; }
+.qa-stat:nth-child(2)::after{ background: #22c55e; }
+.qa-stat:nth-child(3)::after{ background: #f59e0b; }
+.qa-stat:nth-child(4)::after{ background: #a855f7; }
+.qa-stat:hover{ transform: translateY(-3px); }
+.qa-stat .v{
+  font-size: var(--fs-xl); font-weight: var(--fw-xb); color: var(--text-0);
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.qa-stat .v small{ font-size: 13px; color: var(--text-2); font-weight: var(--fw-sb);}
+.qa-stat .l{ font-size: var(--fs-xs); color: var(--text-2); margin-top: 4px; font-weight: var(--fw-med);}
+
+/* ============================================================
+   自我介绍卡 + 计时器
+   ============================================================ */
+.intro-card .top{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom: var(--space-4); padding-bottom: var(--space-3);
+  border-bottom: 1px dashed var(--border);
+}
+.intro-card .top h3{
+  margin:0; font-size: var(--fs-lg); color: var(--text-0); font-weight: var(--fw-b);
+  display:flex; align-items:center; gap: 10px; flex-wrap: wrap;
+}
+.intro-card .txt{
+  font-size: var(--fs-md); color: var(--text-1); line-height: var(--lh-loose);
+  max-height: 260px; overflow: auto; padding-right: 6px;
+}
+.intro-card .txt b{
+  color: var(--text-0);
+  background: linear-gradient(135deg, rgba(34,211,238,0.15), rgba(99,102,241,0.22));
+  padding: 0 5px; border-radius: 5px;
+  border: 1px solid rgba(99,102,241,0.25);
+  font-weight: var(--fw-sb);
+}
+.timer-box{
+  display:flex; align-items:center; gap: 10px; flex-wrap: wrap;
+  margin-top: var(--space-4); padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+}
+.timer-display{
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 16px; font-weight: var(--fw-b);
+  color: var(--text-0);
+  background: var(--glass-deep); padding: 6px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  min-width: 78px; text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.timer-display.running{
+  color: var(--ok);
+  border-color: rgba(34,197,94,0.4);
+  background: rgba(34,197,94,0.08);
+  box-shadow: 0 0 0 1px rgba(34,197,94,0.3), 0 0 20px rgba(34,197,94,0.2);
+  animation: timerPulse 1s var(--ease) infinite;
+}
+.timer-display.warn{
+  color: var(--warn);
+  border-color: rgba(245,158,11,0.4);
+  background: rgba(245,158,11,0.08);
+  box-shadow: 0 0 0 1px rgba(245,158,11,0.3), 0 0 20px rgba(245,158,11,0.2);
+}
+.timer-display.done{
+  color: var(--err);
+  border-color: rgba(239,68,68,0.45);
+  background: rgba(239,68,68,0.09);
+  box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 26px rgba(239,68,68,0.28);
+  animation: shake .5s var(--ease-spring);
+}
+@keyframes timerPulse{
+  0%,100%{ box-shadow: 0 0 0 1px rgba(34,197,94,0.3), 0 0 16px rgba(34,197,94,0.15);}
+  50%    { box-shadow: 0 0 0 1px rgba(34,197,94,0.4), 0 0 28px rgba(34,197,94,0.28);}
+}
+@keyframes shake{
+  10%, 90% { transform: translateX(-1px);}
+  20%, 80% { transform: translateX(3px);}
+  30%, 50%, 70% { transform: translateX(-6px);}
+  40%, 60% { transform: translateX(6px);}
+}
+
+/* 模拟面试大计时器 */
+.mock-timer{
+  background: linear-gradient(135deg, rgba(99,102,241,0.16), rgba(236,72,153,0.14));
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  display:grid; grid-template-columns: 1fr auto; gap: 16px; align-items:center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  position: relative; overflow: hidden;
+}
+.mock-timer::before{
+  content:""; position:absolute; top:-80%; right:-20%; width:360px; height:360px;
+  background: var(--brand-grad); filter: blur(80px); opacity: .16; pointer-events:none;
+}
+.mock-timer .mt-time{
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 40px; font-weight: var(--fw-xb); letter-spacing: 1px; color: var(--text-0);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: var(--brand-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 12px rgba(99,102,241,0.3));
+  position: relative; z-index: 1;
+}
+.mock-timer .mt-label{ color: var(--text-2); font-size: var(--fs-xs); margin-top: 6px; font-weight: var(--fw-med); position: relative; z-index:1;}
+.mock-timer .mt-btns{ display:flex; gap: 6px; flex-wrap:wrap; justify-content: flex-end; position: relative; z-index:1;}
+
+/* ============================================================
+   STAR 翻转卡 v2（3D + hover 光晕 + 渐变背面）
+   ============================================================ */
+.flip-wrap{
+  perspective: 1400px; min-height: 290px;
+}
+.flip{
+  position: relative; width:100%; height:100%; min-height: 290px;
+  transform-style: preserve-3d;
+  transition: transform .75s var(--ease-emph);
+  cursor: pointer;
+}
+.flip-wrap:hover .flip{ transform: translateY(-4px) rotateX(3deg); }
+.flip-wrap.flipped .flip{ transform: rotateY(180deg); }
+.flip-wrap.flipped:hover .flip{ transform: rotateY(180deg) translateY(-4px) rotateX(-3deg); }
+
+.face{
+  position:absolute; inset:0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  padding: 20px;
+  display:flex; flex-direction:column;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur-fast);
+  overflow: hidden;
+}
+.face::before{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), transparent 40%);
+}
+.face:hover{ border-color: var(--border-strong); box-shadow: var(--shadow); }
+
+.face.back{
+  transform: rotateY(180deg);
+  background:
+    linear-gradient(160deg, var(--glass-deep), rgba(99,102,241,0.09) 60%, rgba(236,72,153,0.07));
+  border-color: rgba(99,102,241,0.3);
+}
+.face .flip-tip{
+  position:absolute; top: 14px; right: 14px;
+  color: var(--text-3); font-size: 10.5px; opacity: .65;
+  display:flex; align-items:center; gap:4px;
+  padding: 3px 8px; border-radius: 9999px;
+  background: var(--surface); border: 1px solid var(--border);
+  z-index: 2;
+}
+.face h3{
+  margin: 0 0 8px; font-size: var(--fs-lg); color: var(--text-0); font-weight: var(--fw-b);
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  position: relative; z-index: 1;
+}
+.face .tag-row{
+  display:flex; flex-wrap:wrap; gap: 5px; margin-bottom: 12px;
+  position: relative; z-index: 1;
+}
+.face .kv{
+  display:flex; flex-direction:column; gap: 7px;
+  font-size: var(--fs-md); line-height: var(--lh-normal);
+  color: var(--text-1); flex: 1;
+  overflow: auto; padding-right: 4px;
+  position: relative; z-index: 1;
+}
+.face .kv b.k{
+  min-width: 40px; display:inline-block;
+  color: var(--text-2); font-weight: var(--fw-sb);
+  font-size: var(--fs-sm);
+}
+.face .kv.p1 b.k{ color: #7dd3fc; }
+.face .kv.p2 b.k{ color: #d8b4fe; }
+.face .kv.p3 b.k{ color: #6ee7b7; }
+.face .kv.p4 b.k{ color: #fcd34d; }
+
+.face .result-bar{
+  margin-top: 10px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(6,182,212,0.12));
+  border: 1px solid rgba(16,185,129,0.28);
+  font-size: var(--fs-sm); color: var(--text-1);
+  line-height: var(--lh-normal);
+  font-weight: var(--fw-med);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  position: relative; z-index: 1;
+}
+
+/* ============================================================
+   A4 打印 + 面试前清单
+   ============================================================ */
+.a4-wrap{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.a4-face{
+  background: #fff; color: #0f172a;
+  border-radius: var(--radius);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow);
+  min-height: 580px;
+  transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur) var(--ease);
+  position: relative;
+}
+.a4-face::before{
+  content:""; position:absolute; top:12px; left:12px; right:12px; bottom:12px;
+  border: 1px dashed #e2e8f0; border-radius: 12px; pointer-events:none;
+}
+.a4-face:hover{ transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.a4-face h3{
+  margin:0 0 10px; font-size: var(--fs-md); font-weight: var(--fw-b);
+  border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;
+  display:flex; align-items:center; gap: 8px;
+}
+.a4-face h3 small{ font-weight: var(--fw-med); color:#64748b; font-size: var(--fs-xs);}
+.a4-item{
+  border-left: 3px solid #cbd5f5;
+  padding-left: 10px; margin-bottom: 10px;
+  transition: border-color var(--dur-fast);
+}
+.a4-item:hover{ border-left-color: #6366f1; }
+.a4-item h4{ margin:0 0 2px; font-size: 12.5px; color: #1e3a8a; font-weight: var(--fw-b);}
+.a4-item p{ margin:0; font-size: 11.5px; line-height: 1.65; color: #334155;}
+.a4-face ol.b20{ font-size: 11.5px; line-height: 1.75; color: #334155; padding-left: 20px;}
+.a4-face ol.b20 li{ margin-bottom: 5px; padding-left: 2px;}
+.a4-face ol.b20 li b{ color: #0f172a; }
+.a4-face ol.b20 li:hover{ color: #0f172a; }
+
+.before-final{
+  margin-top: var(--space-5);
+  background: linear-gradient(135deg, rgba(16,185,129,0.10), rgba(59,130,246,0.10));
+  border: 1px solid rgba(16,185,129,0.24);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.before-final h3{
+  margin:0 0 8px; color: var(--text-0); font-weight: var(--fw-b);
+  display:flex; align-items:center; gap: 10px;
+  font-size: var(--fs-lg);
+}
+.check-grid{
+  display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr));
+  gap: 8px; margin-top: var(--space-3);
+}
+.check-grid label{
+  display:flex; align-items:center; gap: 8px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.03);
+  border:1px solid var(--border);
+  font-size: var(--fs-sm); color: var(--text-1); cursor:pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+.check-grid label:hover{
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  transform: translateX(2px);
+}
+.check-grid input{ accent-color: #6366f1; width: 15px; height: 15px; }
+
+/* ============================================================
+   Toast v2（多类型 + 滑入曲线）
+   ============================================================ */
+.toast{
+  position: fixed; left:50%; bottom: 32px;
+  transform: translateX(-50%) translateY(120px);
+  background: rgba(15,23,42,0.96); color:#fff;
+  padding: 10px 18px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-size: var(--fs-sm); font-weight: var(--fw-med);
+  z-index: 999;
+  opacity: 0; pointer-events:none;
+  transition: transform .4s var(--ease-emph), opacity .3s var(--ease);
+  box-shadow: var(--shadow-lg);
+  display:flex; align-items:center; gap: 8px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.toast.show{ transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast i.ok{ color: var(--ok);  }
+.toast i.warn{ color: var(--warn); }
+.toast i.err{ color: var(--err); }
+.toast.info{ background: rgba(99,102,241,0.96); border-color: rgba(255,255,255,0.15);}
+
+/* ============================================================
+   响应式 v2（iPad + 手机细分）
+   ============================================================ */
+/* iPad / 小桌面 */
+@media (max-width: 1024px){
+  .app{ grid-template-columns: 1fr; }
+  .sidebar{ display:none; }
+  .mobile-top{ display:block; }
+  .mobile-tabs{ display:flex; }
+  .content{ padding: var(--space-5) var(--space-4) var(--space-7); }
+  .hero{ padding: var(--space-5); border-radius: var(--radius-lg);}
+  .hero-grid{ grid-template-columns: 1fr; }
+  .hero h1{ font-size: var(--fs-2xl); }
+  .section-head h2{ font-size: var(--fs-xl); }
+  .a4-wrap{ grid-template-columns: 1fr; }
+  .qa-stats{ grid-template-columns: repeat(2, 1fr); }
+  .mock-timer{ grid-template-columns: 1fr; }
+  .mock-timer .mt-btns{ justify-content: flex-start; }
+  .mock-timer .mt-time{ font-size: 32px;}
+}
+/* 手机 */
+@media (max-width:640px){
+  .content{ padding: var(--space-4) var(--space-3) var(--space-7);}
+  .hero{ padding: var(--space-4); }
+  .hero h1{ font-size: 22px;}
+  .hero p.lead{ font-size: var(--fs-sm); line-height: var(--lh-normal);}
+  .stat{ padding: var(--space-3); }
+  .stat .v{ font-size: var(--fs-lg);}
+  .ring{ width: 150px; height: 150px;}
+  .ring .pct{ font-size: 28px;}
+  .qa-stats{ grid-template-columns: 1fr 1fr;}
+  .a4-face{ min-height: auto; padding: var(--space-4);}
+  .section-head{ flex-direction: column; align-items: flex-start; gap: var(--space-2);}
+  .mock-timer{ padding: var(--space-4);}
+  .mock-timer .mt-time{ font-size: 28px;}
+  .section-head h2{ font-size: 18px;}
+  .section-head h2 .icn{ width: 32px; height:32px; font-size: 14px; border-radius: 9px;}
+  .flip-wrap, .flip{ min-height: 320px;}
+}
+
+/* ============================================================
+   打印样式（A4 精确控制）
+   ============================================================ */
+@media print{
+  @page{ size: A4 portrait; margin: 10mm 12mm; }
+  *{ box-shadow: none !important; text-shadow: none !important; filter: none !important;}
+  body{ background: #fff !important; color:#111 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+  html, body{ margin:0; padding:0;}
+  .scroll-progress, .sidebar, .mobile-top, .mobile-tabs, .no-print{ display:none !important; }
+  .app{ display:block;}
+  .content{ padding: 0 !important; max-width: 100% !important; }
+  section{ page-break-inside: avoid; margin: 0 0 12mm 0; padding: 0; }
+  #home, #plan, #qa, #intro, #star{ page-break-after: always;}
+  .hero, .card, .phase-card, .qa-card, .face, .before-final, .mock-timer{
+    background: #fff !important; color:#111 !important;
+    border: 1px solid #d1d5db !important;
+    break-inside: avoid;
+  }
+  .reveal{ opacity: 1 !important; transform: none !important;}
+  .flip{ transform: none !important;}
+  .face{ position: static !important; backface-visibility: visible !important; margin-bottom: 4mm;}
+  .face.back{ transform: none !important; display: block;}
+  .flip-wrap, .flip{ min-height: auto !important; height: auto !important;}
+  .a4-face{
+    box-shadow: none !important;
+    border: 1px solid #9ca3af !important;
+    background: #fff !important;
+    margin: 0;
+    page-break-after: always;
+    min-height: 260mm;
+  }
+  .a4-face::before{ display: none !important; }
+  .a4-wrap{ grid-template-columns: 1fr !important; gap: 4mm !important;}
+  .a4-face h3, .a4-face h4, .a4-face p, .a4-face li{ color:#111 !important;}
+  .ring{ filter: none !important; }
+  .ring::before, .ring::after{ filter: none !important;}
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部滚动进度条 ✨ 新增 -->
+<div class="scroll-progress no-print"><div class="bar" id="scrollBar"></div></div>
+
+<div class="app">
+
+  <!-- ========= 桌面：侧栏 ========= -->
+  <aside class="sidebar no-print">
+    <div class="brand">
+      <div class="logo"><i class="fa-solid fa-user-graduate"></i></div>
+      <div>
+        <div class="t1">陈雨寒 · 面试复习</div>
+        <div class="t2"><i class="fa-regular fa-calendar-check"></i> 14 天分阶段</div>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-title">复习导航</div>
+      <a class="nav-link active" data-link="#home"><i class="fa-solid fa-chart-pie icn"></i> 进度总览 <span class="mini-progress" id="nav-p-all">0%</span></a>
+      <a class="nav-link" data-link="#plan"><i class="fa-solid fa-list-check icn"></i> 14 天打卡 <span class="mini-progress" id="nav-p-plan">0%</span></a>
+      <a class="nav-link" data-link="#qa"><i class="fa-solid fa-brain icn"></i> 基础刷题 <span class="mini-progress" id="nav-p-qa">0%</span></a>
+      <a class="nav-link" data-link="#intro"><i class="fa-solid fa-microphone-lines icn"></i> 自我介绍 <span class="chip chip-p1" style="margin-left:auto">推荐⏱️</span></a>
+      <a class="nav-link" data-link="#star"><i class="fa-regular fa-star icn"></i> STAR 项目卡 <span class="chip chip-p2" style="margin-left:auto">点卡片翻</span></a>
+      <a class="nav-link" data-link="#a4"><i class="fa-solid fa-file-arrow-down icn"></i> A4 速记单</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-title">专项入口</div>
+      <a class="nav-link" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/docs/harness_workflow/01-调研选型-8方案对比与决策树与面试话术.md"><i class="fa-solid fa-diagram-project icn"></i> Harness 选型话术</a>
+      <a class="nav-link" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/docs/interview_qna/面试问答-详细话术.md"><i class="fa-solid fa-comments icn"></i> 问答详细话术</a>
+      <a class="nav-link" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/docs/job_targets/蚂蚁证券-AI-Native-前端答题指南.md"><i class="fa-solid fa-building-columns icn"></i> 蚂蚁专项答题</a>
+      <a class="nav-link" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/docs/resume_tech_deep/00-目录索引.md"><i class="fa-solid fa-book icn"></i> 简历深挖目录</a>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="card" style="padding:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-size:12.5px; font-weight:600; color:var(--text-1);"><i class="fa-solid fa-moon"></i> 外观</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-sm" onclick="toggleTheme('dark')"><i class="fa-solid fa-moon"></i> 暗色</button>
+          <button class="btn btn-sm" onclick="toggleTheme('light')"><i class="fa-solid fa-sun"></i> 亮色</button>
+        </div>
+      </div>
+      <button class="btn btn-ghost" style="width:100%; justify-content:center" onclick="resetProgress()"><i class="fa-solid fa-rotate-left"></i> 重置进度</button>
+      <div style="text-align:center; color: var(--text-3); font-size:11px; margin-top:6px;">
+        <i class="fa-solid fa-database"></i> 进度保存在浏览器
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========= 移动端：顶部 ========= -->
+  <div class="mobile-top no-print">
+    <div class="row1">
+      <div class="brand" style="gap:10px;">
+        <div class="logo" style="width:38px; height:38px; border-radius:12px; font-size:14px;"><i class="fa-solid fa-user-graduate"></i></div>
+        <div>
+          <div class="t1" style="font-size:14px;">陈雨寒 · 面试复习</div>
+          <div class="t2">14 天分阶段 · 文档直达</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn btn-sm" onclick="toggleTheme('dark')" title="暗色"><i class="fa-solid fa-moon"></i></button>
+        <button class="btn btn-sm" onclick="toggleTheme('light')" title="亮色"><i class="fa-solid fa-sun"></i></button>
+      </div>
+    </div>
+    <div class="mobile-tabs" id="mobileTabs">
+      <div class="mtab on" data-link="#home"><i class="fa-solid fa-chart-pie"></i> 总览</div>
+      <div class="mtab" data-link="#plan"><i class="fa-solid fa-list-check"></i> 14 天</div>
+      <div class="mtab" data-link="#qa"><i class="fa-solid fa-brain"></i> 刷题</div>
+      <div class="mtab" data-link="#intro"><i class="fa-solid fa-microphone-lines"></i> 自我介绍</div>
+      <div class="mtab" data-link="#star"><i class="fa-regular fa-star"></i> STAR 卡</div>
+      <div class="mtab" data-link="#a4"><i class="fa-solid fa-file-arrow-down"></i> A4</div>
+    </div>
+  </div>
+
+  <!-- ========= 主内容 ========= -->
+  <div class="content">
+
+    <!-- Hero + 总览 -->
+    <section id="home">
+      <div class="hero">
+        <div class="hero-grid">
+          <div>
+            <div class="chip chip-p2" style="margin-bottom:14px;">
+              <i class="fa-solid fa-bolt"></i> 2026 秋招复习计划
+            </div>
+            <h1>你好，雨寒 👋<br/>让我们把 <span class="grad">6 年经验</span> 结构化输出。</h1>
+            <p class="lead">
+              这是一份为你量身整理的 14 天分阶段复习站。从简历、到跨端深度、到 AI Agent 选型与治理、到公司题基础算法刷题，进度自动保存在浏览器。点击任务中的「📄 打开」直达本地 Markdown/代码文档；点击 STAR 卡片翻到背面看精炼成果。
+            </p>
+            <div class="hero-meta">
+              <span class="chip chip-p1"><i class="fa-solid fa-layer-group"></i> 四阶段总览</span>
+              <span class="chip chip-p2"><i class="fa-solid fa-route"></i> 14 天打卡</span>
+              <span class="chip chip-p3"><i class="fa-solid fa-circle-question"></i> 32 道基础刷题</span>
+              <span class="chip chip-p4"><i class="fa-solid fa-star"></i> 6 STAR 项目卡</span>
+              <span class="chip chip-base"><i class="fa-solid fa-file-pen"></i> A4 速记打印</span>
+            </div>
+          </div>
+          <div class="hero-right">
+            <div class="stat rp" style="grid-column: span 2; display:grid; grid-template-columns: auto 1fr; align-items:center; gap:14px;">
+              <div class="ring" id="headRing" style="--p:0%; --c:#818cf8;">
+                <div class="ring-inner">
+                  <div class="pct" id="headRingPct">0%</div>
+                  <div class="lbl">总体进度</div>
+                </div>
+              </div>
+              <div>
+                <div style="color:var(--text-0); font-size:15px; font-weight:700; margin-bottom:4px;">14 天倒计时冲刺</div>
+                <div style="color:var(--text-2); font-size:12.5px; line-height:1.7;">
+                  打卡勾选项 + 刷题标记掌握，每一项自动累计在这里。<br/>
+                  今天完成一小步，面试时就是一个系统化的自己。
+                </div>
+                <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+                  <button class="btn btn-sm" onclick="jumpTo('#plan')"><i class="fa-solid fa-play"></i> 从 Day 1 开始</button>
+                  <button class="btn btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> 打印速记 A4</button>
+                </div>
+              </div>
+            </div>
+            <div class="stat"><div class="v" id="sTask">0<small>/0</small></div><div class="l"><i class="fa-solid fa-check-double"></i> 打卡任务完成</div></div>
+            <div class="stat"><div class="v" id="sQA">0<small>/0</small></div><div class="l"><i class="fa-solid fa-brain"></i> 基础题掌握</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 四阶段卡 -->
+      <div class="section-head" style="margin-top:36px;">
+        <h2><span class="icn"><i class="fa-solid fa-chart-simple"></i></span> 四阶段路线图</h2>
+        <div class="extra">点击任意卡片 → 跳到对应阶段起点</div>
+      </div>
+      <div class="grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap:14px;">
+        <a class="card phase-card p1" href="#plan" onclick="event.preventDefault(); jumpTo('#plan'); setDayFilter('P1');">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span class="phase-chip p1"><i class="fa-solid fa-seedling"></i> Day 1–3 · 基础</span>
+            <span id="pbar-p1" style="font-weight:700; color:var(--text-2); font-size:13px;">0%</span>
+          </div>
+          <div style="font-size:16px; font-weight:700; color:var(--text-0); margin-bottom:6px;">基础储备</div>
+          <div style="font-size:13px; color:var(--text-2); line-height:1.7;">
+            简历每字讲清 · 深挖文档全量过一遍<br/>
+            JS/网络基础第一轮 · 弱点清单
+          </div>
+          <div style="margin-top:12px;"><div class="progress"><div class="bar" id="pg-p1" style="width:0%; background: var(--p1-grad);"></div></div></div>
+        </a>
+        <a class="card phase-card p2" href="#plan" onclick="event.preventDefault(); jumpTo('#plan'); setDayFilter('P2');">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span class="phase-chip p2"><i class="fa-solid fa-microscope"></i> Day 4–7 · 深挖</span>
+            <span id="pbar-p2" style="font-weight:700; color:var(--text-2); font-size:13px;">0%</span>
+          </div>
+          <div style="font-size:16px; font-weight:700; color:var(--text-0); margin-bottom:6px;">深挖对齐</div>
+          <div style="font-size:13px; color:var(--text-2); line-height:1.7;">
+            Harness 8 方案选型 · 源码对标<br/>
+            蚂蚁专项 + 周末 1 小时全真模拟
+          </div>
+          <div style="margin-top:12px;"><div class="progress"><div class="bar" id="pg-p2" style="width:0%; background: var(--p2-grad);"></div></div></div>
+        </a>
+        <a class="card phase-card p3" href="#plan" onclick="event.preventDefault(); jumpTo('#plan'); setDayFilter('P3');">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span class="phase-chip p3"><i class="fa-solid fa-person-running"></i> Day 8–11 · 冲刺</span>
+            <span id="pbar-p3" style="font-weight:700; color:var(--text-2); font-size:13px;">0%</span>
+          </div>
+          <div style="font-size:16px; font-weight:700; color:var(--text-0); margin-bottom:6px;">模拟冲刺</div>
+          <div style="font-size:13px; color:var(--text-2); line-height:1.7;">
+            4 场 60-90 分钟全真模拟<br/>
+            错题本清零 ≥ 90% · 算法通过率 ≥ 75%
+          </div>
+          <div style="margin-top:12px;"><div class="progress"><div class="bar" id="pg-p3" style="width:0%; background: var(--p3-grad);"></div></div></div>
+        </a>
+        <a class="card phase-card p4" href="#a4" onclick="event.preventDefault(); jumpTo('#a4');">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span class="phase-chip p4"><i class="fa-solid fa-bullseye"></i> Day 12–14 · 速记</span>
+            <span id="pbar-p4" style="font-weight:700; color:var(--text-2); font-size:13px;">0%</span>
+          </div>
+          <div style="font-size:16px; font-weight:700; color:var(--text-0); margin-bottom:6px;">面试前速记</div>
+          <div style="font-size:13px; color:var(--text-2); line-height:1.7;">
+            A4 速记单 · 公司定制复习<br/>
+            ⚠️ 最后一天不学新东西 · 状态优先
+          </div>
+          <div style="margin-top:12px;"><div class="progress"><div class="bar" id="pg-p4" style="width:0%; background: var(--p4-grad);"></div></div></div>
+        </a>
+      </div>
+
+      <!-- 每日完成度 -->
+      <div class="card" style="margin-top:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+          <h3 style="margin:0; font-size:17px; color:var(--text-0); font-weight:700; display:flex; align-items:center; gap:10px;">
+            <span class="icn" style="width:30px; height:30px; border-radius:8px; display:inline-grid; place-items:center; background: var(--p1-grad); color:#fff;"><i class="fa-solid fa-calendar-days"></i></span>
+            14 天每日完成度
+          </h3>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <span class="chip"><span class="badge-dot ok"></span> 已完成</span>
+            <span class="chip"><span class="badge-dot warn"></span> 进行中</span>
+            <span class="chip"><span class="badge-dot"></span> 未开始</span>
+            <button class="btn btn-sm" onclick="setDayFilter('all')">🔄 显示全部</button>
+          </div>
+        </div>
+        <div id="dailyBars" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(70px,1fr)); gap:10px;"></div>
+      </div>
+    </section>
+
+    <!-- 14 天打卡 -->
+    <section id="plan">
+      <div class="section-head">
+        <h2><span class="icn"><i class="fa-solid fa-list-check"></i></span> 14 天打卡（每项任务点直达文档）</h2>
+        <div class="extra">阶段筛选：
+          <select id="phaseFilter" onchange="setDayFilter(this.value)" class="btn btn-sm" style="background:var(--surface); color:var(--text-1); border:1px solid var(--border); border-radius:10px;">
+            <option value="all">全部 14 天</option>
+            <option value="P1">Phase 1 · Day 1-3 基础</option>
+            <option value="P2">Phase 2 · Day 4-7 深挖</option>
+            <option value="P3">Phase 3 · Day 8-11 冲刺</option>
+            <option value="P4">Phase 4 · Day 12-14 速记</option>
+          </select>
+        </div>
+      </div>
+      <div id="planContainer" style="display:flex; flex-direction:column; gap:18px;"></div>
+    </section>
+
+    <!-- 刷题 -->
+    <section id="qa">
+      <div class="section-head">
+        <h2><span class="icn"><i class="fa-solid fa-brain"></i></span> 基础刷题 · JS / 网络 / 算法</h2>
+        <div class="extra">共 <b id="qaTotalCap" style="color:var(--text-0);">0</b> 题 · 来自：readme.md / 快手.js / 蚂蚁证券_AI_Native.js</div>
+      </div>
+
+      <div class="qa-stats no-print">
+        <div class="qa-stat"><div class="v" id="qaTotalStat">0</div><div class="l"><i class="fa-solid fa-layer-group"></i> 题库总数</div></div>
+        <div class="qa-stat"><div class="v" id="qaKnownStat">0<small>%</small></div><div class="l"><i class="fa-solid fa-check-double"></i> 掌握率</div></div>
+        <div class="qa-stat"><div class="v" id="qaRemain">0</div><div class="l"><i class="fa-solid fa-hourglass-half"></i> 待复习</div></div>
+        <div class="qa-stat"><div class="v" id="qaKnownCount">0</div><div class="l"><i class="fa-solid fa-trophy"></i> 已掌握</div></div>
+      </div>
+
+      <div class="toolbar no-print">
+        <button class="btn btn-sm" onclick="filterQA('all')"><i class="fa-solid fa-layer-group"></i> 全部</button>
+        <button class="btn btn-sm" onclick="filterQA('基础')"><span class="badge-dot" style="background:#818cf8"></span> JS/网络基础</button>
+        <button class="btn btn-sm" onclick="filterQA('快手')"><span class="badge-dot" style="background:#e879f9"></span> 快手专项</button>
+        <button class="btn btn-sm" onclick="filterQA('蚂蚁')"><span class="badge-dot" style="background:#34d399"></span> 蚂蚁算法 10 道</button>
+        <button class="btn btn-sm btn-primary" onclick="shuffleQA()"><i class="fa-solid fa-shuffle"></i> 随机洗牌</button>
+        <button class="btn btn-sm" onclick="resetQA()"><i class="fa-solid fa-rotate-left"></i> 重置标记</button>
+        <div class="spacer"></div>
+        <div class="count">掌握 <b id="qaKnownHead">0</b> / 共 <b id="qaTotalHead">0</b></div>
+      </div>
+
+      <div id="qaContainer" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px,1fr)); gap:12px;"></div>
+    </section>
+
+    <!-- 自我介绍 -->
+    <section id="intro">
+      <div class="section-head">
+        <h2><span class="icn"><i class="fa-solid fa-microphone-lines"></i></span> 自我介绍练音 + 模拟面试计时器</h2>
+        <div class="extra">推荐：点 ⏱️ 倒计时 + 在镜子/录像前自己讲一遍</div>
+      </div>
+
+      <!-- 模拟面试大计时器 -->
+      <div class="mock-timer no-print" style="margin-bottom:18px;">
+        <div>
+          <div class="mt-time" id="mockTime">00:00</div>
+          <div class="mt-label"><i class="fa-solid fa-stopwatch"></i> 模拟面试通用计时器（适用于 60/90 分钟整场面试）</div>
+        </div>
+        <div class="mt-btns">
+          <button class="btn btn-sm btn-ok" onclick="mockToggle()"><i class="fa-solid fa-play" id="mockPlayIcon"></i> <span id="mockPlayTxt">开始</span></button>
+          <button class="btn btn-sm btn-warn" onclick="mockLap()"><i class="fa-solid fa-flag"></i> 分段</button>
+          <button class="btn btn-sm btn-err" onclick="mockReset()"><i class="fa-solid fa-rotate-left"></i> 重置</button>
+          <div style="display:flex; gap:6px; align-items:center; margin-left:6px;">
+            <button class="btn btn-sm" onclick="mockPreset(30)">30s</button>
+            <button class="btn btn-sm" onclick="mockPreset(90)">90s</button>
+            <button class="btn btn-sm" onclick="mockPreset(600)">10 分</button>
+            <button class="btn btn-sm" onclick="mockPreset(3600)">60 分</button>
+          </div>
+        </div>
+      </div>
+      <div id="mockLaps" style="margin-bottom:22px; display:none;" class="no-print"></div>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px,1fr)); gap:16px;">
+        <!-- A -->
+        <div class="card intro-card">
+          <div class="top">
+            <h3><span class="chip chip-p1"><i class="fa-solid fa-elevator"></i> A · 电梯版</span> 30 秒 · ~100 字</h3>
+            <span class="chip chip-p1"><i class="fa-regular fa-user"></i> HR / 电话面</span>
+          </div>
+          <div class="txt">
+            你好，我叫陈雨寒，28 岁，<b>6 年前端与全栈经验</b>。最近在抖音直播做前端开发，核心方向两个：一是<b>鸿蒙端 0-1 建设和 KMP 跨端共享</b>（代码复用率 70%+），二是<b>AI Agent Workflow 全链路诊断 + RAG 知识库</b>建设。之前在网易云音乐做直播的 RN 和工程化，主导过赤兔元框架和海豚组件平台。很高兴有这次机会。
+          </div>
+          <div class="timer-box">
+            <button class="btn btn-sm btn-primary" onclick="startTimer(30)"><i class="fa-solid fa-clock"></i> 30 秒倒计时</button>
+            <div class="timer-display" id="timerA">00:30</div>
+            <a class="btn btn-sm" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/面试自我介绍模板.md"><i class="fa-solid fa-file-lines"></i> 打开模板</a>
+          </div>
+        </div>
+
+        <!-- B -->
+        <div class="card intro-card" style="border-left:3px solid var(--p2);">
+          <div class="top">
+            <h3><span class="chip chip-p2"><i class="fa-solid fa-star"></i> B · 标准版 ⭐默认</span> 90 秒 · ~300 字</h3>
+            <span class="chip chip-p2"><i class="fa-solid fa-laptop-code"></i> 技术一面</span>
+          </div>
+          <div class="txt">
+你好，我是陈雨寒，江西财经大学软件工程 20 届，6 年前端与全栈开发经验，求职方向全栈或 AI 应用开发。
+最近两年半我在抖音直播做前端，主要做两块：
+一块是跨端：作为核心开发参与抖音直播鸿蒙端 0-1 建设，落地 H5/Lynx 混合架构 + LiveView 等特色能力；同时主导 KMP 跨端方案，覆盖鸿蒙/安卓/iOS 三端，<b>代码复用率 70%+</b>，跨语言通信<b>性能提升 30%+</b>，整体业务迁移成本<b>降低 50%</b>。
+另一块是 AI 应用：我参与 Workflow Agent 智能体平台建设，<b>负责全链路诊断与问题排查能力开发</b>——用三级 ID 串联形成确定性账本，支持异常定位；还参与直播业务 RAG 知识库建设，<b>双路召回 + Query Rewrite</b>，作为 Agent 的事实知识来源。
+之前四年在网易云音乐做直播，覆盖 RN/H5 Hybrid 海内外，主导<b>赤兔元框架改造（构建效率 +40%）</b>和海豚组件平台。
+技术上我比较有深度的三个方向是：<b>跨平台工程（鸿蒙/KMP/RN）、AI Agent 可观测与评测、前端工程化治理</b>。希望接下来能深入和您交流。
+          </div>
+          <div class="timer-box">
+            <button class="btn btn-sm btn-primary" onclick="startTimer(90)"><i class="fa-solid fa-clock"></i> 90 秒倒计时</button>
+            <div class="timer-display" id="timerB">01:30</div>
+          </div>
+        </div>
+
+        <!-- C -->
+        <div class="card intro-card" style="grid-column: 1 / -1; border-left:3px solid var(--p3);">
+          <div class="top">
+            <h3><span class="chip chip-p3"><i class="fa-solid fa-cubes-stacked"></i> C · 详述版</span> 2.5-3 分钟 · ~700 字</h3>
+            <span class="chip chip-p3"><i class="fa-solid fa-sitemap"></i> 交叉面 / 架构面</span>
+          </div>
+          <div class="txt" style="max-height: 300px;">
+你好，我叫陈雨寒，6 年全栈与跨端开发，20 届软件工程本科毕业。整体履历：四年网易云音乐直播 → 两年半抖音直播，业务一直围绕直播，经历从客户端到工程化再到 AI Agent 的演进。
+目前在抖音直播，我深度参与了两个高难度项目。第一个是<b>直播鸿蒙端 0-1 建设</b>——当时要快速拉齐安卓 iOS 能力，但从零写纯 ArkUI 成本高。我推动落地了 H5/Lynx 混合架构，成熟业务用 Lynx，强交互特色能力（LiveView 实况窗、直播卡片、小窗）走原生 ArkTS。同时主导 KMP 跨端方案，把公共逻辑沉淀到 Kotlin 共享层，<b>代码复用率 70%+</b>，跨语言通信做了批量传输和异步绑定优化，<b>传输效率再提升 30%+</b>，总体迁移成本降低一半。
+第二个是<b>AI Agent Workflow 平台和直播 RAG 知识库</b>——我主要负责全链路诊断与问题排查：给 ReAct 执行引擎加了 traceId / spanId / agentRunId 三级串联，形成 Runtime Trace + Workflow 阶段账本两个确定性证据，出问题时可以精准定位哪个 Tool / 哪个阶段 / 哪个沙箱配置出错。Sandbox 配置同步上用 <b>SHA-256 校验 + 原子替换 + 回滚</b>，解决了多轮会话配置残留导致 TOML 损坏的经典问题（这个坑做 Agent Runtime 的人基本都踩过）。同时把知识库检索封装成 MCP Skill，<b>双路召回 + Query Rewrite + 同义词词典</b>，让 Agent 回答业务问题时事实受知识库约束、幻觉减少。
+网易时期我做两件事：一是<b>工程化治理</b>，主导赤兔元框架从单 RN 改造到 RN/Web 双端，做 RN 拆包 + Webpack5 缓存并行，<b>构建效率 +40%</b>；二是<b>海豚组件平台一期</b>，做 RN→Web 兼容层与 token 模块化，降低跨平台组件的维护成本 25%+。
+总结下来，我的优势是：<b>有跨端（鸿蒙/KMP/RN）和 AI 应用（Agent 可观测/RAG）两条线的复合经验，同时工程化底子扎实</b>，不是只做业务 UI 的类型。很高兴今天交流。
+          </div>
+          <div class="timer-box">
+            <button class="btn btn-sm btn-primary" onclick="startTimer(180)"><i class="fa-solid fa-clock"></i> 3 分钟倒计时</button>
+            <div class="timer-display" id="timerC">03:00</div>
+          </div>
+        </div>
+
+        <!-- D -->
+        <div class="card intro-card" style="grid-column: 1 / -1; border-left:3px solid var(--p4);">
+          <div class="top">
+            <h3><span class="chip chip-p4"><i class="fa-solid fa-bullseye"></i> D · 岗位定制版（蚂蚁证券 AI Native）</span> 衔接在标准版之后 +30 秒</h3>
+            <span class="chip chip-p4"><i class="fa-solid fa-building-columns"></i> 意向岗位</span>
+          </div>
+          <div class="txt">
+（标准版讲 1 分钟之后说）我之所以对这个机会特别感兴趣，是因为你们做 <b>AI Native 全栈应用</b> 这件事，和我在抖音做 Workflow Agent + RAG 知识库的方向高度一致。我在 Agent 执行<b>可观测、异常归因、RAG 事实约束</b>这几块已经踩过一年多实坑，对「怎么把 AI 功能做成工程上<b>可信、可测、可回滚</b>的产品」有比较成型的方法论。证券行业对稳定性和合规性的要求，恰好是我目前这套能力最大的用武之地，希望能把这套经验迁移到证券场景做更有行业价值的应用。
+          </div>
+          <div class="timer-box">
+            <a class="btn btn-sm" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/docs/job_targets/蚂蚁证券-AI-Native-前端面试准备计划.md"><i class="fa-solid fa-clipboard-list"></i> 蚂蚁准备计划</a>
+            <a class="btn btn-sm" target="_blank" href="file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview/面试题/interview/docs/job_targets/蚂蚁证券-AI-Native-前端答题指南.md"><i class="fa-solid fa-book-open"></i> 蚂蚁答题指南</a>
+            <button class="btn btn-sm btn-primary" onclick="startTimer(30)"><i class="fa-solid fa-clock"></i> 30 秒衔接段练习</button>
+            <div class="timer-display" id="timerD">00:30</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STAR 卡 -->
+    <section id="star">
+      <div class="section-head">
+        <h2><span class="icn"><i class="fa-regular fa-star"></i></span> 6 大项目 STAR 速记卡</h2>
+        <div class="extra">点击卡片翻到背面 <i class="fa-solid fa-rotate"></i> 看精炼成果与故事素材</div>
+      </div>
+      <div id="starContainer" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap:16px;"></div>
+    </section>
+
+    <!-- A4 速记单 -->
+    <section id="a4">
+      <div class="section-head">
+        <h2><span class="icn"><i class="fa-solid fa-file-arrow-down"></i></span> A4 速记单（Phase 4 Day12 直接打印）</h2>
+        <div class="extra"><button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> 打印 A4 / 导出 PDF</button></div>
+      </div>
+
+      <div class="a4-wrap">
+        <div>
+          <h3 style="color:var(--text-1); margin:0 0 10px; font-size:14px;"><i class="fa-solid fa-file-lines"></i> A 面 · 6 大项目 STAR 卡</h3>
+          <div class="a4-face" id="a4FaceA"></div>
+        </div>
+        <div>
+          <h3 style="color:var(--text-1); margin:0 0 10px; font-size:14px;"><i class="fa-solid fa-bolt"></i> B 面 · AI + 架构 + 基础 20 条必记</h3>
+          <div class="a4-face">
+            <ol class="b20" id="a4FaceB"></ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="before-final">
+        <h3 style="margin:0 0 8px; color:var(--text-0); font-weight:700; display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-list-check"></i> 🧘 面试当天黄金 2 小时清单</h3>
+        <p style="margin:0 0 4px; font-size:13px; color:var(--text-2);">按勾选顺序过，不要跳。</p>
+        <div class="check-grid">
+          <label><input type="checkbox" /> 提前 30 分钟入座，测试摄像头/麦克风/安静房间</label>
+          <label><input type="checkbox" /> 喝水杯子 + 笔 + 简历 2 份打印版</label>
+          <label><input type="checkbox" /> 10 分钟：自我介绍标准版 90 秒念一遍（念出声音）</label>
+          <label><input type="checkbox" /> 10 分钟：A4 速记单两面各过一遍</label>
+          <label><input type="checkbox" /> 10 分钟：反向提问 5 个默背一遍</label>
+          <label><input type="checkbox" /> 30 分钟：深呼吸，把 6 个项目 STAR 四要素默念一遍</label>
+          <label><input type="checkbox" /> 关闭一切通知（手机开勿扰）</label>
+          <label><input type="checkbox" /> 确认浏览器打开了面试链接 & 邮箱备用</label>
+        </div>
+        <div style="margin-top:14px; padding:12px 14px; background:rgba(239,68,68,0.08); border:1px dashed rgba(239,68,68,0.35); border-radius:12px; font-size:13px; color:var(--text-1); line-height:1.7;">
+          <b style="color:var(--err);"><i class="fa-solid fa-circle-exclamation"></i> 不会的题标准应对话术（直接背）：</b><br/>
+          「这个具体细节我现在有点拿不准，不过我可以按做过的类似场景思路拆解一下：<b>XXX 是背景，XXX 是挑战，我会用 XXX 思路解决</b>——如果我答错了您可以纠正我。」<br/>
+          诚实 + 思路拆解 + 态度诚恳，比硬猜一个错误答案强 100 倍。
+        </div>
+      </div>
+    </section>
+
+    <footer style="margin-top:50px; text-align:center; color: var(--text-3); font-size:12px;">
+      <i class="fa-regular fa-heart"></i> 加油雨寒，认真准备的人一定有好运。进度保存键：localStorage · <code>cyh-interview-site-v2</code>
+    </footer>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"><i class="fa-solid fa-circle-check"></i> <span id="toastText">已保存</span></div>
+
+<script>
+/* ============================================================
+   交互增强 v2.1：滚动进度 / 涟漪 / 入场动画 / 快捷键 / Toast
+   ============================================================ */
+(function initUX(){
+  // ----- 顶部滚动进度条 -----
+  const scrollBar = document.getElementById("scrollBar");
+  function updateScrollBar(){
+    const h = document.documentElement;
+    const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100 || 0;
+    if(scrollBar) scrollBar.style.width = pct + "%";
+  }
+  window.addEventListener("scroll", updateScrollBar, { passive:true });
+  requestAnimationFrame(updateScrollBar);
+
+  // ----- 按钮涟漪点击（事件委托）-----
+  document.addEventListener("click", (e)=>{
+    const btn = e.target.closest(".btn");
+    if(!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const r = document.createElement("span");
+    r.className = "ripple";
+    r.style.width = r.style.height = size + "px";
+    r.style.left = (e.clientX - rect.left - size/2) + "px";
+    r.style.top  = (e.clientY - rect.top  - size/2) + "px";
+    btn.appendChild(r);
+    setTimeout(()=>r.remove(), 650);
+  });
+
+  // ----- 入场动画 IntersectionObserver -----
+  const REVEAL_SEL = ".card, .phase-card, .qa-card, .stat, .qa-stat, .a4-face, .flip-wrap, .before-final, .mock-timer, .intro-card, .section-head, .hero, .day-cell";
+  function setupReveal(){
+    const els = document.querySelectorAll(REVEAL_SEL);
+    let i = 0;
+    els.forEach(el=>{
+      el.classList.add("reveal");
+      const d = (i % 8) + 1;
+      el.setAttribute("data-delay", d);
+      i++;
+    });
+    if(!("IntersectionObserver" in window)){
+      els.forEach(el=>el.classList.add("in"));
+      return;
+    }
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(en=>{
+        if(en.isIntersecting){
+          en.target.classList.add("in");
+          io.unobserve(en.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: "0px 0px -40px 0px" });
+    els.forEach(el=>io.observe(el));
+  }
+  // 因为任务/QA/STAR是后渲染的，在renderXxx后各自再调用
+
+  // ----- 键盘快捷键（1~6 导航 / Ctrl+S 保存 / Esc 关筛选） -----
+  const KEY_NAV = ["#home","#plan","#qa","#intro","#star","#a4"];
+  document.addEventListener("keydown", (e)=>{
+    // 不拦截输入框
+    const tag = (e.target.tagName||"").toLowerCase();
+    if(["input","textarea","select"].includes(tag) || e.target.isContentEditable) return;
+    // 数字 1~6
+    if(e.key >= "1" && e.key <= "6" && !e.metaKey && !e.ctrlKey && !e.altKey){
+      e.preventDefault();
+      const id = KEY_NAV[Number(e.key)-1];
+      if(id && typeof jumpTo === "function") jumpTo(id);
+    }
+    // Ctrl/Cmd+S => 手动保存
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==="s"){
+      e.preventDefault();
+      if(typeof saveState === "function") saveState();
+    }
+    // Esc => 切回 all 筛选
+    if(e.key === "Escape"){
+      if(typeof setDayFilter === "function") setDayFilter("all");
+      if(typeof filterQA === "function") filterQA("all");
+    }
+  });
+
+  // 导出给后续 render 使用
+  window.__setupRevealFor = function(containerSelector){
+    requestAnimationFrame(()=>{
+      const host = document.querySelector(containerSelector);
+      if(!host) return;
+      const fresh = host.querySelectorAll(".card, .phase-card, .qa-card, .stat, .qa-stat, .flip-wrap, .intro-card, .before-final, .mock-timer, .a4-face, .day-cell");
+      let i = 0;
+      fresh.forEach(el=>{
+        if(el.classList.contains("reveal")) return;
+        el.classList.add("reveal");
+        const d = (i % 8) + 1;
+        el.setAttribute("data-delay", d);
+        i++;
+      });
+      if(!("IntersectionObserver" in window)){
+        fresh.forEach(el=>el.classList.add("in"));
+        return;
+      }
+      const io = new IntersectionObserver((entries)=>{
+        entries.forEach(en=>{
+          if(en.isIntersecting){
+            en.target.classList.add("in");
+            io.unobserve(en.target);
+          }
+        });
+      }, { threshold: 0.08, rootMargin: "0px 0px -30px 0px" });
+      fresh.forEach(el=>io.observe(el));
+    });
+  };
+  // 首页静态元素入场
+  document.addEventListener("DOMContentLoaded", ()=>{
+    setTimeout(setupReveal, 30);
+  });
+})();
+
+/* ================= 数据：任务 / QA / STAR ================= */
+const ROOT = "file:///Users/yuhanchen/workspace/myProject/Learning_record/Interview";
+const D = {
+  plan: ROOT + "/面试题/interview/00-面试分阶段复习总计划-14天版.md",
+  intro: ROOT + "/面试题/interview/面试自我介绍模板.md",
+  outR: ROOT + "/面试题/interview/陈雨寒-全栈开发-对外.md",
+  inR: ROOT + "/面试题/interview/陈雨寒-全栈开发-对内.md",
+  qna33: ROOT + "/面试题/interview/docs/interview_qna/面试问答.md",
+  qnaD: ROOT + "/面试题/interview/docs/interview_qna/面试问答-详细话术.md",
+  qnaQ: ROOT + "/面试题/interview/interview_qna_quick.md",
+  mind: ROOT + "/面试题/interview/interview_difficulty_mindmap.md",
+  promo: ROOT + "/面试题/interview/promotion_speech_three_pillars.md",
+  dAi: ROOT + "/面试题/interview/docs/resume_tech_deep/01-AI-Agent-RAG-MCP深挖.md",
+  dHm: ROOT + "/面试题/interview/docs/resume_tech_deep/02-鸿蒙ArkUI与LiveView深挖.md",
+  dHy: ROOT + "/面试题/interview/docs/resume_tech_deep/03-移动端Hybrid与微前端深挖.md",
+  dEl: ROOT + "/面试题/interview/docs/resume_tech_deep/04-Electron-NestJS全栈深挖.md",
+  dRt: ROOT + "/面试题/interview/docs/resume_tech_deep/05-Web-Runtime沙箱深挖.md",
+  d00: ROOT + "/面试题/interview/docs/resume_tech_deep/00-目录索引.md",
+  cpCmp: ROOT + "/面试题/interview/docs/cross_platform_interview_deep/01-三大跨端框架差异对比总览.md",
+  cpKmp2: ROOT + "/面试题/interview/docs/cross_platform_interview_deep/02-KMP深挖-共享层与桥接通信.md",
+  cpKmp: ROOT + "/面试题/interview/docs/cross_platform_interview/01-KMP渲染与通信原理.md",
+  cpLx: ROOT + "/面试题/interview/docs/cross_platform_interview/02-Lynx渲染与通信原理.md",
+  cpRn: ROOT + "/面试题/interview/docs/cross_platform_interview/03-ReactNative渲染与通信原理.md",
+  h01: ROOT + "/面试题/interview/docs/harness_workflow/01-调研选型-8方案对比与决策树与面试话术.md",
+  h02: ROOT + "/面试题/interview/docs/harness_workflow/02-设计方案-AI-Native工作流架构与Harness设计.md",
+  h03: ROOT + "/面试题/interview/docs/harness_workflow/03-落地手册-生产架构与SLA容灾与OnCall.md",
+  h04: ROOT + "/面试题/interview/docs/harness_workflow/04-CodeAgent源码学习路线-配合面试复习.md",
+  antP: ROOT + "/面试题/interview/docs/job_targets/蚂蚁证券-AI-Native-前端面试准备计划.md",
+  antG: ROOT + "/面试题/interview/docs/job_targets/蚂蚁证券-AI-Native-前端答题指南.md",
+  antJs: ROOT + "/面试题/蚂蚁证券_AI_Native.js",
+  ksJs: ROOT + "/面试题/快手.js",
+  base: ROOT + "/面试题/readme.md",
+};
+
+/* 14 天任务：每项 {t, docs:[{url,label}], tags:[], warn?} */
+const DAYS = [
+  { day:"Day 1", phase:"P1 基础储备", pc:"p1", tasks:[
+    { t:"背两份简历所有数字（70%+ / 30%+ / 40%+ / 50%- / 25%-），确保口径一致", docs:[{u:D.outR,l:"对外简历"},{u:D.inR,l:"对内简历"}], tags:["简历"]},
+    { t:"背「自我介绍标准版 90 秒」逐字稿，对着手机录音 2 遍，检查口头禅和时长", docs:[{u:D.intro,l:"自我介绍模板"}], tags:["开场"], warn:true},
+    { t:"熟悉「自我介绍详述版 3 分钟」框架：每个 STAR 四要素先能口头讲", docs:[{u:D.intro,l:"自我介绍模板"}], tags:["开场"]},
+    { t:"JS / 网络基础第一轮：通读 readme.md 所有题目（TCP/UDP、HTTP2、防抖节流、变量提升、CORS、手写题…）", docs:[{u:D.base,l:"readme.md 基础题"}], tags:["基础"]},
+  ]},
+  { day:"Day 2", phase:"P1 基础储备", pc:"p1", tasks:[
+    { t:"深挖 鸿蒙 ArkUI + LiveView：生命周期竞态用状态机修复、Hybrid 容器 5 大 Service 收口", docs:[{u:D.dHm,l:"02-鸿蒙深挖"}], tags:["鸿蒙"]},
+    { t:"深挖 移动端 Hybrid + 微前端：Lynx vs H5 取舍、容器降级策略、串房风险治理", docs:[{u:D.dHy,l:"03-Hybrid深挖"}], tags:["跨端"]},
+    { t:"深挖 Workflow Agent 全链路诊断 + RAG：三级 ID、TOML 损坏修复、双路召回 + Query Rewrite", docs:[{u:D.dAi,l:"01-AI-Agent-RAG-MCP深挖"}], tags:["AI"]},
+    { t:"面试问答 33 题：过一遍每一题标题，打勾 / 打叉（能答 / 答不出 → 生成弱点清单）", docs:[{u:D.qna33,l:"33 题"}], tags:["问答"]},
+    { t:"基础第二轮：不会的题抄入错题本（Promise 链、事件循环、flatten、CORS Headers、Content-Type…）", docs:[{u:D.base,l:"基础题"}], tags:["基础"]},
+  ]},
+  { day:"Day 3", phase:"P1 基础储备", pc:"p1", tasks:[
+    { t:"三大跨端差异对比总览：KMP / Lynx / RN 原理、复用率、生态、学习曲线、选型结论", docs:[{u:D.cpCmp,l:"差异对比总览"}], tags:["跨端"]},
+    { t:"KMP 深挖：共享层 vs 平台侧划分、大对象同步、异步回调生命周期缺失用 Job 绑定修复故事", docs:[{u:D.cpKmp2,l:"KMP 深挖"}], tags:["KMP"]},
+    { t:"KMP / Lynx / RN 三本原理通读（看结构 + 关键图，不背细节）", docs:[{u:D.cpKmp,l:"KMP"},{u:D.cpLx,l:"Lynx"},{u:D.cpRn,l:"RN"}], tags:["原理"]},
+    { t:"Electron-NestJS 全栈 + Web Runtime 沙箱：IPC 通道、包体积优化、沙箱策略", docs:[{u:D.dEl,l:"Electron-NestJS"},{u:D.dRt,l:"Runtime沙箱"}], tags:["全栈"]},
+    { t:"项目难点脑图四道：开播架构、短触、Hybrid 容器、KMP —— 每个 4 要素背熟", docs:[{u:D.mind,l:"项目难点大纲"}], tags:["STAR"], warn:true},
+    { t:"基础第三轮：错题本二刷", docs:[{u:D.base,l:"基础题"}], tags:["基础"]},
+  ], test:"Phase 1 自测：随机抽 6 大项目条目，每项不看资料讲 2 分钟 STAR。抽不出 / 讲不清楚 → 入弱点清单"},
+
+  { day:"Day 4", phase:"P2 深挖对齐", pc:"p2", tasks:[
+    { t:"精读 Harness 01：8 方案定位分类 + 15 维对比关键结论（LangGraph 为什么第一 / CrewAI/Dify 为什么淘汰）", docs:[{u:D.h01,l:"01-调研选型"}], tags:["AI"], warn:true},
+    { t:"背「融合方案 3 条 trade-off 原则」和 8 个高频追问（选型/不用 CrewAI/不用 Dify/不全换 LangGraph/说服团队/模型选型/成本/框架死亡）", docs:[{u:D.h01,l:"01-调研选型 § 6.4 15 追问"}], tags:["选型话术"]},
+    { t:"刷 蚂蚁证券_AI_Native.js：Fiber、虚拟 DOM、三数之和、webpack loader-plugin、浏览器渲染", docs:[{u:D.antJs,l:"蚂蚁证券_AI_Native.js"}], tags:["公司题"]},
+    { t:"蚂蚁准备计划 Day 1 基础：岗位能力地图过一遍，把弱区标记出来", docs:[{u:D.antP,l:"蚂蚁准备计划"}], tags:["蚂蚁"]},
+  ]},
+  { day:"Day 5", phase:"P2 深挖对齐", pc:"p2", tasks:[
+    { t:"Harness 02：六层架构图（接入/协议/治理/工具知识/存储/可观测）+ 四大类 20+ 指标 + 门禁伪代码", docs:[{u:D.h02,l:"02-设计方案"}], tags:["架构"]},
+    { t:"Harness 03：容量规划 / SLA / Mongo PITR 容灾 / 四级可观测 / OnCall Playbook + 两个止血开关", docs:[{u:D.h03,l:"03-落地手册"}], tags:["生产落地"]},
+    { t:"源码学习 Day 1-3：Nano Claude Code  types / prompts / agent.run_loop（Fork/Inline 双执行入口）", docs:[{u:D.h04,l:"源码学习路线 Day1-3"}], tags:["源码对标"]},
+    { t:"源码学习：skills.base + builtin.mcp_client + runtime.approval（审批 auto/ask/never 三模式）", docs:[{u:D.h04,l:"源码学习路线 Day1-3 工具/审批"}], tags:["源码对标"]},
+    { t:"自己写 1 页对比表：「我的 Workflow Agent 设计 vs Nano Claude Code + Codex 一线实现」", docs:[{u:D.h01,l:"8 方案选型"},{u:D.h04,l:"源码学习路线"}], tags:["面试素材"], warn:true},
+    { t:"快手.js 全量过一遍（Fiber / 虚拟 DOM / 三数之和 / 浏览器渲染 / 打包）", docs:[{u:D.ksJs,l:"快手.js"}], tags:["公司题"]},
+  ]},
+  { day:"Day 6", phase:"P2 深挖对齐", pc:"p2", tasks:[
+    { t:"背完 蚂蚁 AI Native 前端答题指南 20+ 题：每道 30 秒主答 + 2 个关键词延伸", docs:[{u:D.antG,l:"蚂蚁答题指南"}], tags:["蚂蚁"], warn:true},
+    { t:"精读 面试问答-详细话术 16 题：全链路诊断 / KMP 选型 / Hybrid / RAG / RN 拆包 / LiveView / 三层架构 / MCP / 上下文等", docs:[{u:D.qnaD,l:"详细话术"}], tags:["问答"]},
+    { t:"STAR 故事两条背熟：① TOML 损坏根因排查故事 ② RAG 调优（召回/生成判别、双路+Rewrite+cross-encoder）", docs:[{u:D.qnaD,l:"详细话术故事题"}], tags:["STAR故事"], warn:true},
+    { t:"LeetCode 前端高频 10 道：LRU / 深拷贝 / 深比较 / Promise.all / Promise.allSettled / 手写防抖节流 / instanceof / Object.create / EventEmitter / 扁平化", docs:[{u:D.base,l:"基础题"}], tags:["算法"]},
+  ]},
+  { day:"Day 7", phase:"P2 深挖对齐", pc:"p2", tasks:[
+    { t:"源码学习 Day 4：Nano Memory 三层（短期/长期项目知识/AI 向量检索）+ runtime.git_worktree 轻量沙箱", docs:[{u:D.h04,l:"路线 Day4"}], tags:["源码对标"]},
+    { t:"源码学习 Day 5-6：Codex 三级平台沙箱（Seatbelt / BubbleWrap / AppContainer）+ approval/memory/mcp", docs:[{u:D.h04,l:"路线 Day5-6"}], tags:["源码对标"]},
+    { t:"源码学习 Day 7：重写「新版 Workflow Agent 介绍话术」（嵌入行业对标）+ 弱点清单每项写完 3 分钟完整回答", docs:[{u:D.intro,l:"自我介绍模板"},{u:D.qnaD,l:"详细话术"}], tags:["素材打磨"], warn:true},
+    { t:"周末 1 小时全真模拟（录音）：自我介绍 90s + 鸿蒙项目 + Workflow Agent + Harness 选型，共 4 题", docs:[{u:D.intro,l:"自我介绍"}], tags:["模拟"], simulation:true, warn:true},
+  ], test:"Phase 2 自测：① 3 分钟 Harness 选型答辩版能完整讲完 ② 蚂蚁/快手两套题通过率 ≥ 70% ③ 1 小时模拟命中率 ≥ 80%"},
+
+  { day:"Day 8", phase:"P3 模拟冲刺", pc:"p3", tasks:[
+    { t:"60 分钟全真模拟 1 · 大前端+跨端专题：自我介绍 / LiveView 竞态 / KMP 选型 / Hybrid 容器 5 大 Service / 开播架构 / RN 拆包 & Webpack +40% / TCP-UDP / HTTP2 vs 1 / 防抖节流 30 秒手写 / 反向提问", docs:[{u:D.dHm,l:"鸿蒙深挖"},{u:D.cpCmp,l:"跨端差异"}], tags:["模拟"], simulation:true, warn:true},
+    { t:"LeetCode 前端高频 10 道（数组 / 链表 / 树 三大类：两数之和 / 反转链表 / 有效括号 / 合并区间 / 层序遍历 / 二分 / 最大子数组和 / 爬楼梯 / 合并有序数组 / 移除元素）", docs:[{u:D.base,l:"基础题"}], tags:["算法"]},
+  ]},
+  { day:"Day 9", phase:"P3 模拟冲刺", pc:"p3", tasks:[
+    { t:"60 分钟全真模拟 2 · AI Native + 全栈专题：自我介绍 3 分钟 / 三级账本设计 / 融合方案三原则 / RAG 双路 + Rewrite / RAG 入库流水线 / Electron IPC+打包 / 事件循环 / 手写 LRU / Promise.all 并发控制", docs:[{u:D.dAi,l:"Workflow Agent深挖"},{u:D.dEl,l:"Electron全栈深挖"}], tags:["模拟"], simulation:true, warn:true},
+    { t:"LeetCode 前端高频 10 道（字符串 / DP / 栈：最长回文 / 回文子串 / 最长公共前缀 / 零钱 II / 买卖股票 / 下一个排列 / 每日温度 / 逆波兰表达式 / 岛屿数量 BFS / 爬楼梯进阶）", docs:[{u:D.base,l:"基础题"}], tags:["算法"]},
+  ]},
+  { day:"Day 10", phase:"P3 模拟冲刺", pc:"p3", tasks:[
+    { t:"90 分钟蚂蚁定制模拟：自我介绍+岗位匹配 / Workflow 融合方案(证券稳定) / 三级沙箱矩阵+审批三模式+止血开关 / Scenario-Baseline-Gate 3 件套 + P0 误阻断 Playbook / RAG 在证券合规 / 蚂蚁答题指南抽 5 题 / Fiber 和算法 3 题 / 反向提问 2-3 个", docs:[{u:D.antG,l:"蚂蚁答题指南"},{u:D.antP,l:"蚂蚁准备计划"}], tags:["蚂蚁","模拟"], simulation:true, warn:true},
+    { t:"整理自己的 5 个反向提问问题库（业务 + 技术 + 协作三类各 1-2 个，随公司业务调词）", docs:[{u:D.intro,l:"自我介绍模板 § 反向提问"}], tags:["反向"], warn:true},
+    { t:"错题本补录 + 算法错题回做", docs:[{u:D.antJs,l:"蚂蚁算法"},{u:D.ksJs,l:"快手题"}], tags:["算法"]},
+  ]},
+  { day:"Day 11", phase:"P3 模拟冲刺", pc:"p3", tasks:[
+    { t:"60 分钟快手 / 通用前端面模拟（基础 + 跨端 + 工程化）", docs:[{u:D.ksJs,l:"快手.js"}], tags:["模拟"], simulation:true},
+    { t:"晋升三板斧：3 个项目难点叙述练熟", docs:[{u:D.promo,l:"晋升三板斧文档"}], tags:["STAR故事"]},
+    { t:"错题本清零 ≥ 90%：Phase 1-3 所有错题本全部回做一遍", docs:[{u:D.base,l:"readme 基础"}], tags:["基础"], warn:true},
+    { t:"算法总刷：readme.md 全部手写题 + 快手.js + 蚂蚁证券_AI_Native.js 错题", docs:[{u:D.base,l:"基础"},{u:D.ksJs,l:"快手"},{u:D.antJs,l:"蚂蚁算法"}], tags:["算法"], warn:true},
+  ], test:"Phase 3 自测：① 4 场模拟均分 ≥ 7/10 ② 错题本清零率 ≥ 90% ③ 算法通过率 ≥ 75%"},
+
+  { day:"Day 12", phase:"P4 面试前速记", pc:"p4", tasks:[
+    { t:"制作 A4 速记单 A 面：6 项目 STAR 卡（每项 4 要素 3 行字写清楚）—— 可以直接打印本站「A4 速记单」页", docs:["#a4"], tags:["A4"], warn:true},
+    { t:"制作 A4 速记单 B 面：Harness 8 方案选型一行结论 × 8 + 跨端三框架一句话 + 高频 JS/网络 10 句结论 + 自己 3 个 STAR 故事（TOML 损坏 / RAG 调优 / LiveView 竞态）", tags:["A4"], warn:true},
+  ]},
+  { day:"Day 13", phase:"P4 面试前速记", pc:"p4", tasks:[
+    { t:"🟡 【蚂蚁面定制】重看 蚂蚁准备计划 + 答题指南 + 蚂蚁算法错题 + 自我介绍岗位匹配段练一遍", docs:[{u:D.antP,l:"蚂蚁准备计划"},{u:D.antG,l:"答题指南"},{u:D.antJs,l:"蚂蚁算法错题"}], tags:["定制"]},
+    { t:"🔵 【通用面定制】快手.js + readme.md 错题二刷 + Harness 选型决策三原则背一遍", docs:[{u:D.ksJs,l:"快手题"},{u:D.base,l:"基础"},{u:D.h01,l:"选型三原则"}], tags:["定制"]},
+    { t:"⚠️ 算法：只刷错题本 —— 千万不要再刷新题（刷新 → 焦虑 → 忘熟的）", tags:["算法"], warn:true},
+  ]},
+  { day:"Day 14", phase:"P4 面试前速记", pc:"p4", tasks:[
+    { t:"A4 速记单过 2 遍（两面）", tags:["速记"], warn:true},
+    { t:"自我介绍标准版 90 秒录一遍音，检查时长和口头禅", tags:["开场"]},
+    { t:"反向提问问题库过 1 遍", tags:["反向"]},
+    { t:"🌳 剩下时间散步 / 运动 / 早睡 —— 状态比多刷 5 道题重要 100 倍 ✨", tags:["心理"], warn:true},
+    { t:"准备物质：简历 2 份打印版 + 笔 + 喝水杯子 + 面试链接 + 安静房间", tags:["准备"]},
+  ]},
+];
+
+/* QA 题库 32 题（略，同 v1）*/
+const QAS = [
+  {s:"基础", q:"高阶组件 HOC 是什么？", a:"和高阶函数概念类似，就是一个会返回组件的函数，用于在组件逻辑复用场景里包装原有组件（注入 props / 权限 / 数据等）。"},
+  {s:"基础", q:"Babel 做什么？", a:"把 ES6+ 代码转译为 ES5。三步工作流：\n1) parse 解析为 AST；\n2) transform 旧 AST → 新 AST （各 plugin 做转换）；\n3) generate 以新 AST 为基础生成目标代码。"},
+  {s:"基础", q:"CSS position 五者区别", a:"static 默认（无定位）；relative 相对自身偏移；absolute 相对最近非 static 父元素；fixed 相对视口固定；sticky 滚动到阈值前相对，之后吸顶。"},
+  {s:"基础", q:"纯 CSS 画三角形", a:"元素宽高设为 0，边框设为非 0，把其他三边颜色设为 transparent，剩下一条边的颜色就是三角形（利用 border 4 块梯形结构）。"},
+  {s:"基础", q:"TCP vs UDP 核心区别（必背）", a:"① TCP 面向连接（三次握手）可靠传输（丢包重传 + 按序交付），UDP 无连接不可靠但快；\n② TCP 占用系统资源更多，UDP 少；\n③ UDP 速度受应用生成速度 / 带宽限制，不被对方接收窗口限制（直播 / 游戏 / VoIP）。"},
+  {s:"基础", q:"typeof vs instanceof vs Object.prototype.toString.call", a:"typeof 判断基本类型，8 种识别（null 判成 object 经典坑）；instanceof 基于原型链判断「是否是某构造函数实例」，跨 iframe 会失效；Object.prototype.toString.call() 返回 [object ClassName] 最可靠。"},
+  {s:"基础", q:"setInterval 的问题 + 怎么替代", a:"当回调执行时长超过 interval 会堆积（回调结束立即下一次），且页面不可见时继续累积。通常用 setTimeout 自调度模拟，或用更顺滑的 requestAnimationFrame。"},
+  {s:"基础", q:"节流 vs 防抖 + 典型应用", a:"节流（throttle）：一段时间只让首次生效 → resize/scroll/搜索联想；防抖（debounce）：一段时间只取最后一次 → 表单提交防重复点击 / 输入联想 / 窗口停止变化再算布局。"},
+  {s:"基础", q:"OSI 七层 vs TCP/IP 五层", a:"七层下→上：物理(比特)/数据链路(帧+MAC)/网络(IP)/传输(TCP UDP)/会话/表示/应用；五层把会话+表示合并到应用层，工业界常用简化模型。"},
+  {s:"基础", q:"HTTP 1.1 vs 2.0 核心差异", a:"1.1 同域名 6 TCP 连接 + 请求排队（队头阻塞）；HTTP2：多路复用（单连接多流并行）+ HPACK Header 压缩 + 服务端推送 + 流优先级。HTTP2 之后通常不再需要 domain sharding / 文件合并。"},
+  {s:"基础", q:"手写柯里化加法：sum(x,y) 和 sum(x)(y) 两种调用都支持", a:"function sum(...a){\n  if(a.length>=2) return a.slice(0,2).reduce((s,x)=>s+Number(x),0);\n  return (b)=>sum(a[0],b);\n}\n\nsum(1,2) // 3\nsum(1)(2) // 3"},
+  {s:"基础", q:"实现单链表 insert + search", a:"class Node{constructor(v){this.val=v;this.next=null}}\nclass LL{\n  constructor(){this.head=null}\n  insert(v){\n    const n=new Node(v);\n    if(!this.head){this.head=n;return}\n    let c=this.head; while(c.next)c=c.next; c.next=n;\n  }\n  search(v){\n    let c=this.head,i=1;\n    while(c){ if(c.val===v) return i; c=c.next; i++;}\n    return -1;\n  }\n}"},
+  {s:"基础", q:"实现 repeat(func, times, wait)：N 次调用，每次间隔 wait 毫秒", a:"function repeat(fn,t,wait){\n  return function(...a){\n    let i=0;\n    const tick=()=>{\n      if(i>=t) return;\n      fn.apply(this,a); i++;\n      setTimeout(tick,wait);\n    };\n    tick();\n  };\n}"},
+  {s:"基础", q:"Array.prototype.flatten() 手写扁平化", a:"Array.prototype.flatten=function(){\n  const res=[];\n  const dfs=a=>{\n    for(const x of a){\n      if(Array.isArray(x)) dfs(x); else res.push(x);\n    }\n  };\n  dfs(this);\n  return res;\n};"},
+  {s:"基础", q:"事件循环打印：Promise + setTimeout 经典题", a:"原则：先跑本轮宏任务同步代码 → 清空所有微任务（Promise.then / queueMicrotask / MutationObserver）→ 渲染 → 下一个宏任务。\n\n经典题顺序：start → p1 → p2 → timeout1 → p3 → p4 → 3s 后 interval 每隔打印。"},
+  {s:"基础", q:"怎么判断 AJAX 请求？", a:"最常用：请求头 X-Requested-With 为 XMLHttpRequest（jQuery/axios 会带）。更现代：Fetch Metadata 请求头 Sec-Fetch-Mode: cors / Sec-Fetch-* 一套。预检 OPTIONS + Access-Control-Request-Method/Headers 也是信号。"},
+  {s:"基础", q:"CORS 三字段怎么配？", a:"服务端响应头三件套：\n① Access-Control-Allow-Origin（必填，写 Origin 值或 *，带 Cookie 时不能 *）；\n② Access-Control-Allow-Credentials: true（允许带 Cookie，和 * 互斥）；\n③ Access-Control-Expose-Headers（前端能读的额外 Header 白名单）。\n预检 OPTIONS 还要响应 Allow-Methods / Allow-Headers / Max-Age。"},
+  {s:"基础", q:"Content-Type 常见三值", a:"application/x-www-form-urlencoded（key=val&key2=val2 URL 编码）；multipart/form-data（文件上传，boundary 多段分割）；application/json（JSON 序列化）。"},
+  {s:"基础", q:"变量提升 & 函数提升优先级", a:"函数先提升且优先级更高，不会被变量声明覆盖，但会被后续的赋值语句覆盖（所以同作用域 var x + function x(){}，先拿到函数，x = 123 后就变成 123）。ES6 前 JS 只有全局作用域 + 函数作用域。"},
+  {s:"基础", q:"Webpack loader vs plugin 区别", a:"Loader 是文件转换器（module.rules 里配置）→ 对单个文件做编译（babel-loader/ts-loader/css-loader/style-loader）；Plugin 是构建生命周期事件钩子 → 贯穿整个构建流程做副作用（HTMLWebpackPlugin 生成 html、MiniCssExtractPlugin 抽 css、CleanWebpackPlugin、DefinePlugin 注入常量）。一句话：Loader 管转换，Plugin 管流程扩展。"},
+  {s:"基础", q:"浏览器渲染原理（关键路径 + 回流/重绘/合成）", a:"① HTML → DOM；② CSS → CSSOM；③ 合成 Style Rules → Render Tree（display:none 不在）；④ Layout（算几何）；⑤ Paint（栅格化绘颜色）；⑥ Composite（合成到多图层 GPU 显示）。\n回流=重走 4→6，重绘=重走 5→6，GPU 合成层（transform/will-change）可避免回/重绘。"},
+  {s:"基础", q:"虚拟 DOM + 为什么比直接 DOM 快？", a:"VDOM 是内存里 DOM 的轻量描述对象树。diff 新旧两棵算最小变更 patch 再批量更新真实 DOM。\n优势：批量更新减少回流次数、跨平台复用描述（RN/小程序）、声明式编程省心。但简单单次文本修改直接 DOM 反而更快（VDOM diff 有 overhead）。"},
+  {s:"基础", q:"打包构建优化 8 条清单", a:"① 持久化缓存（Webpack5 cache:filesystem / Vite 依赖预构建）；② 多进程压缩 + esbuild/tsup 替代 TS 编译；③ 路由级 code split + Tree-Shaking + antd/lodash 按需；④ 图片 webp/avif + CDN + SVG；⑤ externals React/Vue 走 CDN；⑥ webpack-bundle-analyzer 找大依赖（moment → dayjs，lodash → 按需）；⑦ alias 解析精确 + extensions 少；⑧ 模块联邦拆独立包部署（适合中台）。"},
+  {s:"快手", q:"React Fiber 是什么？为什么重构 Stack Reconciler？", a:"Fiber 是 React 16 新协调引擎：把渲染拆成 Fiber 单元小任务，浏览器空闲时做（Scheduler 优先级/Lanes），超过 5ms 让渡给浏览器（输入/动画），下次继续。解决了老 Stack Reconciler 一次递归 diff 阻塞主线程导致掉帧的问题。关键：双缓存（current/wip 树）+ Effect List + 可中断可恢复。"},
+  {s:"快手", q:"虚拟 DOM 和 Fiber 的关系？", a:"VDOM = 对 UI 的声明式描述（render 产出的对象树）；Fiber = 实现 VDOM diff + 更新的调度机制。没有 Fiber 之前 React 也有 VDOM，只是 diff 同步不可中断；Fiber 不改 VDOM，改的是 diff + patch 的执行方式（切片/优先级/可中断）。"},
+  {s:"快手", q:"三数之和（经典双指针）", a:"function threeSum(n){\n  n.sort((a,b)=>a-b);\n  const r=[];\n  for(let i=0;i<n.length-2;i++){\n    if(i>0&&n[i]===n[i-1])continue;\n    let l=i+1,R=n.length-1;\n    while(l<R){\n      const s=n[i]+n[l]+n[R];\n      if(s===0){\n        r.push([n[i],n[l],n[R]]);\n        while(l<R&&n[l]===n[l+1])l++;\n        while(l<R&&n[R]===n[R-1])R--;\n        l++;R--;\n      } else s<0?l++:R--;\n    }\n  }\n  return r;\n}"},
+  {s:"快手", q:"浏览器渲染流水线 + 怎么避免布局抖动？", a:"流水线见基础题库第 21 题。\n布局抖动：批量读、批量写、读写分离；classList/cssText 一次改多样式；读 offsetWidth/getComputedStyle 会强制同步布局，避免在循环中交替读写；布局只读用 ResizeObserver/IntersectionObserver 等原生异步 API。"},
+  {s:"蚂蚁", q:"算法 1.1 三数之和（同快手第 3 题）", a:"见上方快手 3 题答案。"},
+  {s:"蚂蚁", q:"算法 1.2 最长无重复子串（滑窗）", a:"function lengthOfLongestSubstring(s){\n  const m=new Map();\n  let l=0,max=0;\n  for(let r=0;r<s.length;r++){\n    const c=s[r];\n    if(m.has(c)&&m.get(c)>=l) l=m.get(c)+1;\n    m.set(c,r);\n    max=Math.max(max,r-l+1);\n  }\n  return max;\n}"},
+  {s:"蚂蚁", q:"算法 1.3 最小覆盖子串（滑窗 + 计数）", a:"function minWindow(s,t){\n  const need=new Map();\n  for(const c of t) need.set(c,(need.get(c)||0)+1);\n  let l=0,r=0,valid=0;\n  const win=new Map();\n  let start=0,len=Infinity;\n  while(r<s.length){\n    const c=s[r++];\n    if(need.has(c)){\n      win.set(c,(win.get(c)||0)+1);\n      if(win.get(c)===need.get(c)) valid++;\n    }\n    while(valid===need.size){\n      if(r-l<len){start=l; len=r-l;}\n      const d=s[l++];\n      if(need.has(d)){\n        if(win.get(d)===need.get(d)) valid--;\n        win.set(d,win.get(d)-1);\n      }\n    }\n  }\n  return len===Infinity?'':s.slice(start,start+len);\n}"},
+  {s:"蚂蚁", q:"算法 1.4 合并 K 个有序链表（小顶堆）", a:"class ListNode{constructor(val=0,next=null){this.val=val;this.next=next}}\nclass MinHeap{\n  constructor(cmp){this.d=[];this.c=cmp}\n  push(v){\n    this.d.push(v);\n    let i=this.d.length-1;\n    while(i>0){\n      const p=(i-1)>>1;\n      if(this.c(this.d[i],this.d[p])<0){[this.d[i],this.d[p]]=[this.d[p],this.d[i]]; i=p;}else break;\n    }\n  }\n  pop(){\n    const top=this.d[0]; const last=this.d.pop();\n    if(this.d.length){\n      this.d[0]=last;\n      let i=0,n=this.d.length;\n      while(true){\n        let l=i*2+1,r=l+1,m=i;\n        if(l<n&&this.c(this.d[l],this.d[m])<0)m=l;\n        if(r<n&&this.c(this.d[r],this.d[m])<0)m=r;\n        if(m===i)break;\n        [this.d[i],this.d[m]]=[this.d[m],this.d[i]]; i=m;\n      }\n    }\n    return top;\n  }\n  size(){return this.d.length}\n}\nfunction mergeKLists(lists){\n  const h=new MinHeap((a,b)=>a.val-b.val);\n  for(const head of lists) if(head) h.push(head);\n  const d=new ListNode(); let c=d;\n  while(h.size()){\n    const n=h.pop(); c.next=n; c=c.next;\n    if(n.next) h.push(n.next);\n  }\n  return d.next;\n}"},
+  {s:"蚂蚁", q:"算法 1.5 二叉树最近公共祖先", a:"function LCA(root,p,q){\n  if(!root||root===p||root===q) return root;\n  const l=LCA(root.left,p,q);\n  const r=LCA(root.right,p,q);\n  if(l&&r) return root;\n  return l||r;\n}"},
+  {s:"蚂蚁", q:"算法 1.6 最长递增子序列（O(n log n) 贪心+二分）", a:"function lengthOfLIS(nums){\n  const tails=[];\n  for(const x of nums){\n    let l=0, r=tails.length;\n    while(l<r){\n      const m=(l+r)>>1;\n      if(tails[m]<x) l=m+1; else r=m;\n    }\n    tails[l]=x;\n  }\n  return tails.length;\n}"},
+  {s:"蚂蚁", q:"算法 1.7 打家劫舍 II（环形房屋，首尾不能同时偷）", a:"function rob(nums){\n  if(nums.length===1) return nums[0];\n  const line=arr=>{\n    let prev=0,curr=0;\n    for(const x of arr){ const t=Math.max(curr,prev+x); prev=curr; curr=t; }\n    return curr;\n  };\n  return Math.max(line(nums.slice(0,-1)), line(nums.slice(1)));\n}"},
+  {s:"蚂蚁", q:"算法 1.8 编辑距离 DP", a:"function minDistance(s1,s2){\n  const m=s1.length,n=s2.length;\n  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));\n  for(let i=0;i<=m;i++) dp[i][0]=i;\n  for(let j=0;j<=n;j++) dp[0][j]=j;\n  for(let i=1;i<=m;i++){\n    for(let j=1;j<=n;j++){\n      if(s1[i-1]===s2[j-1]) dp[i][j]=dp[i-1][j-1];\n      else dp[i][j]=1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);\n    }\n  }\n  return dp[m][n];\n}"},
+  {s:"蚂蚁", q:"算法 1.9 接雨水（单调栈）", a:"function trap(H){\n  const st=[]; let ans=0;\n  for(let i=0;i<H.length;i++){\n    while(st.length && H[i]>H[st[st.length-1]]){\n      const mid=st.pop();\n      if(!st.length) break;\n      const left=st[st.length-1];\n      const w=i-left-1;\n      const h=Math.min(H[left],H[i])-H[mid];\n      ans += w*h;\n    }\n    st.push(i);\n  }\n  return ans;\n}"},
+  {s:"蚂蚁", q:"算法 1.10 全排列（回溯 + 同层剪枝去重）", a:"function permuteUnique(nums){\n  nums.sort();\n  const res=[], used=Array(nums.length).fill(false);\n  function dfs(path){\n    if(path.length===nums.length){ res.push(path.slice()); return; }\n    for(let i=0;i<nums.length;i++){\n      if(used[i]) continue;\n      if(i>0&&nums[i]===nums[i-1]&&!used[i-1]) continue; // 同层去重关键\n      used[i]=true; path.push(nums[i]); dfs(path);\n      path.pop(); used[i]=false;\n    }\n  }\n  dfs([]);\n  return res;\n}"},
+];
+
+const STARS = [
+  {id:1, title:"鸿蒙直播端 0-1 建设", tag:"鸿蒙", pc:"p1",
+   tags:["LiveView","Hybrid","三状态机"],
+   bg:"抖音直播要在鸿蒙端快速拉齐安卓/iOS 能力，从零纯 ArkUI 成本高、人力跟不上。",
+   chal:"① 多端逻辑重复 ② LiveView 实况窗等强交互能力必须原生 ③ Lynx/H5 成熟活动快速接入容器",
+   sol:"落地 H5/Lynx 混合架构（成熟业务 Lynx，特色能力原生 ArkTS）；LiveView 生命周期竞态用「三状态机 + 竞态检测」修；容器 5 大 Service 收口 schema/UA/globalProps/lynxConfig/webScheme。",
+   out:"鸿蒙业务 1 个月 MVP 上线，LiveView 曝光/点击率对齐安卓，团队后续接入成本显著下降。",
+   result:"关键成果：H5/Lynx 成熟活动 + 原生特色能力双轨协同，新业务平均接入时间从 5 人日 → 2 人日。"},
+  {id:2, title:"KMP 跨端三端共享", tag:"KMP", pc:"p1",
+   tags:["Kotlin","Job 绑定生命周期","批量传输"],
+   bg:"直播互动功能安卓/鸿蒙/iOS 过去三份重复实现，埋点、口径、新需求排期乘 3 倍。",
+   chal:"① 哪些逻辑下沉 vs 平台侧保留 ② Room/User 大对象跨端同步成本高 ③ 跨语言异步回调生命周期不一致导致泄漏",
+   sol:"业务逻辑下沉 commonMain；两种消费模式（LogicShare：State/Action + 平台原生 UI；Compose 共享 UI）；批量传输 + 异步 Job 绑定宿主生命周期修复回调泄漏。",
+   out:"代码复用率 70%+；跨语言通信效率 +30%；业务迁移成本降低 50%；跨端模型/消息/埋点口径统一。",
+   result:"关键成果：70%+ 复用 / +30% 性能 / -50% 迁移成本；三端埋点一致性从 78% → 99.5%。"},
+  {id:3, title:"Workflow Agent 全链路诊断", tag:"AI Agent", pc:"p2",
+   tags:["三级ID","确定性账本","TOML损坏事故"],
+   bg:"研发场景 AI Agent 上线靠手工点，Prompt/工具改了不知道坏了没，线上出问题半天找不到根因。",
+   chal:"① ReAct 每一步要精准定位是 LLM/工具/沙箱/Session 哪层出问题 ② 多轮会话沙箱配置不同步、TOML 文件频繁损坏 ③ 诊断过程要可回放、可对比",
+   sol:"traceId / spanId / agentRunId 三级串联；形成 Runtime Trace + Workflow 阶段账本双确定性账本；沙箱配置同步加 SHA-256 校验 + 原子替换 + 一键回滚。",
+   out:"异常定位从半天 → <30 分钟；TOML 损坏类事故从每周 3-5 次 → 清零；为后续 Harness 治理打下数据基础。",
+   result:"事故清零故事：多轮会话配置残留 → SHA-256 + 原子替换 + 回滚三件套根治。面试讲这个非常有记忆点。"},
+  {id:4, title:"直播业务 RAG 知识库", tag:"RAG", pc:"p2",
+   tags:["双路召回","Query Rewrite","MCP Skill"],
+   bg:"直播业务规则复杂，业务问答/排障/决策依赖老人口传，新人上手慢、口径不一致，Agent 回答容易幻觉。",
+   chal:"① 纯向量召回长术语（直播间/场景名）召回率低 ② Query 口语化 vs 知识库术语不匹配 ③ 多轮上下文导致幻觉放大",
+   sol:"向量 + BM25 关键词双路召回（RRF 融合 + cross-encoder 重排）；Query Rewrite（同义词词典 + 用户画像 + 业务词典扩展）；检索封装成 MCP Skill 作为 Agent 的 Evidence Bank 事实约束。",
+   out:"Top-1 召回率 +18%；Onepage 业务问答口径统一；Agent 回答人工抽检一致率 +22%（幻觉显著下降）。",
+   result:"调优故事：召回 vs 生成判别 → 先改召回（双路 + 同义词）+ Rewrite + cross-encoder，比只换更大 Embedding 提升更多。"},
+  {id:5, title:"赤兔元工程框架 + 海豚组件平台", tag:"工程化", pc:"p3",
+   tags:["RN 拆包","Webpack5 缓存","Design Token 模块化"],
+   bg:"网易云音乐直播 RN/H5 海内外多业务巨石框架 + 无统一组件平台，团队协作差、构建慢。",
+   chal:"① RN 包体太大首屏加载慢 ② H5 打包配置散 ③ RN/H5 组件维护成本 2x",
+   sol:"赤兔元：RN 拆包（基础包 + 业务包按需注入）+ Webpack5 持久化缓存 + 多进程并行压缩；海豚：RN→Web 兼容层 + Design Token 模块化（一套 token 渲染到两端）。",
+   out:"RN 构建效率 +40%；H5 打包从 5min → < 1min；跨平台组件维护成本降低 25%+。",
+   result:"关键成果：RN 构建提速 40% + 跨平台组件维护成本 -25%；这是工程化最硬的两个量化数字。"},
+  {id:6, title:"跨境 ERP Electron + NestJS 全栈", tag:"全栈", pc:"p3",
+   tags:["IPC 三通道","NestJS(TypeORM)","本地-云端双同步"],
+   bg:"跨境运营后台要做桌面客户端 + 本地服务，支持离线数据缓存 + 实时同步服务器。",
+   chal:"① 主/渲染进程/Node 后端三层 IPC 通信易乱 ② 安装包体积太大 ③ 本地 SQLite ↔ 云端 MySQL 数据一致性",
+   sol:"Electron + NestJS 本地后端（Fastify 适配 + SQLite TypeORM）；主进程统一 IPC 通道按命名空间（db/ui/net）路由；打包 electron-builder 分平台 artifact + asar 压缩 + devDep 全部移除。",
+   out:"独立交付可安装桌面客户端；包体积 120MB（行业平均 200+MB）；离线缓存同步一致性 99.9%。",
+   result:"关键成果：全栈独立交付能力证明；99.9% 同步一致性是做本地-云产品最硬的指标。"},
+];
+
+/* A4 B 面 20 条 */
+const A4B20 = [
+  "【Harness 分类】Agent 技术栈 4 大类：Code Agent（OpenHands/SWE-agent）/ 编排（LangGraph★/CrewAI/AutoGen）/ 低代码（Dify）/ DevOps（Harness.io/Copilot WS）。",
+  "【选型结论】LangGraph 排第一：显式状态机 100% 可控 + Checkpoint 结构化审计回放 + HITL 一等公民 + LangSmith 可观测业界最佳。",
+  "【不激进替换】自研 Runtime 是线上稳定资产，LangGraph 用 AgentExecutor 协议双轨灰度（99% 自研 / 1% LangGraph Beta）—— 绞杀者迁移。",
+  "【融合三原则】三原则：稳定 vs 敏捷、可控 vs 红利、短期 vs 长期。",
+  "【P0 止血】两开关：GATE_ENABLED=false 全局解阻断；DEFERRED_LLM_AS_PASS=true 把 LLM-Judge 当通过。",
+  "【门禁三件套】Scenario 版本化用例 / Baseline 历史锚点 / Gate（baseline_delta + absolute + ratio 三类规则）。",
+  "【Fork/Inline】Nano Claude Code：独立子任务走 Fork（独立 state/memory/权限 Subagent），同上下文轻工具调用走 Inline。",
+  "【三层 Memory】短期会话栈 / 长期项目知识（自动 extractor 抽取）/ AI 记忆搜索（向量检索）。",
+  "【三级沙箱】macOS Seatbelt / Linux BubbleWrap / Windows AppContainer —— 平台原生不硬上 Docker。",
+  "【审批三模式】auto（只读类永久过）/ ask（rm/ssh/drop-table 高风险类永远问）/ never（黑名单工具永不让用）。",
+  "【跨端一句话】KMP = 逻辑跨平台 + 原生 UI（性能最强/写 Kotlin）；Lynx = 小程序语法（活动/营收玩法发版快）；RN = React JS（生态最大/性能弱于前两者，JSI/Fabric 修复）。",
+  "【KMP 通信三招】批量减次数 + Job 绑定宿主生命周期修泄漏 + 大对象只传 id + 懒拉取。",
+  "【RN 新架构】三件套：JSI（JS↔C++ 直连无 JSON 序列化）、Fabric（UI 管理异步化）、TurboModule（懒加载原生模块）。",
+  "【网络两条】TCP 三次握手/可靠/重传+按序 vs UDP 无连接/低开销；HTTP1.1 队头阻塞 vs HTTP2 多路复用 + HPACK。",
+  "【防抖节流】debounce 取最后一次（表单/搜索框）；throttle 取第一次（resize/scroll）。",
+  "【typeof 坑】typeof null === 'object'；跨 iframe 判断类型一律 Object.prototype.toString.call。",
+  "【事件循环】浏览器：1 宏任务 → 清空所有微任务（Promise.then/MutationObserver/queueMicrotask）→ 渲染 → 下一宏任务。",
+  "【3 个 STAR 故事】① LiveView 竞态 → 三状态机修复 ② Sandbox TOML 损坏 → SHA-256 + 原子替换 + 回滚 ③ RAG 召回低 → 双路召回 + Rewrite + cross-encoder。",
+  "【算法保底 5 道】三数之和 / 最长无重复子串 / 接雨水 / 全排列去重 / 编辑距离 —— 5 题写熟可以覆盖 70%。",
+  "【反向提问 3 句】① 团队现在最挑战的技术问题？② 这个岗 6 个月内第一优先级交付？③ 团队协作 + 跨团队协作的典型流程？",
+];
+
+/* ================= 状态 ================= */
+const STORE_KEY = "cyh-interview-site-v2";
+let state = loadState();
+function loadState(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||"{}")}catch{return {}}
+function saveState(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); toast("已保存进度 ✓"); }
+
+let qFilter = "all";
+let dayPhaseFilter = "all";
+const SEC = { P1:"P1", P2:"P2", P3:"P3", P4:"P4" };
+
+/* ================= 工具 ================= */
+function toast(text, duration=1500, type){
+  const t = document.getElementById("toast");
+  const iconEl = t.querySelector("i");
+  // 清除旧 class
+  t.classList.remove("info");
+  iconEl.className = "fa-solid fa-circle-check";
+  iconEl.classList.remove("ok","warn","err");
+  // 设置类型
+  if(type === "warn"){ iconEl.className = "fa-solid fa-triangle-exclamation warn"; }
+  else if(type === "err"){ iconEl.className = "fa-solid fa-circle-xmark err"; }
+  else if(type === "info"){ iconEl.className = "fa-solid fa-circle-info"; t.classList.add("info");}
+  else { iconEl.className = "fa-solid fa-circle-check ok"; }
+  document.getElementById("toastText").textContent = text || "已保存";
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove("show"), duration);
+}
+function fmtPct(a,b){ return b===0?"0%": Math.round(a/b*100)+"%"; }
+function jumpTo(id){
+  const el = document.querySelector(id);
+  if(el){ el.scrollIntoView({ behavior:"smooth", block:"start" }); setTimeout(updateActiveNav, 350); }
+}
+
+/* ================= 主题 ================= */
+function toggleTheme(t){
+  document.documentElement.classList.toggle("light", t==="light");
+  state.theme = t; saveState();
+  toast("已切换为"+(t==="light"?"亮色":"暗色"));
+}
+
+/* ================= 进度计算 ================= */
+function computeAll(){
+  // tasks
+  const perDay = DAYS.map((d,di) => ({total: d.tasks.length, done: d.tasks.filter((_,ti)=> state.tasks?.[di+"_"+ti]).length }));
+  const gTask = { total: perDay.reduce((s,x)=>s+x.total,0), done: perDay.reduce((s,x)=>s+x.done,0) };
+  // phase
+  const phaseMap = {P1:[0,1,2], P2:[3,4,5,6], P3:[7,8,9,10], P4:[11,12,13]};
+  const phase = {};
+  for(const k in phaseMap){
+    const rng = phaseMap[k];
+    const slice = perDay.filter((_,i)=> rng.includes(i));
+    phase[k] = { total: slice.reduce((s,x)=>s+x.total,0), done: slice.reduce((s,x)=>s+x.done,0), days: rng.map(i=>perDay[i]) };
+  }
+  // qa
+  const qaTotal = QAS.length;
+  const qaKnownCount = QAS.filter(q=> state.qa?.["q_"+q.q]).length;
+  return { perDay, gTask, phase, qaTotal, qaKnownCount };
+}
+
+/* ================= 渲染：总览 / 14 天条 ================= */
+function renderProgress(){
+  const C = computeAll();
+  const ring = document.getElementById("headRing");
+  const pct = Math.round(C.gTask.done/Math.max(1,C.gTask.total)*100);
+  ring.style.setProperty("--p", pct + "%");
+  document.getElementById("headRingPct").textContent = pct + "%";
+
+  document.getElementById("sTask").innerHTML = `${C.gTask.done}<small>/${C.gTask.total}</small>`;
+  const qaPct = Math.round(C.qaKnownCount/Math.max(1,C.qaTotal)*100);
+  document.getElementById("sQA").innerHTML = `${qaPct}<small>%</small>`;
+
+  // 四条 phase 进度
+  for(const k of ["P1","P2","P3","P4"]){
+    const lower = k.toLowerCase();
+    const bar = document.getElementById("pg-"+lower);
+    const pb = document.getElementById("pbar-"+lower);
+    const p = phase[k];
+    const p1 = Math.round(p.done/Math.max(1,p.total)*100);
+    if(bar) bar.style.width = p1+"%";
+    if(pb) pb.textContent = p1+"%";
+  }
+  // 导航 mini
+  const np = (k)=>fmtPct(phase[k].done, phase[k].total);
+  const a = document.getElementById("nav-p-all"); if(a) a.textContent = fmtPct(C.gTask.done, C.gTask.total);
+  const planDone = phase.P1.done+phase.P2.done+phase.P3.done+phase.P4.done;
+  const planTotal = phase.P1.total+phase.P2.total+phase.P3.total+phase.P4.total;
+  const b = document.getElementById("nav-p-plan"); if(b) b.textContent = fmtPct(planDone, planTotal);
+  const c = document.getElementById("nav-p-qa"); if(c) c.textContent = fmtPct(C.qaKnownCount, C.qaTotal);
+
+  // 每日完成度小条
+  const wrap = document.getElementById("dailyBars");
+  wrap.innerHTML = C.perDay.map((d,i)=>{
+    const dayObj = DAYS[i];
+    const pct = d.total? Math.round(d.done/d.total*100): 0;
+    const cls = dayObj.pc;
+    const done = d.total && d.done===d.total;
+    return `<a class="day-cell ${cls} ${done?"done":""}" onclick="jumpTo('#plan'); setDayFilter('${dayObj.phase.split(" ")[0]}');">
+      <div class="fill" style="height:${pct}%"></div>
+      <div class="d">D${i+1}</div>
+      <div class="p">${pct}%</div>
+    </a>`;
+  }).join("");
+  if(window.__setupRevealFor) window.__setupRevealFor("#dailyBars");
+}
+
+/* ================= 渲染：打卡 ================= */
+function toggleTask(di, ti){
+  if(!state.tasks) state.tasks = {};
+  const k = di+"_"+ti;
+  state.tasks[k] = !state.tasks[k];
+  saveState();
+  renderPlan();
+  renderProgress();
+}
+function setDayFilter(v){
+  dayPhaseFilter = v;
+  document.getElementById("phaseFilter").value = v;
+  renderPlan();
+  jumpTo("#plan");
+}
+function renderPlan(){
+  const el = document.getElementById("planContainer");
+  let html = "";
+  DAYS.forEach((day, di)=>{
+    if(dayPhaseFilter!=="all" && !day.phase.startsWith(dayPhaseFilter)) return;
+    const total = day.tasks.length;
+    const done = day.tasks.filter((_,ti)=> state.tasks?.[di+"_"+ti]).length;
+    const pct = total? Math.round(done/total*100): 0;
+    html += `
+    <div class="card phase-card ${day.pc}">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:4px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span class="phase-chip ${day.pc}"><i class="fa-solid fa-flag"></i> ${day.day} · ${day.phase}</span>
+          <span class="chip"><i class="fa-solid fa-list-check"></i> ${done} / ${total} 完成 · ${pct}%</span>
+          ${day.test? `<span class="chip chip-p3"><i class="fa-solid fa-circle-exclamation"></i> 本阶段自测</span>`:""}
+        </div>
+        <div style="min-width:140px; flex:0 0 auto;">
+          <div class="progress"><div class="bar" style="width:${pct}%"></div></div>
+        </div>
+      </div>
+      <div class="task-list">
+        ${day.tasks.map((t, ti)=>{
+          const k = di+"_"+ti;
+          const checked = !!state.tasks?.[k];
+          return `
+          <div class="task-item ${checked?"done":""}">
+            <label class="task-check">
+              <input type="checkbox" ${checked?"checked":""} onchange="toggleTask(${di},${ti})">
+            </label>
+            <div class="task-text">
+              ${t.warn?`<span class="chip chip-p4" style="margin-right:6px;"><i class="fa-solid fa-circle-exclamation"></i> 必做</span>`:""}
+              ${t.tags?.includes("模拟") || t.simulation? `<span class="chip chip-p2" style="margin-right:6px;"><i class="fa-solid fa-person-chalkboard"></i> 模拟面</span>`:""}
+              ${t.tags?.includes("算法")? `<span class="chip chip-ant" style="margin-right:6px;"><i class="fa-solid fa-code"></i> 算法</span>`:""}
+              ${t.t}
+              ${t.docs && t.docs.length? `<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">${
+                t.docs.map(d=>{
+                  const url = typeof d === "string" ? d : d.u;
+                  const label = typeof d === "string" ? (url.startsWith("#") ? ("跳到"+url.slice(1)) : "📄 打开文档") : ("📄 "+d.l);
+                  if(url.startsWith("#")){
+                    return `<a class="btn btn-sm" onclick="event.preventDefault(); jumpTo('${url}');"><i class="fa-solid fa-link"></i> ${label}</a>`;
+                  }
+                  return `<a class="btn btn-sm" target="_blank" href="${url}">${label}</a>`;
+                }).join("")
+              }</div>`:""}
+            </div>
+            <div class="task-meta">
+              ${(t.tags||[]).map(tag=>`<span class="chip">#${tag}</span>`).join("")}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+      ${day.test? `
+      <div style="margin-top:16px; padding:14px; border-radius:14px; background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(168,85,247,0.08)); border:1px dashed rgba(129,140,248,0.35);">
+        <div style="font-size:13px; font-weight:600; color:var(--text-0); margin-bottom:4px;"><i class="fa-solid fa-clipboard-check"></i> ${day.day} 阶段自测验收标准</div>
+        <div style="font-size:13px; color:var(--text-1); line-height:1.7;">${day.test}</div>
+      </div>`:""}
+    </div>`;
+  });
+  el.innerHTML = html || `<div class="card" style="text-align:center; padding:40px;"><i class="fa-solid fa-filter-circle-xmark" style="font-size:40px; color:var(--text-3);"></i><div style="margin-top:14px; color:var(--text-2);">当前筛选下无内容</div><button class="btn" onclick="setDayFilter('all')">🔄 显示全部 14 天</button></div>`;
+  if(window.__setupRevealFor) window.__setupRevealFor("#planContainer");
+}
+
+/* ================= QA 渲染 & 筛选 ================= */
+function filterQA(v){ qFilter = v; renderQA(); document.querySelectorAll(".toolbar .btn").forEach(b=>b.classList.toggle("active", b.textContent.includes(v==="all"?"全部":v))); }
+function resetQA(){ if(!confirm("确定要清空所有刷题掌握标记吗？")) return; delete state.qa; saveState(); renderQA(); renderProgress(); }
+function shuffleQA(){
+  // 重渲染时随机排序
+  QAS.sort(()=> Math.random()-0.5);
+  renderQA();
+  toast("已随机洗牌 🎲");
+}
+function toggleQA(q){
+  if(!state.qa) state.qa = {};
+  const k = "q_"+q;
+  state.qa[k] = !state.qa[k];
+  saveState();
+  renderQA(); renderProgress();
+}
+function renderQA(){
+  const list = qFilter==="all"? QAS: QAS.filter(q=> q.s === qFilter);
+  const total = list.length;
+  const known = list.filter(q=> state.qa?.["q_"+q.q]).length;
+  const pct = total? Math.round(known/total*100): 0;
+  document.getElementById("qaTotalStat").textContent = total;
+  document.getElementById("qaKnownStat").innerHTML = pct+"<small>%</small>";
+  document.getElementById("qaRemain").textContent = total-known;
+  document.getElementById("qaKnownCount").textContent = known;
+  document.getElementById("qaTotalCap").textContent = QAS.length;
+  document.getElementById("qaTotalHead").textContent = total;
+  document.getElementById("qaKnownHead").textContent = known;
+
+  const el = document.getElementById("qaContainer");
+  el.innerHTML = list.map((q,i)=>{
+    const known = !!state.qa?.["q_"+q.q];
+    const clsMap = {"基础":"chip-base","快手":"chip-ks","蚂蚁":"chip-ant"};
+    return `
+    <details class="qa-card" ${known?"open":""}>
+      <summary class="qa-head">
+        <div class="chev"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="q">
+          <span class="chip ${clsMap[q.s]} border">${q.s}</span>
+          <span class="chip ${known?'chip-p3 border':'border'}">${known?'<i class="fa-solid fa-check-double"></i> 已掌握':'待掌握'}</span>
+          <span style="display:block; margin-top:6px;">${i+1}. ${q.q}</span>
+        </div>
+      </summary>
+      <div class="qa-body">
+        ${/function|class|\n/.test(q.a)? `<pre class="code">${q.a}</pre>` : `<div style="font-size:13px; line-height:1.75; color:var(--text-1); white-space:pre-wrap;">${q.a}</div>`}
+        <div class="qa-actions">
+          <button class="btn btn-sm btn-ok" onclick="toggleQA(${JSON.stringify(q.q).replace(/"/g,"&quot;")})">
+            <i class="fa-solid ${known?'fa-xmark':'fa-check'}"></i> ${known?"取消掌握":"标记掌握"}
+          </button>
+          <button class="btn btn-sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify(JSON.stringify(q.a)).replace(/"/g,"&quot;")}).then(()=>toast('答案已复制到剪贴板',1500,'ok'))"><i class="fa-regular fa-copy"></i> 复制答案</button>
+        </div>
+      </div>
+    </details>`;
+  }).join("") || `<div class="card" style="grid-column: 1 / -1; text-align:center; padding:40px; color:var(--text-2);"><i class="fa-solid fa-circle-info" style="font-size:36px;"></i><div style="margin-top:10px;">当前筛选项下没有题目</div></div>`;
+  if(window.__setupRevealFor) window.__setupRevealFor("#qaContainer");
+}
+
+/* ================= STAR 卡翻转 ================= */
+function renderSTAR(){
+  const el = document.getElementById("starContainer");
+  el.innerHTML = STARS.map(s=>{
+    const colorMap = {鸿蒙:"var(--p1)", KMP:"var(--p1)", "AI Agent":"var(--p2)", RAG:"var(--p2)", 工程化:"var(--p3)", 全栈:"var(--p3)"};
+    const c = colorMap[s.tag] || "var(--p2)";
+    return `
+    <div class="flip-wrap" onclick="this.classList.toggle('flipped')">
+      <div class="flip">
+        <div class="face">
+          <span class="flip-tip">点击翻转 ↻</span>
+          <h3><span class="chip chip-${s.pc}" style="color:#fff; border-color:transparent;"><i class="fa-solid fa-star"></i> ${s.id}</span> ${s.title}</h3>
+          <div class="tag-row">${s.tags.map(t=>`<span class="chip">#${t}</span>`).join("")} <span class="chip" style="color:${c}; border-color:${c}33; background:${c}15;">${s.tag}</span></div>
+          <div class="kv ${s.pc}">
+            <div><b class="k">背景</b>${s.bg}</div>
+            <div><b class="k">挑战</b>${s.chal}</div>
+            <div><b class="k">方案</b>${s.sol}</div>
+            <div><b class="k">结果</b>${s.out}</div>
+          </div>
+        </div>
+        <div class="face back">
+          <span class="flip-tip">点击翻回 ↺</span>
+          <h3 style="display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-gem" style="color:var(--p2);"></i> 故事素材 & 关键成果</h3>
+          <div class="kv ${s.pc}">
+            <div><b class="k">量化</b><b style="color:var(--text-0);">${s.out}</b></div>
+            <div style="margin-top:8px; padding:10px 12px; background:rgba(255,255,255,0.04); border-radius:10px;">${s.result}</div>
+          </div>
+          <div class="result-bar" style="margin-top:auto;"><i class="fa-solid fa-lightbulb"></i> 面试讲这个：先讲量化指标，再讲「怎么踩坑+怎么修」的故事细节。</div>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // A4 FaceA
+  document.getElementById("a4FaceA").innerHTML = STARS.map(s=>`
+    <div class="a4-item">
+      <h4>${s.id}. ${s.title}（${s.tag}）</h4>
+      <p><b>B：</b>${s.bg.slice(0,56)}<br/>
+      <b>C：</b>${s.chal.slice(0,56)}<br/>
+      <b>S：</b>${s.sol.slice(0,60)}<br/>
+      <b style="color:#047857;">R：</b><b style="color:#047857;">${s.out.slice(0,60)}</b></p>
+    </div>`).join("");
+
+  // A4 FaceB
+  document.getElementById("a4FaceB").innerHTML = A4B20.map(x=>`<li>${x}</li>`).join("");
+
+  if(window.__setupRevealFor) window.__setupRevealFor("#starContainer");
+}
+
+/* ================= 计时器（自我介绍 4 档） ================= */
+const timers = {};
+function fmtTime(sec){ sec = Math.max(0, Math.round(sec)); const m = String(Math.floor(sec/60)).padStart(2,"0"); const s = String(sec%60).padStart(2,"0"); return m+":"+s; }
+function startTimer(total, id){
+  const key = id || ("intro_"+total);
+  const idsByTotal = { 30:"timerA", 90:"timerB", 180:"timerC" };
+  const elId = id || idsByTotal[total] || "timerA";
+  const el = document.getElementById(elId);
+  clearInterval(timers[key]);
+  let left = total;
+  el.className = "timer-display running";
+  el.textContent = fmtTime(left);
+  timers[key] = setInterval(()=>{
+    left -= 1;
+    el.textContent = fmtTime(left);
+    if(left<=10 && left>0){ el.className = "timer-display warn"; }
+    if(left<=0){
+      clearInterval(timers[key]);
+      el.className = "timer-display done";
+      el.textContent = "⏰ 时间到！";
+      // 震动提示（移动端有效 + 视觉抖动由样式完成）
+      if(navigator.vibrate){ try{ navigator.vibrate([80,40,80]); }catch{} }
+      toast("⏰ 计时结束 · 还没讲完就精简一下哦～", 2600);
+    }
+  }, 1000);
+  toast("⏱️ 计时开始，加油！", 1000);
+}
+
+/* ================= 模拟面试大计时器 ================= */
+let mock = { on:false, t:0, laps:[], timer:null };
+function fmtLong(sec){ sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600); const m=Math.floor(sec%3600/60); const s=sec%60; return (h?String(h).padStart(2,"0")+":":"")+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); }
+function renderMock(){
+  document.getElementById("mockTime").textContent = fmtLong(mock.t);
+  const icon = document.getElementById("mockPlayIcon");
+  const txt = document.getElementById("mockPlayTxt");
+  if(mock.on){ icon.className="fa-solid fa-pause"; txt.textContent = "暂停"; }
+  else { icon.className="fa-solid fa-play"; txt.textContent = mock.t>0?"继续":"开始"; }
+  const lapsEl = document.getElementById("mockLaps");
+  if(mock.laps.length){
+    lapsEl.style.display = "block";
+    lapsEl.innerHTML = `<div class="card" style="padding:14px;"><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;"><b style="color:var(--text-0);"><i class="fa-solid fa-flag"></i> 分段记录（${mock.laps.length} 条）</b><button class="btn btn-sm" onclick="mock.laps=[];renderMock();">清空</button></div><div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap:8px;">${
+      mock.laps.map((l,i)=>`<span class="chip" style="padding:6px 10px;"><b>#${i+1}</b> ${fmtLong(l.t)} <span style="color:var(--text-3); margin:0 4px;">·</span> ${fmtLong(l.delta)} +</span>`).join("")
+    }</div></div>`;
+  } else {
+    lapsEl.style.display = "none";
+  }
+}
+function mockToggle(){
+  mock.on = !mock.on;
+  if(mock.on){
+    mock.timer = setInterval(()=>{ mock.t++; renderMock(); }, 1000);
+  } else {
+    clearInterval(mock.timer);
+  }
+  renderMock();
+}
+function mockReset(){
+  mock.on=false; clearInterval(mock.timer); mock.t=0; mock.laps=[]; renderMock(); toast("计时器已重置");
+}
+function mockLap(){
+  if(mock.t===0 && !mock.on){ toast("请先开始计时"); return; }
+  const delta = mock.laps.length === 0 ? mock.t : (mock.t - mock.laps[mock.laps.length-1].t);
+  mock.laps.push({ t: mock.t, delta });
+  renderMock();
+  toast("分段已记录 · +"+fmtLong(delta));
+}
+function mockPreset(sec){
+  mock.on=false; clearInterval(mock.timer); mock.t=sec; mock.laps=[]; renderMock();
+  toast("已设定 "+fmtLong(sec)+"，点击开始倒计时正向走");
+}
+
+/* ================= 导航：active + hash 路由 + 移动端 tab ================= */
+function updateActiveNav(){
+  const ids = ["home","plan","qa","intro","star","a4"];
+  let cur = "home";
+  const y = window.scrollY + 120;
+  for(const id of ids){ const el = document.getElementById(id); if(el && el.offsetTop <= y) cur = id; }
+  document.querySelectorAll(".nav-link").forEach(a=> a.classList.toggle("active", a.dataset.link === "#"+cur));
+  document.querySelectorAll(".mtab").forEach(a=> a.classList.toggle("on", a.dataset.link === "#"+cur));
+  if(location.hash !== "#"+cur){
+    history.replaceState(null, "", "#"+cur);
+  }
+}
+function bindNav(){
+  document.querySelectorAll("[data-link]").forEach(el=>{
+    el.addEventListener("click", (e)=>{
+      const id = el.dataset.link;
+      if(id){ e.preventDefault(); jumpTo(id); }
+    });
+  });
+}
+
+/* ================= 重置进度 ================= */
+function resetProgress(){
+  if(!confirm("确定要清空所有打卡/刷题进度吗？（本地不可恢复）\n\n（仅清除本浏览器 localStorage，不影响 Markdown 文档和打印 A4。）")) return;
+  state = {}; saveState();
+  renderPlan(); renderProgress(); renderQA();
+  toast("进度已清零，从头开始加油！💪", 2000);
+}
+
+/* ================= 初始化 ================= */
+window.addEventListener("DOMContentLoaded", ()=>{
+  if(state.theme) document.documentElement.classList.toggle("light", state.theme==="light");
+  bindNav();
+  window.addEventListener("scroll", updateActiveNav, { passive:true });
+  setTimeout(updateActiveNav, 50);
+  renderSTAR();
+  renderPlan();
+  renderQA();
+  renderProgress();
+  renderMock();
+  // 如果 URL 有 hash，跳过去
+  if(location.hash && document.querySelector(location.hash)) jumpTo(location.hash);
+});
+</script>
+</body>
+</html>

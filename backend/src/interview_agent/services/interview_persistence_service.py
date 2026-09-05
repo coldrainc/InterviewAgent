@@ -32,12 +32,14 @@ class InterviewPersistenceService:
         config: InterviewConfig,
         state: InterviewState,
         resume_id: str | None = None,
+        plan_task_id: str | None = None,
     ) -> None:
         await self.repository.create_session(
             session_id=session_id,
             config=config,
             state=state,
             resume_id=resume_id,
+            plan_task_id=plan_task_id,
         )
         if self.export_markdown:
             self._export(session_id, config, state)
@@ -53,6 +55,7 @@ class InterviewPersistenceService:
         advanced: bool,
         fallback_used: bool,
         guardrails: list[str],
+        plan_task_id: str | None = None,
     ) -> None:
         await self.repository.sync_session_state(
             session_id=session_id,
@@ -60,6 +63,7 @@ class InterviewPersistenceService:
             state=state,
             fallback_used=fallback_used,
             guardrails=guardrails,
+            plan_task_id=plan_task_id,
         )
         if self.export_markdown:
             store = self._store_for_session(session_id)

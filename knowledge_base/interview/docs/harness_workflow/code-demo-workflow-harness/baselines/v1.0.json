@@ -1,0 +1,19 @@
+{
+  "scenario_count": 2,
+  "task_success_rate": 0.92,
+  "tool_selection_acc": 0.95,
+  "parameter_correctness": 0.91,
+  "tool_order_satisfaction": 0.93,
+  "3d_validity": 0.88,
+  "3d_efficiency": 0.82,
+  "3d_adaptivity": 0.90,
+  "3d_overall": 0.87,
+  "tool_repetition_rate": 0.01,
+  "total_steps": 5.5,
+  "avg_step_ms": 180.0,
+  "total_token_count": 8500,
+  "total_cost_usd": 0.028,
+  "tool_error_rate": 0.02,
+  "faithfulness_simple": 0.88,
+  "pii_suspicious_count": 0
+}

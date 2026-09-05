@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>陈雨寒 · AI Native 全栈 面试复习计划</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #2563EB;
+    --primary-soft: #EFF6FF;
+    --primary-border: #BFDBFE;
+    --p1: #2563EB;
+    --p1-soft: #EFF6FF;
+    --p2: #0EA5E9;
+    --p2-soft: #F0F9FF;
+    --p3: #16A34A;
+    --p3-soft: #F0FDF4;
+    --p4: #D97706;
+    --p4-soft: #FFFBEB;
+    --bg: #F8FAFC;
+    --bg-card: #FFFFFF;
+    --bg-alt: #F1F5F9;
+    --text: #0F172A;
+    --text-sub: #475569;
+    --text-mute: #94A3B8;
+    --border: #E2E8F0;
+    --border-sub: #CBD5E1;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+    --shadow-lg: 0 4px 12px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
+    --gap: 8px;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+    padding-bottom: 80px;
+  }
+
+  /* ===== HEADER ===== */
+  header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 24px 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  header .subtitle {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--text-sub);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+  header .subtitle .dot { color: var(--text-mute); }
+  header .subtitle .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  nav.tabs {
+    display: flex;
+    gap: 4px;
+    margin-top: 20px;
+    overflow-x: auto;
+  }
+  button.tab {
+    border: none;
+    background: transparent;
+    padding: 12px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-sub);
+    cursor: pointer;
+    border-radius: var(--radius) var(--radius) 0 0;
+    white-space: nowrap;
+    transition: color 200ms, background 200ms;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  button.tab:hover { color: var(--primary); background: var(--bg-alt); }
+  button.tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* ===== MAIN ===== */
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .tab-pane { display: none; animation: fadeIn 300ms ease; }
+  .tab-pane.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 18px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
+  /* ===== OVERVIEW TAB ===== */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .phase-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    border-left: 4px solid var(--primary);
+    box-shadow: var(--shadow);
+  }
+  .phase-card.p1 { border-left-color: var(--p1); }
+  .phase-card.p2 { border-left-color: var(--p2); }
+  .phase-card.p3 { border-left-color: var(--p3); }
+  .phase-card.p4 { border-left-color: var(--p4); }
+  .phase-card .ph-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  .phase-card.p1 .ph-badge { background: var(--p1-soft); color: var(--p1); }
+  .phase-card.p2 .ph-badge { background: var(--p2-soft); color: var(--p2); }
+  .phase-card.p3 .ph-badge { background: var(--p3-soft); color: var(--p3); }
+  .phase-card.p4 .ph-badge { background: var(--p4-soft); color: var(--p4); }
+  .phase-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .phase-card .ph-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-sub);
+    margin-bottom: 8px;
+  }
+  .phase-card .ph-meta strong { color: var(--text); font-weight: 600; }
+  .phase-card .ph-goal {
+    font-size: 12px;
+    color: var(--text-mute);
+    line-height: 1.5;
+  }
+  .phase-card .ph-bar {
+    height: 6px;
+    background: var(--bg-alt);
+    border-radius: 3px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .phase-card .ph-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 400ms cubic-bezier(0.4,0,0.2,1);
+  }
+  .phase-card.p1 .ph-bar-fill { background: var(--p1); }
+  .phase-card.p2 .ph-bar-fill { background: var(--p2); }
+  .phase-card.p3 .ph-bar-fill { background: var(--p3); }
+  .phase-card.p4 .ph-bar-fill { background: var(--p4); }
+
+  /* Progress ring */
+  .progress-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 32px;
+    align-items: center;
+  }
+  .ring-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+  }
+  .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--bg-alt); stroke-width: 12; }
+  .ring-fg {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-dasharray: 376.99;
+    stroke-dashoffset: 376.99;
+    transition: stroke-dashoffset 400ms cubic-bezier(0.4,0,0.2,1);
+  }
+  .ring-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .ring-text .pct {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+  }
+  .ring-text .lbl {
+    font-size: 12px;
+    color: var(--text-sub);
+    margin-top: 4px;
+  }
+  .progress-detail .done-row {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .progress-detail .done-row .done-num { color: var(--primary); font-size: 20px; }
+  .progress-detail .done-row .total-num { color: var(--text-mute); }
+  .progress-detail .phase-progress-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 24px;
+    margin-top: 12px;
+  }
+  .progress-detail .phase-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .phase-progress-item .bar {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-alt);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+  .phase-progress-item .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 400ms cubic-bezier(0.4,0,0.2,1);
+  }
+  .phase-progress-item .pp-text { min-width: 40px; color: var(--text-sub); font-size: 12px; text-align: right; }
+
+  /* Gantt */
+  .gantt-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--shadow);
+  }
+  .gantt-chart {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+  .gantt-label { font-size: 13px; font-weight: 500; color: var(--text-sub); }
+  .gantt-track {
+    position: relative;
+    height: 32px;
+    background: var(--bg-alt);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .gantt-bar {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .gantt-bar.g1 { left: 0; width: 28.57%; background: var(--p1); }
+  .gantt-bar.g2 { left: 28.57%; width: 28.57%; background: var(--p2); }
+  .gantt-bar.g3 { left: 57.14%; width: 21.43%; background: var(--p3); }
+  .gantt-bar.g4 { left: 78.57%; width: 21.43%; background: var(--p4); }
+  .gantt-days {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(14, 1fr);
+    gap: 0;
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--text-mute);
+    text-align: center;
+  }
+  .gantt-days span { padding: 2px 0; }
+
+  /* ===== DAYS TAB ===== */
+  .days-layout {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 20px;
+  }
+  .filter-chips {
+    position: sticky;
+    top: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-self: flex-start;
+  }
+  .filter-chip {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-sub);
+    text-align: left;
+    transition: all 200ms;
+  }
+  .filter-chip:hover { border-color: var(--primary-border); color: var(--primary); }
+  .filter-chip.active {
+    background: var(--primary-soft);
+    border-color: var(--primary-border);
+    color: var(--primary);
+  }
+  .filter-chip.active[data-filter="p1"] { background: var(--p1-soft); border-color: var(--p1); color: var(--p1); }
+  .filter-chip.active[data-filter="p2"] { background: var(--p2-soft); border-color: var(--p2); color: var(--p2); }
+  .filter-chip.active[data-filter="p3"] { background: var(--p3-soft); border-color: var(--p3); color: var(--p3); }
+  .filter-chip.active[data-filter="p4"] { background: var(--p4-soft); border-color: var(--p4); color: var(--p4); }
+
+  .days-list { display: flex; flex-direction: column; gap: 12px; }
+  details.day {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: box-shadow 200ms;
+  }
+  details.day[open] { box-shadow: var(--shadow-lg); }
+  details.day summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    user-select: none;
+    transition: background 200ms;
+  }
+  details.day summary:hover { background: var(--bg-alt); }
+  details.day summary::-webkit-details-marker { display: none; }
+  .d-arrow {
+    width: 20px; height: 20px;
+    color: var(--text-mute);
+    transition: transform 200ms;
+    flex-shrink: 0;
+  }
+  details.day[open] .d-arrow { transform: rotate(90deg); color: var(--primary); }
+  .d-day-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 52px;
+  }
+  .d-phase-tag {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .d-phase-tag.p1 { background: var(--p1-soft); color: var(--p1); }
+  .d-phase-tag.p2 { background: var(--p2-soft); color: var(--p2); }
+  .d-phase-tag.p3 { background: var(--p3-soft); color: var(--p3); }
+  .d-phase-tag.p4 { background: var(--p4-soft); color: var(--p4); }
+  .d-title {
+    font-size: 13px;
+    color: var(--text-sub);
+    flex: 1;
+  }
+  .d-task-count {
+    font-size: 12px;
+    color: var(--text-mute);
+    flex-shrink: 0;
+    padding: 2px 10px;
+    background: var(--bg-alt);
+    border-radius: 999px;
+  }
+  .d-done-count { color: var(--primary); font-weight: 600; }
+
+  .task-list {
+    padding: 0 20px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .task-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 4px;
+    align-items: flex-start;
+    border-bottom: 1px dashed var(--border);
+  }
+  .task-item:last-child { border-bottom: none; }
+  .task-check {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--primary);
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-item.done .task-body { opacity: 0.55; }
+  .task-item.done .task-title { text-decoration: line-through; }
+  .task-title {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .task-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .task-tag {
+    padding: 2px 8px;
+    font-size: 11px;
+    background: var(--bg-alt);
+    color: var(--text-sub);
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .task-tag.critical {
+    background: #FEF2F2;
+    color: #DC2626;
+  }
+
+  /* ===== ASSETS TAB ===== */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 18px 20px;
+  }
+  .card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .intro-card { margin-bottom: 14px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+  .intro-card:last-child { margin-bottom: 0; }
+  .intro-card.intro-90 { border-left: 3px solid var(--p2); }
+  .intro-card.intro-3min { border-left: 3px solid var(--p3); }
+  .intro-card.intro-30 { border-left: 3px solid var(--p1); }
+  .intro-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .intro-label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .intro-time {
+    font-size: 11px;
+    color: var(--text-sub);
+    padding: 2px 8px;
+    background: var(--bg-alt);
+    border-radius: 999px;
+  }
+  .intro-scenario {
+    font-size: 11px;
+    color: var(--text-mute);
+    margin-bottom: 8px;
+    font-style: italic;
+  }
+  .intro-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-sub);
+  }
+
+  .star-card {
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .star-card:last-child { margin-bottom: 0; }
+  .star-head {
+    padding: 14px 16px;
+    background: var(--bg-card);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .star-head.star-1 { background: linear-gradient(90deg, var(--p1-soft), var(--bg-card)); }
+  .star-head.star-2 { background: linear-gradient(90deg, var(--p2-soft), var(--bg-card)); }
+  .star-head.star-3 { background: linear-gradient(90deg, var(--p3-soft), var(--bg-card)); }
+  .star-head.star-4 { background: linear-gradient(90deg, #F0F9FF, var(--bg-card)); }
+  .star-head.star-5 { background: linear-gradient(90deg, var(--p4-soft), var(--bg-card)); }
+  .star-head.star-6 { background: linear-gradient(90deg, #FEF2F2, var(--bg-card)); }
+  .star-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .star-head.star-1 .star-num { background: var(--p1); }
+  .star-head.star-2 .star-num { background: var(--p2); }
+  .star-head.star-3 .star-num { background: var(--p3); }
+  .star-head.star-4 .star-num { background: var(--p2); }
+  .star-head.star-5 .star-num { background: var(--p4); }
+  .star-head.star-6 .star-num { background: #DC2626; }
+  .star-info { flex: 1; }
+  .star-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .star-tech { font-size: 11px; color: var(--text-sub); }
+  .star-btn-toggle {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    font-size: 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-sub);
+    transition: all 150ms;
+    flex-shrink: 0;
+  }
+  .star-btn-toggle:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-border); }
+  .star-detail {
+    display: none;
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-alt);
+  }
+  .star-detail.open { display: block; }
+  .star-detail-row {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+  }
+  .star-detail-row:last-child { margin-bottom: 0; }
+  .star-k {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary);
+    padding: 2px 0;
+    text-align: center;
+    background: var(--primary-soft);
+    border-radius: 4px;
+  }
+  .star-head.star-1 .star-k, .star-detail .star-1-k { background: var(--p1-soft); color: var(--p1); }
+  .star-head.star-2 .star-k, .star-detail .star-2-k { background: var(--p2-soft); color: var(--p2); }
+  .star-head.star-3 .star-k, .star-detail .star-3-k { background: var(--p3-soft); color: var(--p3); }
+  .star-head.star-5 .star-k, .star-detail .star-5-k { background: var(--p4-soft); color: var(--p4); }
+  .star-v { font-size: 12.5px; line-height: 1.65; color: var(--text-sub); }
+  .star-result {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--p3-soft);
+    border-radius: 6px;
+    color: var(--p3);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .a4-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--shadow);
+  }
+  .a4-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .print-btn {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 200ms;
+  }
+  .print-btn:hover { background: #1D4ED8; }
+  .a4-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .a4-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 14px 14px 50px;
+    position: relative;
+    min-height: 80px;
+  }
+  .a4-num {
+    position: absolute;
+    left: 12px;
+    top: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .a4-card.a4-b .a4-num { background: #7C3AED; }
+  .a4-card .face-label {
+    position: absolute;
+    right: 12px;
+    top: 14px;
+    font-size: 10px;
+    color: var(--text-mute);
+    padding: 1px 6px;
+    background: var(--bg-alt);
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .a4-card .text {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* ===== FOOTER ===== */
+  footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 20;
+    flex-wrap: wrap;
+  }
+  .foot-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-sub);
+    transition: all 150ms;
+  }
+  .foot-btn:hover { border-color: var(--primary-border); color: var(--primary); background: var(--primary-soft); }
+  .foot-btn.danger:hover { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }
+  .foot-hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-mute);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 900px) {
+    header { padding: 18px 16px 0; }
+    main { padding: 16px; }
+    .overview-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .progress-section { grid-template-columns: 1fr; gap: 18px; text-align: center; }
+    .ring-wrap { margin: 0 auto; }
+    .progress-detail .phase-progress-list { grid-template-columns: 1fr; }
+    .days-layout { grid-template-columns: 1fr; }
+    .filter-chips { position: static; flex-direction: row; flex-wrap: wrap; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .a4-grid { grid-template-columns: repeat(2, 1fr); }
+    .gantt-chart { grid-template-columns: 1fr; gap: 8px; }
+    .gantt-days { grid-column: 1; }
+  }
+  @media (max-width: 560px) {
+    .overview-grid { grid-template-columns: 1fr; }
+    .a4-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ===== PRINT ===== */
+  @media print {
+    header, footer, nav.tabs, .filter-chips, .print-btn, .a4-card .face-label,
+    details.day summary .d-arrow, .star-btn-toggle { display: none !important; }
+    body { background: #fff; padding-bottom: 0; font-size: 12px; }
+    main { max-width: none; padding: 0; }
+    .tab-pane { display: block !important; }
+    .tab-pane + .tab-pane { page-break-before: always; }
+    .task-item { break-inside: avoid; }
+    details.day summary { padding: 10px 16px; }
+    .star-detail { display: block !important; }
+    .a4-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .overview-grid { grid-template-columns: repeat(2, 1fr); }
+    .gantt-chart { grid-template-columns: 100px 1fr; }
+    .task-check { opacity: 0.8; }
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>陈雨寒 · AI Native 全栈 面试复习计划</h1>
+  <div class="subtitle">
+    <span class="pill">Plan ID: 64153f58</span>
+    <span><strong>14 天 × 4 小时</strong><span class="dot"> · </span>Senior 6 年</span>
+    <span>55 核心任务 <span class="dot">·</span> 6 STAR <span class="dot">·</span> 3 Intro <span class="dot">·</span> 12 A4</span>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview">📊 总览</button>
+    <button class="tab" data-tab="days">📅 14 天任务</button>
+    <button class="tab" data-tab="assets">🧰 辅助素材</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ========== OVERVIEW TAB ========== -->
+<section id="overview" class="tab-pane active">
+  <h2 class="section-title">四阶段概览</h2>
+  <div class="overview-grid">
+    <div class="phase-card p1">
+      <span class="ph-badge">P1 · 基础夯实</span>
+      <h3>Foundation · 语言基础与运行时</h3>
+      <div class="ph-meta"><span>Day 1-4</span><strong>30%</strong></div>
+      <div class="ph-meta"><span>任务数</span><strong>18 / 18</strong></div>
+      <div class="ph-goal">语言基础+运行时 → React+前端工程 → Node+服务端 → 网络浏览器+系统。</div>
+      <div class="ph-bar"><div class="ph-bar-fill" data-phase-bar="p1"></div></div>
+    </div>
+    <div class="phase-card p2">
+      <span class="ph-badge">P2 · 专题深挖</span>
+      <h3>Deepening · 算法 + AI 大模型</h3>
+      <div class="ph-meta"><span>Day 5-8</span><strong>28%</strong></div>
+      <div class="ph-meta"><span>任务数</span><strong>15 / 15</strong></div>
+      <div class="ph-goal">算法 2 天（JS手写+LeetCode高频）；AI 2 天（RAG/Agent/Prompt/评测）。</div>
+      <div class="ph-bar"><div class="ph-bar-fill" data-phase-bar="p2"></div></div>
+    </div>
+    <div class="phase-card p3">
+      <span class="ph-badge">P3 · 项目打磨</span>
+      <h3>Project · STAR 卡 + 自我介绍</h3>
+      <div class="ph-meta"><span>Day 9-11</span><strong>22%</strong></div>
+      <div class="ph-meta"><span>任务数</span><strong>10 / 10</strong></div>
+      <div class="ph-goal">3 STAR/天打磨 + 自我介绍 3 版本 + 行为面试题准备。</div>
+      <div class="ph-bar"><div class="ph-bar-fill" data-phase-bar="p3"></div></div>
+    </div>
+    <div class="phase-card p4">
+      <span class="ph-badge">P4 · 模拟冲刺</span>
+      <h3>Simulation · 全真模拟 + 错题清零</h3>
+      <div class="ph-meta"><span>Day 12-14</span><strong>20%</strong></div>
+      <div class="ph-meta"><span>任务数</span><strong>12 / 12</strong></div>
+      <div class="ph-goal">3 轮全真模拟 + 错题本清零 + A4 速记 + 临场清单。</div>
+      <div class="ph-bar"><div class="ph-bar-fill" data-phase-bar="p4"></div></div>
+    </div>
+  </div>
+
+  <div class="progress-section">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 140 140">
+        <circle class="ring-bg" cx="70" cy="70" r="60"></circle>
+        <circle class="ring-fg" cx="70" cy="70" r="60" id="ringFg"></circle>
+      </svg>
+      <div class="ring-text">
+        <div class="pct" id="ringPct">0%</div>
+        <div class="lbl">总体进度</div>
+      </div>
+    </div>
+    <div class="progress-detail">
+      <div class="done-row">
+        已完成 <span class="done-num" id="doneNum">0</span> / <span class="total-num">55</span> 个任务
+      </div>
+      <div style="font-size:12px;color:var(--text-sub)">进度保存于浏览器 localStorage，离线随时可用</div>
+      <div class="phase-progress-list">
+        <div class="phase-progress-item">
+          <span style="width:4px;height:16px;background:var(--p1);border-radius:2px;display:inline-block"></span>
+          <span style="font-size:12px;min-width:60px">P1 基础</span>
+          <div class="bar"><div class="bar-fill" style="background:var(--p1);width:0%" data-phase-mini="p1"></div></div>
+          <span class="pp-text" data-phase-text="p1">0/18</span>
+        </div>
+        <div class="phase-progress-item">
+          <span style="width:4px;height:16px;background:var(--p2);border-radius:2px;display:inline-block"></span>
+          <span style="font-size:12px;min-width:60px">P2 深挖</span>
+          <div class="bar"><div class="bar-fill" style="background:var(--p2);width:0%" data-phase-mini="p2"></div></div>
+          <span class="pp-text" data-phase-text="p2">0/15</span>
+        </div>
+        <div class="phase-progress-item">
+          <span style="width:4px;height:16px;background:var(--p3);border-radius:2px;display:inline-block"></span>
+          <span style="font-size:12px;min-width:60px">P3 项目</span>
+          <div class="bar"><div class="bar-fill" style="background:var(--p3);width:0%" data-phase-mini="p3"></div></div>
+          <span class="pp-text" data-phase-text="p3">0/10</span>
+        </div>
+        <div class="phase-progress-item">
+          <span style="width:4px;height:16px;background:var(--p4);border-radius:2px;display:inline-block"></span>
+          <span style="font-size:12px;min-width:60px">P4 冲刺</span>
+          <div class="bar"><div class="bar-fill" style="background:var(--p4);width:0%" data-phase-mini="p4"></div></div>
+          <span class="pp-text" data-phase-text="p4">0/12</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gantt-section">
+    <h2 class="section-title" style="margin-bottom:18px">14 天时间线</h2>
+    <div class="gantt-chart">
+      <div class="gantt-label">阶段分布</div>
+      <div class="gantt-track">
+        <div class="gantt-bar g1">P1 基础 4 天</div>
+        <div class="gantt-bar g2">P2 深挖 4 天</div>
+        <div class="gantt-bar g3">P3 项目 3 天</div>
+        <div class="gantt-bar g4">P4 冲刺 3 天</div>
+      </div>
+      <div class="gantt-label"></div>
+      <div class="gantt-days">
+        <span>D1</span><span>D2</span><span>D3</span><span>D4</span>
+        <span>D5</span><span>D6</span><span>D7</span><span>D8</span>
+        <span>D9</span><span>D10</span><span>D11</span>
+        <span>D12</span><span>D13</span><span>D14</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== DAYS TAB ========== -->
+<section id="days" class="tab-pane">
+  <div class="days-layout">
+    <aside class="filter-chips">
+      <button class="filter-chip active" data-filter="all">📌 全部阶段 (55)</button>
+      <button class="filter-chip" data-filter="p1">🔵 P1 基础夯实 (18)</button>
+      <button class="filter-chip" data-filter="p2">🔷 P2 专题深挖 (15)</button>
+      <button class="filter-chip" data-filter="p3">🟢 P3 项目打磨 (10)</button>
+      <button class="filter-chip" data-filter="p4">🟠 P4 模拟冲刺 (12)</button>
+    </aside>
+    <div class="days-list" id="daysList"></div>
+  </div>
+</section>
+
+<!-- ========== ASSETS TAB ========== -->
+<section id="assets" class="tab-pane">
+  <div class="grid-2">
+    <div class="card">
+      <h3>🎙️ 自我介绍 3 版本</h3>
+      <div class="intro-card intro-30">
+        <div class="intro-header">
+          <span class="intro-label">电梯版 30 秒</span>
+          <span class="intro-time">⏱ 30s</span>
+        </div>
+        <div class="intro-scenario">适用：HR 电话面 / 内推破冰 / 面试官刚坐下</div>
+        <div class="intro-text">面试官您好，我是陈雨寒，6 年 AI Native 全栈工程师，专注 RAG、Agent 工作流落地与跨端工程化。</div>
+      </div>
+      <div class="intro-card intro-90">
+        <div class="intro-header">
+          <span class="intro-label">标准版 90 秒</span>
+          <span class="intro-time">⏱ 90s</span>
+        </div>
+        <div class="intro-scenario">适用：技术一面 / 视频面默认</div>
+        <div class="intro-text">您好，我是陈雨寒，6 年 AI Native 全栈工程师，熟悉前后端+大模型应用层+评测与护栏。1.设计并交付企业级 RAG 平台，覆盖 12+ 业务线，线上答案准确率 92%，工单降 60%；2.主导多 Agent 协作引擎，任务成功率 92%，平均迭代从 7 天降到 1 天；3.深耕评测护栏：慢查询 Top-N、向量重排、Guardrails 覆盖率 85%，事故率下降 65%。</div>
+      </div>
+      <div class="intro-card intro-3min">
+        <div class="intro-header">
+          <span class="intro-label">详述版 3 分钟（岗位定制）</span>
+          <span class="intro-time">⏱ 3min</span>
+        </div>
+        <div class="intro-scenario">适用：交叉面 / 二面 / 架构面</div>
+        <div class="intro-text">对岗位理解。产品思维：业务价值倒推技术方案，关注成本/性能/上线节奏；工程能力：端到端交付 Web/桌面端/小程序统一架构 Tauri/Electron 熟练；AI 深度：RAG、Agent、Harness、评测闭环、Guardrails；跨端广度：React/Vue/Node/Postgres/Python/向量库。非常期待把经验复制到贵团队。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>⭐ STAR 项目卡 × 6</h3>
+      <div id="starList"></div>
+    </div>
+  </div>
+
+  <div class="a4-section">
+    <div class="a4-head">
+      <h3 style="margin:0;font-size:15px;font-weight:600">📄 A4 速记 12 条（A 面知识主干 · B 面实战要点）</h3>
+      <button class="print-btn" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        打印全部
+      </button>
+    </div>
+    <div class="a4-grid" id="a4Grid"></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <button class="foot-btn" id="exportBtn">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    导出进度 JSON
+  </button>
+  <button class="foot-btn danger" id="resetBtn">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+    重置所有勾选
+  </button>
+  <span class="foot-hint">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+    数据保存在浏览器 localStorage，双击本文件即可离线使用
+  </span>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+
+  var LS_KEY = 'cyh_interview_plan_14d_v1';
+  var PLAN_ID = '64153f58-3745-4076-ae11-3806e2786313';
+
+  var PHASES = {
+    p1: { label: 'P1 基础夯实', color: '#2563EB', total: 18 },
+    p2: { label: 'P2 专题深挖', color: '#0EA5E9', total: 15 },
+    p3: { label: 'P3 项目打磨', color: '#16A34A', total: 10 },
+    p4: { label: 'P4 模拟冲刺', color: '#D97706', total: 12 }
+  };
+
+  var DAYS = [
+    {
+      id: 'day-1', day: 'Day 1', phase: 'p1', title: '语言与运行时（Promise / 原型链 / 事件循环 / 防抖节流）',
+      tasks: [
+        { id: 'd1-t1', critical: true, tags: ['Promise', '手写', '核心'], title: '完成 Promise.all / race / allSettled / any 四种手写实现一遍，覆盖错误传播 + allSettled 两种状态' },
+        { id: 'd1-t2', critical: true, tags: ['原型链', 'this', '基础'], title: '原型链 + this 指向专题：Foo.getName 顺序题、静态/实例/私有三类方法，手写 6 道练习题' },
+        { id: 'd1-t3', critical: true, tags: ['事件循环', '浏览器', 'Node'], title: '浏览器 vs Node.js 事件循环对比：微任务/宏任务 6 阶段顺序题，画顺序图 3 遍' },
+        { id: 'd1-t4', tags: ['防抖节流', '手写'], title: '防抖 debounce + 节流 throttle：立即版 + cancel + Promise 版，手写两遍计时验证' }
+      ]
+    },
+    {
+      id: 'day-2', day: 'Day 2', phase: 'p1', title: 'React + 前端工程化（Fiber / HOC Hook / Webpack / Babel / Diff）',
+      tasks: [
+        { id: 'd2-t1', critical: true, tags: ['React', 'Fiber', '核心'], title: 'React Fiber 双缓存：current/workInProgress 双树、beginWork / completeWork / commitRoot 三阶段口述 + 画时间线' },
+        { id: 'd2-t2', critical: true, tags: ['React', 'Hook', '性能'], title: 'HOC / Hook 差异：useMemo/useCallback 精确边界题 8 道（含 useSyncExternalStore、useTransition 口述）' },
+        { id: 'd2-t3', tags: ['工程化', 'Webpack'], title: 'Webpack 构建流程：初始化 config → resolve loader/plugin → compilation chunk graph → emit（口述 5 分钟）' },
+        { id: 'd2-t4', tags: ['工程化', 'Babel', '手写'], title: 'Babel preset / plugin 顺序：Polyfill core-js@3 preset-env useBuiltIns:usage，手写一个移除 console 的 plugin（visitor）' },
+        { id: 'd2-t5', critical: true, tags: ['React', 'Diff', '核心'], title: '虚拟 DOM diff：单节点 + 多节点 5 步 old/newIndex 推演 + key 作用题（2 道）' }
+      ]
+    },
+    {
+      id: 'day-3', day: 'Day 3', phase: 'p1', title: '服务端 + 跨端 IPC（Node 事件循环 / 并发调度 / 重试退避 / Electron IPC）',
+      tasks: [
+        { id: 'd3-t1', critical: true, tags: ['Node', '事件循环'], title: 'Node.js 事件循环：timers/pending/idle/prepare/poll/check/close，nextTick vs setImmediate，场景 4 道' },
+        { id: 'd3-t2', critical: true, tags: ['Node', '并发控制', '手写'], title: 'Node 并发调度器：并发池 Pool(promiseFn[], limit=8) + 全局限流令牌桶，手写' },
+        { id: 'd3-t3', tags: ['可靠性', '重试', '手写'], title: '重试退避：指数退避 backoff(3) + 抖动 jitter + 幂等 key，重试 429/5xx 不重试 400' },
+        { id: 'd3-t4', critical: true, tags: ['Electron', 'IPC', '跨端'], title: 'Electron IPC 三种：invoke/send/ipcRenderer vs 本地后端（NestJS 本地 localhost 通信）的选型' }
+      ]
+    },
+    {
+      id: 'day-4', day: 'Day 4', phase: 'p1', title: '网络 + 浏览器渲染（TCP / HTTP / CORS / 渲染管线 / OSI 七层）',
+      tasks: [
+        { id: 'd4-t1', critical: true, tags: ['TCP', '网络', '核心'], title: 'TCP 三次握手 + 四次挥手：SYN→SYN+ACK→ACK，TIME_WAIT=2MSL，画时序图' },
+        { id: 'd4-t2', critical: true, tags: ['HTTP', 'HTTP2', 'HTTP3'], title: 'HTTP1.1 / HTTP2 / HTTP3：队头阻塞 / HPACK 压缩 / 多路复用 / QUIC UDP 对比表' },
+        { id: 'd4-t3', tags: ['CORS', '安全'], title: 'CORS 三字段：Allow-Origin / Allow-Methods / Allow-Credentials，OPTIONS 预检触发条件（+ Content-Type application/json）' },
+        { id: 'd4-t4', critical: true, tags: ['浏览器', '渲染'], title: '浏览器渲染管线：HTML→DOM + CSS→CSSOM → Style → Layout → Paint → Composite（GPU 层），口述' },
+        { id: 'd4-t5', tags: ['网络', '协议栈'], title: 'OSI 七层与 TCP/IP 四层：应用层 DNS TLS HTTP、传输层 TCP UDP、网络层 IP、链路层 数据链路' }
+      ]
+    },
+    {
+      id: 'day-5', day: 'Day 5', phase: 'p2', title: 'JS 手写高频 + 链表基础（快手.js + 链表 3 道 + 蚂蚁证券基础）',
+      tasks: [
+        { id: 'd5-t1', critical: true, tags: ['JS手写', '快手', '核心'], title: '快手.js 手写题 6 道：柯里化 sum(x)(y) / flatten / 大数加一 / repeat / 单链表 insert+search / 大数乘' },
+        { id: 'd5-t2', critical: true, tags: ['算法', '链表', '核心'], title: '链表 3 道：翻转链表（递归+迭代，口述）、合并 K 有序链表（手写 MinHeap 类，插入/extractMin）、有环入口快慢指针数学证明' },
+        { id: 'd5-t3', tags: ['JS基础', '蚂蚁', 'Proxy'], title: '蚂蚁证券 JS 基础 3 道：闭包 3 套输出题、Proxy 实现响应式对象、WeakMap vs Map 适用场景' }
+      ]
+    },
+    {
+      id: 'day-6', day: 'Day 6', phase: 'p2', title: '滑窗 / DP / 回溯 / TopK（双指针滑窗 4 道 + DP贪心 4 道 + 栈回溯TopK 4 道）',
+      tasks: [
+        { id: 'd6-t1', critical: true, tags: ['双指针', '滑窗', '核心'], title: '双指针+滑窗 4 道：三数之和排序去重 + 最长无重复子串(Map+left) + 最小覆盖子串(need/window) + 盛水最多容器' },
+        { id: 'd6-t2', critical: true, tags: ['DP', '贪心', '核心'], title: 'DP+贪心 4 道：LIS（二分+tails O(nlogn)）+ 打家劫舍II（环形两端二选一） + 零钱兑换 + 编辑距离（表格填写一遍）' },
+        { id: 'd6-t3', critical: true, tags: ['栈', '回溯', 'TopK'], title: '栈+回溯+TopK 4 道：接雨水（单调栈存下标）+ 全排列去重剪枝 + 岛屿 DFS 淹没 + Top K 高频小顶堆维持K个' }
+      ]
+    },
+    {
+      id: 'day-7', day: 'Day 7', phase: 'p2', title: 'RAG 质量链 + Chunking + 检索 + Prompt Engineering',
+      tasks: [
+        { id: 'd7-t1', critical: true, tags: ['AI', 'RAG', '核心'], title: '画 RAG 质量链全景图 8 步：QueryRewrite → 双路召回 BM25+向量 → RRF 融合 → Rerank 精排 → Guardrails 事实约束 → Prompt 组装 → LLM → 引用溯源' },
+        { id: 'd7-t2', critical: true, tags: ['AI', 'RAG', 'Chunking'], title: 'Chunking 三策略：512tokens+50overlap 默认 / Markdown ## 标题语义切分 / Embedding 相似度阈值语义切分；各举 1 例适用场景' },
+        { id: 'd7-t3', tags: ['AI', '检索', '指标'], title: '检索 Top-K 指标：Recall@K、MRR、NDCG 三条公式 + 解释；TopK 动态调整（基于 query 复杂度分桶）' },
+        { id: 'd7-t4', critical: true, tags: ['AI', 'Prompt', '核心'], title: 'Prompt Engineering 6 大框架：Zero/Few-shot、CoT、ToT、ReAct、Self-consistency、RAG + Source Citation；每个手写 1 个模板' }
+      ]
+    },
+    {
+      id: 'day-8', day: 'Day 8', phase: 'p2', title: 'Agent + Harness + Guardrails + 评测指标',
+      tasks: [
+        { id: 'd8-t1', critical: true, tags: ['AI', 'Agent', '核心'], title: 'ReAct Agent Loop：手写 ReActAgent 类（Thought→Action→Observation），maxSteps=10 + 工具 Schema 校验 + 超时 30s + 中间状态记录' },
+        { id: 'd8-t2', tags: ['AI', 'MCP', '工具调用'], title: 'MCP 工具调用：SSE 流 + stdin/stdout 通信 + 工具注册表 ToolRegistry(name, schema, handler)；3 个失败模式与回退 LLM' },
+        { id: 'd8-t3', critical: true, tags: ['AI', 'Harness', '核心'], title: 'Harness 三件套：Scenario（120+）+ Baseline（golden run 锚点）+ Gate（成功率/延迟/事实一致率）；P0 止血：GATE_ENABLED=false + DEFERRED_LLM_AS_PASS' },
+        { id: 'd8-t4', tags: ['AI', 'Guardrails', '安全'], title: 'Guardrails 五层防护：输入校验 → Prompt 注入检测 → 输出事实性校验 → 引用溯源覆盖率 ≥ 80% → 合规 PII 移除' },
+        { id: 'd8-t5', tags: ['AI', '评测', '指标'], title: '评测 4 类指标：Retrieval(Recall/MRR/NDCG)、Generation(ROUGE/BERTScore/事实一致率)、Agent(成功率/步骤数/工具正确率)、业务(工单降本率/NPS)' }
+      ]
+    },
+    {
+      id: 'day-9', day: 'Day 9', phase: 'p3', title: 'STAR 项目卡打磨 1-3（RAG 平台 / Agent 引擎 / Harness 治理）',
+      tasks: [
+        { id: 'd9-t1', critical: true, tags: ['STAR', 'RAG', '项目深挖'], title: '打磨 STAR #1：企业级 RAG 平台（S：文档分散 + 成本高；T：统一 RAG 平台 12+ 业务；A：双路召回 + Rerank + Guardrails + QueryRewrite；R：准确率 92% 工单降 60% NPS 46 → 92%）' },
+        { id: 'd9-t2', critical: true, tags: ['STAR', 'Agent', '项目深挖'], title: '打磨 STAR #2：多 Agent 协作引擎（S：多步骤手写 prompt 难维护；T：可视化编排 + 可靠执行；A：DAG 编排 + Trace + 重试 + DSL；R：成功率 92% 迭代 7天→1天）' },
+        { id: 'd9-t3', critical: true, tags: ['STAR', 'Harness', '项目深挖'], title: '打磨 STAR #3：Harness 质量治理平台（S：线上事故率高；T：评测+护栏闭环；A：Scenario+Baseline+Gate；R：事故率降 65%、阻断率 99.2%）' }
+      ]
+    },
+    {
+      id: 'day-10', day: 'Day 10', phase: 'p3', title: 'STAR 项目卡打磨 4-6（KMP / Electron+NestJS / HarmonyOS 直播）',
+      tasks: [
+        { id: 'd10-t1', critical: true, tags: ['STAR', 'KMP', '跨端'], title: '打磨 STAR #4：KMP 跨端三端复用（commonMain 下沉 ViewModel/状态/解码 + 50ms 聚合批量 + Job 绑定生命周期 → 复用率 71% 通信 +32% 迁移 -53%）' },
+        { id: 'd10-t2', critical: true, tags: ['STAR', 'Electron', 'NestJS'], title: '打磨 STAR #5：Electron + NestJS 跨境 ERP（主进程 NestJS 本地后端 + Repository SQLite/Postgres 双端 + CRDT LWW 向量时钟 → 同步一致率 99.92% 月活 +45%）' },
+        { id: 'd10-t3', critical: true, tags: ['STAR', 'HarmonyOS', '直播'], title: '打磨 STAR #6：HarmonyOS 直播 0-1（H5/Lynx 混合 + LiveView 显式状态机 Loading→Ready→Active→Bg→Destroyed 修复竞态 → 28天 MVP 崩溃率 0.38% 接入 2.1 人日）' }
+      ]
+    },
+    {
+      id: 'day-11', day: 'Day 11', phase: 'p3', title: '自我介绍 + 行为 STAR 骨架（3 版本打磨 + 行为面试 5 条）',
+      tasks: [
+        { id: 'd11-t1', critical: true, tags: ['自我介绍', '30s'], title: '30 秒电梯版连续说 5 遍，每遍录音并在 30 秒停止；核心内容：陈雨寒 6 年 AI Native 全栈' },
+        { id: 'd11-t2', critical: true, tags: ['自我介绍', '90s'], title: '90 秒标准版连续说 3 遍（RAG 平台 + Agent 引擎 + Harness 治理 三个量化数字），时间允许 ±5 秒' },
+        { id: 'd11-t3', critical: true, tags: ['自我介绍', '3min'], title: '3 分钟详版（交叉面用）：背景→4亮点→岗位匹配段，口述后录音' },
+        { id: 'd11-t4', tags: ['行为面试', 'STAR'], title: '行为面试 5 条 STAR 骨架：最大挑战（LiveView 竞态）/ 冲突处理（三端分歧投票）/ 失败案例（RAG 召回 65% 反思）/ 学新技术（Harness 15维）/ 领导项目（4人小组）' }
+      ]
+    },
+    {
+      id: 'day-12', day: 'Day 12', phase: 'p4', title: '跨端模拟 + 错题一刷 + A4 速记定稿',
+      tasks: [
+        { id: 'd12-t1', critical: true, tags: ['模拟', '跨端'], title: '60 分钟跨端模拟面：KMP 选型表、RN/Flutter/鸿蒙差异、Electron IPC 模式，每题口头答完后写 2 条复盘笔记' },
+        { id: 'd12-t2', critical: true, tags: ['错题本', '一刷'], title: '错题一刷：面试题/readme.md、快手.js、蚂蚁.js 所有错题再过一遍，记录错误原因（概念不清 / 粗心 / 边界），每条写 1 句话修复措施' },
+        { id: 'd12-t3', tags: ['A4', '速记'], title: 'A4 速记 A 面（知识主干 1-6 条）：大声朗读 2 遍，每条 10 秒内口头回忆要点' },
+        { id: 'd12-t4', critical: true, tags: ['A4', '速记'], title: 'A4 速记 B 面（实战要点 7-12 条）：大声朗读 2 遍，关键量化数字写在便签纸上' }
+      ]
+    },
+    {
+      id: 'day-13', day: 'Day 13', phase: 'p4', title: 'AI/蚂蚁专项 + 错题二刷',
+      tasks: [
+        { id: 'd13-t1', critical: true, tags: ['模拟', 'AI'], title: '60 分钟 AI 模拟：RAG 质量链 8 步 × 各失败模式 + Agent 6 模块 × 成本上限（Token/时延/工具调用次数限制）' },
+        { id: 'd13-t2', critical: true, tags: ['模拟', '蚂蚁', '公司题'], title: '90 分钟蚂蚁证券专项：蚂蚁证券_AI_Native.js 全部题 + 公司定制 JD 对齐话术（证券合规红线）' },
+        { id: 'd13-t3', critical: true, tags: ['错题本', '二刷'], title: '错题二刷：Day 12 错题本里概念不清类型的，全部重新手写 / 口头完整一遍' }
+      ]
+    },
+    {
+      id: 'day-14', day: 'Day 14', phase: 'p4', title: '高压模拟 + 错题清零 + 面试清单 + 放松',
+      tasks: [
+        { id: 'd14-t1', critical: true, tags: ['模拟', '高压', '核心'], title: '高压模拟：90 分钟完整模拟（30s 自我介绍 + 4 轮技术 + STAR × 2 + 反问 5 条），完整录音后复盘' },
+        { id: 'd14-t2', critical: true, tags: ['A4', '速记'], title: 'A4 速记 3 遍过全本：A/B 两面 12 条，每遍结束打一个 ✓ 勾' },
+        { id: 'd14-t3', critical: true, tags: ['错题本', '清零'], title: '错题清零：错题本里剩下所有题，最后一遍过，还不会的直接写死记口诀贴显示器' },
+        { id: 'd14-t4', tags: ['准备', '清单'], title: '面试清单：资料（简历/作品集/GitHub/STAR 打印版）+ 设备（耳机/摄像头/网络）+ 环境（安静/背景/白板）核对 3 轮' },
+        { id: 'd14-t5', tags: ['心理', '放松'], title: '放松：早睡觉、不做新题；只过 A4 和 STAR 卡，保持头脑清醒（3 条可选，完成打勾）' }
+      ]
+    }
+  ];
+
+  var INTRO_SCRIPTS = [
+    { id: 'intro-30s', label: '电梯版 30 秒', duration_seconds: 30, scenario: 'HR 电话面 / 内推破冰 / 面试官刚坐下', text: '面试官您好，我是陈雨寒，6 年 AI Native 全栈工程师，专注 RAG、Agent 工作流落地与跨端工程化。' },
+    { id: 'intro-90s', label: '标准版 90 秒', duration_seconds: 90, scenario: '技术一面 / 视频面默认', text: '您好，我是陈雨寒，6 年 AI Native 全栈工程师，熟悉前后端+大模型应用层+评测与护栏。1.设计并交付企业级 RAG 平台，覆盖 12+ 业务线，线上答案准确率 92%，工单降 60%；2.主导多 Agent 协作引擎，任务成功率 92%，平均迭代从 7 天降到 1 天；3.深耕评测护栏：慢查询 Top-N、向量重排、Guardrails 覆盖率 85%，事故率下降 65%。' },
+    { id: 'intro-3min', label: '详述版 3 分钟（岗位定制）', duration_seconds: 180, scenario: '交叉面 / 二面 / 架构面', text: '对岗位理解。产品思维：业务价值倒推技术方案，关注成本/性能/上线节奏；工程能力：端到端交付 Web/桌面端/小程序统一架构 Tauri/Electron 熟练；AI 深度：RAG、Agent、Harness、评测闭环、Guardrails；跨端广度：React/Vue/Node/Postgres/Python/向量库。非常期待把经验复制到贵团队。' }
+  ];
+
+  var STAR_CARDS = [
+    { id: 'star-1', index: 1, title: '企业级 RAG 问答平台', tag: 'RAG', tech: 'RAG / Go / 多租户', result_pct: '线上准确率 92%、NPS 46、月调用量 300w+',
+      situation: '企业文档分散查不到答案+支持成本高。',
+      task: '统一 RAG 平台覆盖 12+ 业务线，降低 60% 支持工单。',
+      action: '向量检索+重排+分块+引用溯源，自研评测集+Guardrails。',
+      result: '线上准确率 92%、NPS 46、月调用量 300w+。'
+    },
+    { id: 'star-2', index: 2, title: '多 Agent 工作流引擎', tag: 'Agent', tech: 'Agent / Workflow / Node.js', result_pct: '任务成功率 92%、迭代周期 7 天 → 1 天',
+      situation: '复杂任务多步骤多角色，手写 prompt 难维护。',
+      task: '可视化编排+可靠执行多 Agent 引擎。',
+      action: 'DAG 编排+上下文记忆+错误重试+工具调用 DSL。',
+      result: '任务成功率 92%、平均迭代周期从 7 天降到 1 天。'
+    },
+    { id: 'star-3', index: 3, title: 'Harness 质量治理平台', tag: 'Harness', tech: 'Harness / Eval / Guardrails', result_pct: '事故率下降 65%、阻断率 99.2%',
+      situation: '线上事故率高，缺乏上线质量锚点。',
+      task: 'Scenario+Baseline+Gate 三件套。',
+      action: '120+ 用例 / 黄金锚点 / 成功率与延迟 Gate。',
+      result: '事故率下降 65%、阻断率 99.2%。'
+    },
+    { id: 'star-4', index: 4, title: 'KMP 跨端三端复用', tag: 'KMP', tech: 'KMP / Android+iOS+Harmony', result_pct: '复用率 71%、通信 +32%、迁移 -53%',
+      situation: '三端重复开发+口径不一致。',
+      task: 'commonMain 下沉 ViewModel/状态/解码。',
+      action: '50ms 批量聚合 + Job 绑定生命周期。',
+      result: '复用率 71%、通信 +32%、迁移工时 -53%。'
+    },
+    { id: 'star-5', index: 5, title: 'Electron+NestJS 跨境 ERP', tag: 'Electron', tech: 'Electron / NestJS / CRDT', result_pct: '同步一致率 99.92%、月活 +45%、包体 120MB',
+      situation: '跨境 ERP 离线体验差+同步冲突。',
+      task: '主进程 NestJS 本地后端+CRDT LWW 同步。',
+      action: 'Repository 双端 SQLite/Postgres + 向量时钟。',
+      result: '同步一致率 99.92%、月活 +45%、包体 120MB。'
+    },
+    { id: 'star-6', index: 6, title: 'HarmonyOS ArkTS 直播 0-1', tag: 'HarmonyOS', tech: 'HarmonyOS / ArkTS / LiveView', result_pct: '28 天 MVP、崩溃率 0.38%、接入 2.1 人日',
+      situation: '直播端需要快速 MVP + 复杂状态竞态。',
+      task: 'H5/Lynx 混合架构 + LiveView 显式状态机。',
+      action: 'Loading→Ready→Active→Bg→Destroyed 修复竞态。',
+      result: '28 天 MVP、崩溃率 0.38%、接入 2.1 人日。'
+    }
+  ];
+
+  var A4_MEMORY = [
+    { face: 'A', text: 'Promise 四件套：all/race/allSettled/any 边界与错误传播' },
+    { face: 'A', text: '事件循环：同步→微任务→宏任务，微任务清完再下一宏' },
+    { face: 'A', text: '防抖最后一次有效+节流固定窗口+立即+cancel' },
+    { face: 'A', text: 'TCP 三握四挥 TIME_WAIT=2MSL' },
+    { face: 'A', text: 'HTTP2：多路复用/HPACK/Server Push/流优先级' },
+    { face: 'A', text: 'React Fiber：双缓存+beginWork/completeWork/commitRoot' },
+    { face: 'B', text: 'KMP vs RN vs Lynx：定位复用/通信/适用场景对比表' },
+    { face: 'B', text: 'RAG 质量链 8 步：QueryRewrite→双路→融合→Rerank→…' },
+    { face: 'B', text: 'Agent 6 模块：Planner/ToolRegistry/Executor/Memory/Guardrails/Evaluator' },
+    { face: 'B', text: 'Harness 三件套：Scenario + Baseline + Gate' },
+    { face: 'B', text: '经典 STAR 三故事：TOML 损坏 / RAG 召回 65%→92% / LiveView 竞态' },
+    { face: 'B', text: '量化数字速查：复用率 70%+ / 通信 +30% / 迁移 -50% / 构建 +40%' }
+  ];
+
+  var checked = {};
+  function loadLS() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        var obj = JSON.parse(raw);
+        if (obj && obj.checked && typeof obj.checked === 'object') checked = obj.checked;
+      }
+    } catch(e) { checked = {}; }
+  }
+  function saveLS() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        plan_id: PLAN_ID,
+        name: '陈雨寒',
+        updated_at: new Date().toISOString(),
+        checked: checked
+      }));
+    } catch(e) {}
+  }
+
+  function getPhaseCount(phase) {
+    var done = 0, total = 0;
+    DAYS.forEach(function(d) {
+      if (d.phase === phase) {
+        d.tasks.forEach(function(t) {
+          total++;
+          if (checked[t.id]) done++;
+        });
+      }
+    });
+    return { done: done, total: total };
+  }
+  function getTotalCount() {
+    var done = 0, total = 0;
+    DAYS.forEach(function(d) {
+      d.tasks.forEach(function(t) {
+        total++;
+        if (checked[t.id]) done++;
+      });
+    });
+    return { done: done, total: total };
+  }
+
+  function updateProgressUI() {
+    var tot = getTotalCount();
+    var pct = tot.total === 0 ? 0 : Math.round(tot.done / tot.total * 100);
+    var circ = 2 * Math.PI * 60;
+    var ring = document.getElementById('ringFg');
+    ring.setAttribute('stroke-dasharray', circ);
+    ring.setAttribute('stroke-dashoffset', circ - (pct / 100) * circ);
+    document.getElementById('ringPct').textContent = pct + '%';
+    document.getElementById('doneNum').textContent = tot.done;
+
+    ['p1','p2','p3','p4'].forEach(function(p) {
+      var c = getPhaseCount(p);
+      var pct2 = c.total === 0 ? 0 : (c.done / c.total * 100);
+      var barMain = document.querySelector('[data-phase-bar="' + p + '"]');
+      var barMini = document.querySelector('[data-phase-mini="' + p + '"]');
+      var textEl = document.querySelector('[data-phase-text="' + p + '"]');
+      if (barMain) barMain.style.width = pct2 + '%';
+      if (barMini) barMini.style.width = pct2 + '%';
+      if (textEl) textEl.textContent = c.done + '/' + c.total;
+    });
+  }
+
+  function renderDays(filter) {
+    var list = document.getElementById('daysList');
+    list.innerHTML = '';
+    var arr = filter === 'all' ? DAYS : DAYS.filter(function(d) { return d.phase === filter; });
+    var arrowSvg = '<svg class="d-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+    arr.forEach(function(d) {
+      var phaseDone = 0;
+      d.tasks.forEach(function(t) { if (checked[t.id]) phaseDone++; });
+      var details = document.createElement('details');
+      details.className = 'day';
+      details.dataset.phase = d.phase;
+      details.id = d.id;
+      var tagClass = 'd-phase-tag ' + d.phase;
+      var phaseLabel = PHASES[d.phase].label.split(' ')[0] + ' ' + PHASES[d.phase].label.split(' ')[1];
+      details.innerHTML =
+        '<summary>' + arrowSvg +
+        '<span class="d-day-label">' + d.day + '</span>' +
+        '<span class="' + tagClass + '">' + phaseLabel + '</span>' +
+        '<span class="d-title">' + d.title + '</span>' +
+        '<span class="d-task-count"><span class="d-done-count">' + phaseDone + '</span>/' + d.tasks.length + ' 任务</span>' +
+        '</summary>';
+      var taskList = document.createElement('div');
+      taskList.className = 'task-list';
+      d.tasks.forEach(function(t) {
+        var isDone = !!checked[t.id];
+        var tagsHtml = t.tags.map(function(tg) {
+          var cls = 'task-tag' + (tg === '核心' || tg.indexOf('核心') > -1 || t.critical ? ' critical' : '');
+          return '<span class="' + cls + '">' + tg + '</span>';
+        }).join('');
+        var taskEl = document.createElement('div');
+        taskEl.className = 'task-item' + (isDone ? ' done' : '');
+        taskEl.innerHTML =
+          '<input type="checkbox" class="task-check" data-task-id="' + t.id + '" ' + (isDone ? 'checked' : '') + '>' +
+          '<div class="task-body">' +
+          '<div class="task-title">' + t.title + '</div>' +
+          (tagsHtml ? '<div class="task-tags">' + tagsHtml + '</div>' : '') +
+          '</div>';
+        taskList.appendChild(taskEl);
+      });
+      details.appendChild(taskList);
+      list.appendChild(details);
+    });
+
+    list.querySelectorAll('.task-check').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var tid = this.dataset.taskId;
+        checked[tid] = this.checked ? true : false;
+        saveLS();
+        var item = this.closest('.task-item');
+        if (this.checked) item.classList.add('done'); else item.classList.remove('done');
+        var dEl = this.closest('details.day');
+        if (dEl) {
+          var dayId = dEl.id;
+          var dayData = DAYS.find(function(x) { return x.id === dayId; });
+          if (dayData) {
+            var dn = 0;
+            dayData.tasks.forEach(function(t) { if (checked[t.id]) dn++; });
+            var cnt = dEl.querySelector('.d-done-count');
+            if (cnt) cnt.textContent = dn;
+          }
+        }
+        updateProgressUI();
+      });
+    });
+  }
+
+  function renderStars() {
+    var list = document.getElementById('starList');
+    list.innerHTML = '';
+    STAR_CARDS.forEach(function(s) {
+      var cls = 'star-' + s.index;
+      var kcls = 'star-' + s.index + '-k';
+      var el = document.createElement('div');
+      el.className = 'star-card';
+      el.innerHTML =
+        '<div class="star-head ' + cls + '">' +
+        '<div class="star-num">' + s.index + '</div>' +
+        '<div class="star-info">' +
+        '<div class="star-title">' + s.title + '</div>' +
+        '<div class="star-tech">' + s.tag + ' · ' + s.tech + '</div>' +
+        '</div>' +
+        '<button class="star-btn-toggle" data-toggle-star="' + s.id + '">展开 A/R</button>' +
+        '</div>' +
+        '<div class="star-detail" id="' + s.id + '-detail">' +
+        '<div class="star-detail-row"><span class="star-k ' + kcls + '">S</span><div class="star-v">' + s.situation + '</div></div>' +
+        '<div class="star-detail-row"><span class="star-k ' + kcls + '">T</span><div class="star-v">' + s.task + '</div></div>' +
+        '<div class="star-detail-row"><span class="star-k ' + kcls + '">A</span><div class="star-v">' + s.action + '</div></div>' +
+        '<div class="star-detail-row"><span class="star-k ' + kcls + '">R</span><div class="star-v">' + s.result + '</div></div>' +
+        '<div class="star-result">🎯 ' + s.result_pct + '</div>' +
+        '</div>';
+      list.appendChild(el);
+    });
+    list.querySelectorAll('[data-toggle-star]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var sid = this.dataset.toggleStar;
+        var d = document.getElementById(sid + '-detail');
+        if (d.classList.contains('open')) {
+          d.classList.remove('open');
+          this.textContent = '展开 A/R';
+        } else {
+          d.classList.add('open');
+          this.textContent = '收起';
+        }
+      });
+    });
+  }
+
+  function renderA4() {
+    var grid = document.getElementById('a4Grid');
+    grid.innerHTML = '';
+    A4_MEMORY.forEach(function(a, i) {
+      var faceLabel = a.face === 'A' ? 'A 面' : 'B 面';
+      var cls = a.face === 'B' ? 'a4-b' : '';
+      var el = document.createElement('div');
+      el.className = 'a4-card ' + cls;
+      el.innerHTML =
+        '<div class="a4-num">' + (i + 1) + '</div>' +
+        '<div class="face-label">' + faceLabel + '</div>' +
+        '<div class="text">' + a.text + '</div>';
+      grid.appendChild(el);
+    });
+  }
+
+  function initTabs() {
+    document.querySelectorAll('.tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = this.dataset.tab;
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.tab-pane').forEach(function(p) { p.classList.remove('active'); });
+        this.classList.add('active');
+        var p = document.getElementById(target);
+        if (p) p.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  }
+
+  function initFilters() {
+    document.querySelectorAll('.filter-chip').forEach(function(chip) {
+      chip.addEventListener('click', function() {
+        document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+        this.classList.add('active');
+        renderDays(this.dataset.filter);
+      });
+    });
+  }
+
+  function initFootBtns() {
+    document.getElementById('exportBtn').addEventListener('click', function() {
+      var payload = {
+        schema: 'cyh_interview_plan_export_v1',
+        plan_id: PLAN_ID,
+        name: '陈雨寒',
+        role: 'AI Native 全栈工程师（Senior 6年）',
+        exported_at: new Date().toISOString(),
+        total_done: getTotalCount().done,
+        total_tasks: getTotalCount().total,
+        phase_progress: {
+          p1: getPhaseCount('p1'),
+          p2: getPhaseCount('p2'),
+          p3: getPhaseCount('p3'),
+          p4: getPhaseCount('p4')
+        },
+        completed_task_ids: Object.keys(checked).filter(function(k) { return checked[k]; }),
+        tasks_state: checked
+      };
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'cyh-interview-plan-progress-' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', function() {
+      var c = confirm('确定要清空所有任务勾选吗？此操作不可撤销。');
+      if (!c) return;
+      checked = {};
+      saveLS();
+      renderDays(document.querySelector('.filter-chip.active').dataset.filter);
+      updateProgressUI();
+    });
+  }
+
+  loadLS();
+  renderDays('all');
+  renderStars();
+  renderA4();
+  initTabs();
+  initFilters();
+  initFootBtns();
+  updateProgressUI();
+})();
+</script>
+
+</body>
+</html>

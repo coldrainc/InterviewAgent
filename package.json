@@ -11,6 +11,8 @@
   "scripts": {
     "desktop:build": "npm --prefix apps/desktop run build",
     "desktop:start": "npm --prefix apps/desktop run desktop",
-    "backend:test": "cd backend && ../.venv/bin/python -m pytest"
+    "backend:test": "cd backend && ../.venv/bin/python -m pytest",
+    "miniapp:check": "npm --prefix apps/miniapp run check",
+    "check": "make check"
   }
 }

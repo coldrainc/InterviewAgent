@@ -12,6 +12,7 @@ def test_agent_loop_reaches_evaluation_after_focus_areas() -> None:
         max_followups_per_focus=1,
     )
     loop = AgentLoop(config, ScriptedInterviewHarness(config))
+    assert isinstance(loop.uses_langgraph, bool)
 
     first = loop.start()
     assert first.state.stage == InterviewStage.INTRO
@@ -30,6 +31,18 @@ def test_agent_loop_reaches_evaluation_after_focus_areas() -> None:
     final = loop.step("I would measure saturation and error budgets.")
     assert final.state.stage == InterviewStage.EVALUATION
     assert final.state.completed is True
+
+
+def test_explicit_orchestration_status_includes_thread_id() -> None:
+    config = InterviewConfig()
+    loop = AgentLoop(config, ScriptedInterviewHarness(config))
+    loop.set_thread_id("session-123")
+    loop._graph_executor = None
+
+    status = loop.orchestration_status
+
+    assert status["engine"] == "explicit"
+    assert status["thread_id"] == "session-123"
 
 
 def test_agent_loop_keeps_digging_when_answer_lacks_project_evidence() -> None:

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -282,6 +283,9 @@ class InterviewSessionModel(Base):
     config_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
     state_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    plan_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UuidString(), ForeignKey("review_plan_tasks.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
@@ -290,6 +294,9 @@ class InterviewSessionModel(Base):
     resume: Mapped[ResumeModel | None] = relationship(back_populates="sessions")
     turns: Mapped[list["InterviewTurnModel"]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
+    )
+    report: Mapped["InterviewReportModel | None"] = relationship(
+        back_populates="session", uselist=False, cascade="all, delete-orphan"
     )
 
 
@@ -629,3 +636,380 @@ class AgentSpanModel(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     trace: Mapped[AgentTraceModel] = relationship(back_populates="spans")
+
+
+class ReviewPlanModel(Base):
+    __tablename__ = "review_plans"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "plan_key", name="uq_review_plans_tenant_user_key"),
+        Index("ix_review_plans_tenant_updated", "tenant_id", "user_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    plan_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    subtitle: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    start_date: Mapped[date | None] = mapped_column(Date)
+    source_root: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_documents_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    commercial_positioning_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    phases: Mapped[list["ReviewPhaseModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    days: Mapped[list["ReviewDayModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    intro_scripts: Mapped[list["IntroScriptModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    star_cards: Mapped[list["StarCardModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    a4_memory: Mapped[list["A4MemoryItemModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    progress_records: Mapped[list["ReviewProgressModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    checkins: Mapped[list["ReviewCheckinModel"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+
+
+class ReviewPhaseModel(Base):
+    __tablename__ = "review_plan_phases"
+    __table_args__ = (
+        Index("ix_review_plan_phases_plan", "plan_id", "sort_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    phase_key: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    range_label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    goal: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="phases")
+
+
+class ReviewDayModel(Base):
+    __tablename__ = "review_plan_days"
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    day_key: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    day_label: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    phase_key: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    acceptance: Mapped[str | None] = mapped_column(Text)
+    scheduled_date: Mapped[date | None] = mapped_column(Date, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="days")
+    tasks: Mapped[list["ReviewTaskModel"]] = relationship(
+        back_populates="day", cascade="all, delete-orphan"
+    )
+
+
+class ReviewTaskModel(Base):
+    __tablename__ = "review_plan_tasks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    day_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plan_days.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    task_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    tags_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    critical: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    docs_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="plan")
+    source_ref: Mapped[str | None] = mapped_column(String(255))
+    link_type: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    link_payload_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    reason: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    day: Mapped[ReviewDayModel] = relationship(back_populates="tasks")
+    progresses: Mapped[list["ReviewProgressModel"]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+
+
+class ReviewProgressModel(Base):
+    __tablename__ = "review_progresses"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "task_id", name="uq_review_progresses_user_task"),
+        Index("ix_review_progresses_plan_done", "plan_id", "done"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    day_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plan_days.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plan_tasks.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    elapsed_minutes: Mapped[int | None] = mapped_column(Integer)
+    mastery_score: Mapped[int | None] = mapped_column(Integer)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="progress_records")
+    day: Mapped[ReviewDayModel] = relationship()
+    task: Mapped[ReviewTaskModel] = relationship(back_populates="progresses")
+
+
+class IntroScriptModel(Base):
+    __tablename__ = "review_intro_scripts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    script_key: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scenario: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="intro_scripts")
+
+
+class StarCardModel(Base):
+    __tablename__ = "review_star_cards"
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    card_key: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    tag: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    background: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    challenge: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    solution: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    result: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="star_cards")
+
+
+class A4MemoryItemModel(Base):
+    __tablename__ = "review_a4_memory_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    side: Mapped[str] = mapped_column(String(8), nullable=False, default="ALL")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="a4_memory")
+
+
+class PracticeQuestionModel(Base):
+    __tablename__ = "practice_questions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "content_hash", name="uq_practice_questions_user_hash"),
+        Index("ix_practice_questions_category", "tenant_id", "user_id", "practice_category", "subject"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    practice_category: Mapped[str] = mapped_column(String(64), nullable=False, default="internet")
+    source: Mapped[str] = mapped_column(String(128), nullable=False, default="manual")
+    source_url: Mapped[str | None] = mapped_column(Text)
+    subject: Mapped[str | None] = mapped_column(String(64))
+    question_type: Mapped[str | None] = mapped_column(String(64))
+    prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    choices_json: Mapped[list | None] = mapped_column(JsonDict())
+    answer: Mapped[str | None] = mapped_column(Text)
+    answer_detail: Mapped[str | None] = mapped_column(Text)
+    difficulty: Mapped[str] = mapped_column(String(32), nullable=False, default="medium")
+    tags_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    wrong_entries: Mapped[list["PracticeWrongBookModel"]] = relationship(
+        back_populates="question", cascade="all, delete-orphan"
+    )
+    attempts: Mapped[list["PracticeAttemptModel"]] = relationship(
+        back_populates="question", cascade="all, delete-orphan"
+    )
+
+
+class PracticeWrongBookModel(Base):
+    __tablename__ = "practice_wrong_book"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "question_id", name="uq_wrong_book_user_question"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("practice_questions.id", ondelete="CASCADE"), nullable=False
+    )
+    mark_type: Mapped[str] = mapped_column(String(32), nullable=False, default="wrong")
+    mastery_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    note: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    question: Mapped[PracticeQuestionModel] = relationship(back_populates="wrong_entries")
+
+
+class InterviewReportModel(Base):
+    __tablename__ = "interview_reports"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "session_id", name="uq_interview_reports_user_session"),
+        Index("ix_interview_reports_tenant_updated", "tenant_id", "user_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("interview_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    mode: Mapped[str] = mapped_column(String(32), nullable=False, default="interviewer")
+    total_score: Mapped[int | None] = mapped_column(Integer)
+    dimension_scores_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    per_question_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    evidence_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    strength_tags_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    weakness_tags_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    suggestions_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    summary_text: Mapped[str | None] = mapped_column(Text)
+    report_version: Mapped[str] = mapped_column(String(16), nullable=False, default="v1")
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    session: Mapped[InterviewSessionModel] = relationship(back_populates="report")
+
+
+class PracticeAttemptModel(Base):
+    __tablename__ = "practice_attempts"
+    __table_args__ = (
+        Index("ix_practice_attempts_tenant_created", "tenant_id", "user_id", "created_at"),
+        Index("ix_practice_attempts_question", "question_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("practice_questions.id", ondelete="CASCADE"), nullable=False
+    )
+    question_type: Mapped[str | None] = mapped_column(String(64))
+    answer: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    elapsed_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    feedback: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    question: Mapped[PracticeQuestionModel] = relationship(back_populates="attempts")
+
+
+class ReviewCheckinModel(Base):
+    __tablename__ = "review_checkins"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "plan_id", "checkin_date", name="uq_review_checkins_user_plan_date"),
+        Index("ix_review_checkins_tenant_date", "tenant_id", "user_id", "checkin_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UuidString(), ForeignKey("review_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    checkin_date: Mapped[date] = mapped_column(Date, nullable=False)
+    tasks_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tasks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    elapsed_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    note: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    plan: Mapped[ReviewPlanModel] = relationship(back_populates="checkins")
+
+
+class UserAchievementModel(Base):
+    __tablename__ = "user_achievements"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "achievement_key", name="uq_user_achievements_user_key"),
+        Index("ix_user_achievements_tenant", "tenant_id", "user_id", "unlocked_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, default="anonymous")
+    achievement_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    unlocked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

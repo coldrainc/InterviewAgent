@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, nativeImage } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, Notification } = require("electron");
 const fs = require("fs/promises");
 const path = require("path");
 
@@ -11,6 +11,129 @@ const API_RETRY_COUNT = 8;
 const API_RETRY_DELAY_MS = 350;
 const APP_ICON_PATH = path.join(__dirname, "assets", "app-icon.png");
 const streamControllers = new Map();
+
+// ---- 本地学习提醒通知 ----
+const DEFAULT_NOTIFY_SETTINGS = {
+  enabled: false,
+  time: "20:00",
+  title: "今日复习提醒",
+  body: "别忘了完成今天的复习计划、刷题和打卡～"
+};
+let notifySettings = { ...DEFAULT_NOTIFY_SETTINGS };
+let notifyTimer = null;
+let notifyReady = null;
+
+function notifySettingsPath() {
+  return path.join(app.getPath("userData"), "notify-settings.json");
+}
+
+async function loadNotifySettings() {
+  try {
+    const raw = await fs.readFile(notifySettingsPath(), "utf-8");
+    notifySettings = { ...DEFAULT_NOTIFY_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    notifySettings = { ...DEFAULT_NOTIFY_SETTINGS };
+  }
+}
+
+function ensureNotifyLoaded() {
+  if (!notifyReady) notifyReady = loadNotifySettings();
+  return notifyReady;
+}
+
+async function saveNotifySettings() {
+  try {
+    await fs.writeFile(notifySettingsPath(), JSON.stringify(notifySettings, null, 2), "utf-8");
+  } catch (error) {
+    console.warn("[notify] persist settings failed:", error?.message || error);
+  }
+}
+
+function clearNotifyTimer() {
+  if (notifyTimer) {
+    clearTimeout(notifyTimer);
+    clearInterval(notifyTimer);
+    notifyTimer = null;
+  }
+}
+
+function showStudyNotification(settings) {
+  if (!Notification.isSupported()) {
+    console.log("[notify] notification not supported on this system");
+    return;
+  }
+  const notice = new Notification({
+    title: settings?.title || DEFAULT_NOTIFY_SETTINGS.title,
+    body: settings?.body || DEFAULT_NOTIFY_SETTINGS.body,
+    icon: APP_ICON_PATH
+  });
+  notice.on("click", () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    }
+  });
+  notice.show();
+  console.log("[notify] notification shown:", settings?.title || DEFAULT_NOTIFY_SETTINGS.title);
+}
+
+function scheduleNotify() {
+  clearNotifyTimer();
+  if (!notifySettings.enabled) {
+    console.log("[notify] disabled, no schedule");
+    return;
+  }
+  const [hourStr, minuteStr] = String(notifySettings.time || "20:00").split(":");
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    console.warn("[notify] invalid time:", notifySettings.time);
+    return;
+  }
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hour, minute, 0, 0);
+  if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+  const delayMs = target.getTime() - now.getTime();
+  console.log(`[notify] scheduled daily at ${notifySettings.time}, next fire ${target.toISOString()} (in ${Math.round(delayMs / 1000)}s)`);
+  notifyTimer = setTimeout(() => {
+    showStudyNotification(notifySettings);
+    notifyTimer = setInterval(() => showStudyNotification(notifySettings), 24 * 60 * 60 * 1000);
+  }, delayMs);
+}
+
+ipcMain.handle("notify:test", async () => {
+  if (!Notification.isSupported()) {
+    return { ok: false, error: "当前系统不支持桌面通知" };
+  }
+  await ensureNotifyLoaded();
+  showStudyNotification(notifySettings);
+  return { ok: true };
+});
+
+ipcMain.handle("notify:schedule", async (_event, payload = {}) => {
+  await ensureNotifyLoaded();
+  notifySettings = { ...notifySettings, ...payload };
+  await saveNotifySettings();
+  scheduleNotify();
+  return {
+    ok: true,
+    enabled: !!notifySettings.enabled,
+    time: notifySettings.time,
+    scheduled: !!notifyTimer
+  };
+});
+
+ipcMain.handle("notify:cancel", async () => {
+  await ensureNotifyLoaded();
+  notifySettings.enabled = false;
+  await saveNotifySettings();
+  clearNotifyTimer();
+  console.log("[notify] schedule cancelled");
+  return { ok: true, enabled: false, scheduled: false };
+});
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -35,12 +158,15 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const appIcon = nativeImage.createFromPath(APP_ICON_PATH);
   if (process.platform === "darwin" && !appIcon.isEmpty()) {
     app.dock.setIcon(appIcon);
   }
   createWindow();
+
+  await ensureNotifyLoaded();
+  scheduleNotify();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -51,8 +177,30 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
+ipcMain.handle("shell:open-external", async (_event, url) => {
+  const target = String(url || "");
+  if (!/^https?:\/\//.test(target) && !/^file:\/\/\//.test(target) && !/^[a-zA-Z]:[\\/]/.test(target) && !target.startsWith("/")) {
+    return { ok: false, error: "不支持的链接类型" };
+  }
+  try {
+    const error = await shell.openExternal(target);
+    return error ? { ok: false, error: String(error) } : { ok: true };
+  } catch (error) {
+    return { ok: false, error: error?.message || "打开失败" };
+  }
+});
+
 ipcMain.handle("api:health", async () => {
   return requestJson("/health");
+});
+
+// 通用 JSON 通道：渲染层新端点统一走这里，复用主进程鉴权/刷新/重试逻辑
+ipcMain.handle("api:request", async (_event, route, options = {}) => {
+  return requestJson(route, {
+    method: options.method || "GET",
+    body: options.body,
+    headers: options.headers
+  });
 });
 
 ipcMain.handle("metadata:industries", async (_event, targetRole) => {
@@ -89,6 +237,88 @@ ipcMain.handle("practice:questions", async (_event, filters = {}) => {
 
 ipcMain.handle("practice:seed", async () => {
   return requestJson("/practice/questions/seed", { method: "POST" });
+});
+
+ipcMain.handle("review-site:plans", async () => {
+  return requestJson("/review-site/plans");
+});
+
+ipcMain.handle("review-site:create-plan", async (_event, payload) => {
+  return requestJson("/review-site/plans", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("review-site:plan", async (_event, planId) => {
+  return requestJson(`/review-site/plans/${encodeURIComponent(planId)}`);
+});
+
+ipcMain.handle("review-site:patch-plan", async (_event, planId, payload) => {
+  return requestJson(`/review-site/plans/${encodeURIComponent(planId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("review-site:archive-plan", async (_event, planId) => {
+  return requestJson(`/review-site/plans/${encodeURIComponent(planId)}/archive`, { method: "POST" });
+});
+
+ipcMain.handle("review-site:patch-progress", async (_event, taskId, payload) => {
+  return requestJson(`/review-site/progress/task/${encodeURIComponent(taskId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("review-site:intro-scripts", async (_event, planId) => {
+  return requestJson(`/review-site/plans/${encodeURIComponent(planId)}/intro-scripts`);
+});
+
+ipcMain.handle("review-site:star-cards", async (_event, planId) => {
+  return requestJson(`/review-site/plans/${encodeURIComponent(planId)}/star-cards`);
+});
+
+ipcMain.handle("review-site:a4-memory", async (_event, planId) => {
+  return requestJson(`/review-site/plans/${encodeURIComponent(planId)}/a4-memory`);
+});
+
+ipcMain.handle("review-site:practice-questions", async (_event, filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  if (filters.subject) params.set("subject", filters.subject);
+  if (filters.question_type) params.set("question_type", filters.question_type);
+  if (filters.difficulty) params.set("difficulty", filters.difficulty);
+  if (filters.keyword) params.set("keyword", filters.keyword);
+  params.set("limit", filters.limit || 30);
+  params.set("offset", filters.offset || 0);
+  return requestJson(`/review-site/practice-questions?${params.toString()}`);
+});
+
+ipcMain.handle("review-site:mark-question", async (_event, questionId, payload) => {
+  return requestJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/mark`, {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("review-site:wrong-book", async () => {
+  return requestJson("/review-site/wrong-book");
+});
+
+ipcMain.handle("review-site:import", async (_event, payload) => {
+  return requestJson("/review-site/import", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
+});
+
+ipcMain.handle("review-site:generate-plan", async (_event, payload) => {
+  return requestJson("/review-site/planner/generate", {
+    method: "POST",
+    body: JSON.stringify(payload || {})
+  });
 });
 
 ipcMain.handle("jobs:list", async () => {
@@ -564,6 +794,13 @@ function normalizeCategory(value) {
     "互联网": "internet",
     "互联网行业": "internet",
     "技术面试": "internet",
+    "力扣": "leetcode",
+    "力扣算法": "leetcode",
+    "leetcode": "leetcode",
+    "leet code": "leetcode",
+    "算法": "leetcode",
+    "算法题": "leetcode",
+    "刷题": "leetcode",
     "ai": "ai_application",
     "ai工程": "ai_application",
     "ai 工程": "ai_application",

@@ -60,12 +60,42 @@ fun InterviewApp(viewModel: ChatViewModel) {
                         onInput = viewModel::updateInput,
                         onSend = viewModel::send
                     )
+                } else if (selectedTab == AppTab.Practice) {
+                    PracticeScreen(
+                        state = state,
+                        onSelectCategory = viewModel::selectPracticeCategory,
+                        onAnswer = viewModel::updatePracticeAnswer,
+                        onSeed = viewModel::seedPracticeQuestions,
+                        onSubmit = viewModel::submitPracticeAnswer,
+                        onNext = viewModel::nextPracticeQuestion
+                    )
+                } else if (selectedTab == AppTab.Resume) {
+                    ResumeScreen(
+                        state = state,
+                        onNameChange = viewModel::updateResumeDraftName,
+                        onTextChange = viewModel::updateResumeDraftText,
+                        onImport = viewModel::importResumeDraft,
+                        onRefresh = viewModel::loadResumes,
+                        onSelect = viewModel::selectResume,
+                        onDelete = viewModel::deleteResume
+                    )
+                } else if (selectedTab == AppTab.History) {
+                    HistoryScreen(
+                        state = state,
+                        onRefresh = viewModel::loadSessions,
+                        onRestore = {
+                            viewModel.restoreSession(it)
+                            selectedTab = AppTab.Chat
+                        },
+                        onDelete = viewModel::deleteSession
+                    )
                 } else {
                     ProfileScreen(
                         state = state,
                         onDevLogin = viewModel::devLogin,
                         onRefreshAccount = viewModel::refreshAccount,
                         onRecharge = viewModel::recharge,
+                        onUpdateDefaultMode = viewModel::updateDefaultMode,
                         onLogout = viewModel::logout
                     )
                 }
@@ -103,6 +133,9 @@ private fun BottomTabs(selected: AppTab, onSelect: (AppTab) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
         Row(modifier = Modifier.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             TabButton("面试", selected == AppTab.Chat, Modifier.weight(1f)) { onSelect(AppTab.Chat) }
+            TabButton("刷题", selected == AppTab.Practice, Modifier.weight(1f)) { onSelect(AppTab.Practice) }
+            TabButton("简历", selected == AppTab.Resume, Modifier.weight(1f)) { onSelect(AppTab.Resume) }
+            TabButton("历史", selected == AppTab.History, Modifier.weight(1f)) { onSelect(AppTab.History) }
             TabButton("我的", selected == AppTab.Profile, Modifier.weight(1f)) { onSelect(AppTab.Profile) }
         }
     }
@@ -123,5 +156,8 @@ private fun TabButton(text: String, active: Boolean, modifier: Modifier = Modifi
 
 private enum class AppTab {
     Chat,
+    Practice,
+    Resume,
+    History,
     Profile
 }

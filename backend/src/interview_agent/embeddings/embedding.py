@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 import requests
-from openai import OpenAI
 
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -30,6 +29,10 @@ class EmbeddingConfig:
 class EmbeddingClient:
     def __init__(self, config: EmbeddingConfig) -> None:
         self.config = config
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("OpenAI embedding 需要安装 openai>=1.0。") from exc
         kwargs = {}
         if config.base_url:
             kwargs["base_url"] = config.base_url
@@ -114,7 +117,15 @@ class EmbeddingServiceClient:
             )
             response.raise_for_status()
             payload = response.json()
-            vectors.extend(payload["vectors"])
+            batch_vectors = payload.get("vectors")
+            if not isinstance(batch_vectors, list):
+                raise RuntimeError("Embedding service response missing vectors list.")
+            if len(batch_vectors) != len(batch):
+                raise RuntimeError(
+                    "Embedding service returned "
+                    f"{len(batch_vectors)} vectors for {len(batch)} input texts."
+                )
+            vectors.extend(batch_vectors)
         return vectors
 
     def embed_query(self, text: str) -> list[float]:

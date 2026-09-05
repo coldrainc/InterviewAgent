@@ -41,6 +41,18 @@ final class InterviewApiClient {
         try await request(path: "/account")
     }
 
+    func getSettings() async throws -> UserSettingsResponse {
+        try await request(path: "/settings")
+    }
+
+    func updateDefaultInterviewMode(_ mode: InterviewMode) async throws -> UserSettingsResponse {
+        try await request(
+            path: "/settings",
+            method: "PUT",
+            body: ["default_interview_mode": mode.rawValue]
+        )
+    }
+
     func recharge(amountCredits: String) async throws -> AccountResponse {
         try await request(
             path: "/account/recharge",
@@ -58,8 +70,58 @@ final class InterviewApiClient {
         return try await request(path: "/metadata/industries?target_role=\(encoded)")
     }
 
+    func listPracticeCategories() async throws -> [PracticeCategory] {
+        try await request(path: "/practice/categories")
+    }
+
+    func listPracticeQuestions(category: String, limit: Int = 50) async throws -> PracticeQuestionListResponse {
+        let encoded = category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? category
+        return try await request(path: "/practice/questions?category=\(encoded)&limit=\(limit)")
+    }
+
+    func seedPracticeQuestions() async throws -> ImportResultResponse {
+        try await request(path: "/practice/questions/seed", method: "POST")
+    }
+
+    func submitPracticeAttempt(questionID: String, answer: String, elapsedSeconds: Int?) async throws -> PracticeAttemptResponse {
+        try await request(
+            path: "/practice/attempt",
+            method: "POST",
+            body: PracticeAttemptRequest(questionID: questionID, answer: answer, elapsedSeconds: elapsedSeconds)
+        )
+    }
+
+    func listResumes() async throws -> [ResumeRecord] {
+        try await request(path: "/resumes")
+    }
+
+    func importResume(filename: String, text: String) async throws -> ResumeRecord {
+        let encoded = Data(text.utf8).base64EncodedString()
+        return try await request(
+            path: "/resumes",
+            method: "POST",
+            body: ResumeImportRequest(filename: filename, contentBase64: encoded, sourcePath: nil)
+        )
+    }
+
+    func deleteResume(id: String) async throws -> DeleteResponse {
+        try await request(path: "/resumes/\(id)", method: "DELETE")
+    }
+
     func createSession(_ body: CreateSessionRequest) async throws -> ChatResponse {
         try await request(path: "/sessions", method: "POST", body: body)
+    }
+
+    func listSessions(limit: Int = 50) async throws -> [SessionSummary] {
+        try await request(path: "/sessions?limit=\(limit)")
+    }
+
+    func getSession(id: String) async throws -> SessionDetail {
+        try await request(path: "/sessions/\(id)")
+    }
+
+    func deleteSession(id: String) async throws -> DeleteResponse {
+        try await request(path: "/sessions/\(id)", method: "DELETE")
     }
 
     func sendMessage(sessionID: String, message: String) async throws -> ChatResponse {

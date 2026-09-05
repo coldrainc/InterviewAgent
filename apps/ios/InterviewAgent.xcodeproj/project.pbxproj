@@ -17,6 +17,9 @@
 		IA0000110000000000000008 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000009 /* AccountView.swift */; };
 		IA0000110000000000000009 /* SharedComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000010 /* SharedComponents.swift */; };
 		IA0000110000000000000010 /* BrandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000011 /* BrandPalette.swift */; };
+		IA0000110000000000000011 /* ResumeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000012 /* ResumeView.swift */; };
+		IA0000110000000000000012 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000013 /* HistoryView.swift */; };
+		IA0000110000000000000013 /* PracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000014 /* PracticeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +34,9 @@
 		IA0000210000000000000009 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		IA0000210000000000000010 /* SharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedComponents.swift; sourceTree = "<group>"; };
 		IA0000210000000000000011 /* BrandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandPalette.swift; sourceTree = "<group>"; };
+		IA0000210000000000000012 /* ResumeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumeView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000013 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000014 /* PracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeView.swift; sourceTree = "<group>"; };
 		IA0000310000000000000001 /* InterviewAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InterviewAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -81,6 +87,9 @@
 				IA0000210000000000000008 /* RootView.swift */,
 				IA0000210000000000000005 /* ChatView.swift */,
 				IA0000210000000000000009 /* AccountView.swift */,
+				IA0000210000000000000014 /* PracticeView.swift */,
+				IA0000210000000000000012 /* ResumeView.swift */,
+				IA0000210000000000000013 /* HistoryView.swift */,
 				IA0000210000000000000010 /* SharedComponents.swift */,
 				IA0000210000000000000011 /* BrandPalette.swift */,
 			);
@@ -163,6 +172,9 @@
 				IA0000110000000000000007 /* RootView.swift in Sources */,
 				IA0000110000000000000005 /* ChatView.swift in Sources */,
 				IA0000110000000000000008 /* AccountView.swift in Sources */,
+				IA0000110000000000000013 /* PracticeView.swift in Sources */,
+				IA0000110000000000000011 /* ResumeView.swift in Sources */,
+				IA0000110000000000000012 /* HistoryView.swift in Sources */,
 				IA0000110000000000000009 /* SharedComponents.swift in Sources */,
 				IA0000110000000000000010 /* BrandPalette.swift in Sources */,
 			);

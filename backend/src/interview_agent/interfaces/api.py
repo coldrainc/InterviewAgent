@@ -14,7 +14,7 @@ from queue import Empty, Queue
 from urllib.parse import parse_qs
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
@@ -87,7 +87,13 @@ from interview_agent.services.billing_service import (
     validate_recharge_amount,
 )
 from interview_agent.services.interview_persistence_service import InterviewPersistenceService
+from interview_agent.services.interview_report_service import InterviewReportService
+from interview_agent.services.practice_attempt_service import PracticeAttemptService
+from interview_agent.services.plan_generator_service import PlanGeneratorService
 from interview_agent.services.resume_service import ResumeService
+from interview_agent.services.review_checkin_service import ReviewCheckinService
+from interview_agent.services.study_dashboard_service import StudyDashboardService
+from interview_agent.services.subjective_grader import LlmSubjectiveGrader
 from interview_agent.services.security_service import (
     SecurityService,
     has_permission,
@@ -96,7 +102,12 @@ from interview_agent.services.security_service import (
 )
 from interview_agent.repositories.civil_service_repository import CivilServiceQuestionRepository
 from interview_agent.repositories.job_repository import JobRepository, event_to_dict, job_to_dict
+from interview_agent.repositories.practice_question_repository import PracticeQuestionRepository
+from interview_agent.domain.practice_grading import is_choice_question
+from interview_agent.repositories.review_site_repository import ReviewSiteRepository
 from interview_agent.services.agent_ops_service import AgentOpsService, trace_to_dict
+from interview_agent.services.achievement_service import AchievementService, safe_evaluate
+from interview_agent.services.review_site_import_service import ReviewSiteImportService
 from interview_agent.services.workflow_runner import TERMINAL_JOB_STATUSES, create_and_start_job
 
 
@@ -114,6 +125,7 @@ class SessionRequest(BaseModel):
     interview_goal: str | None = None
     focus_areas: list[str] | None = None
     resume_id: str | None = None
+    plan_task_id: str | None = None
     model_id: str | None = None
     thinking_enabled: bool | None = None
     reasoning_effort: str | None = Field(default=None, pattern="^(low|medium|high|max)$")
@@ -366,6 +378,7 @@ class ChatResponse(BaseModel):
     model_id: str = ""
     usage: UsageResponse | None = None
     turn_index: int | None = None
+    orchestration: dict | None = None
 
 
 class SessionSummaryResponse(BaseModel):
@@ -377,6 +390,7 @@ class SessionSummaryResponse(BaseModel):
     target_role: str
     seniority: str
     status: str
+    plan_task_id: str | None = None
     created_at: str
     updated_at: str
 
@@ -415,10 +429,257 @@ class CivilServiceQuestionListResponse(BaseModel):
     offset: int
 
 
+class PracticeAttemptRequest(BaseModel):
+    question_id: str = Field(min_length=1, max_length=128)
+    answer: str = Field(default="", max_length=8000)
+    elapsed_seconds: int | None = Field(default=None, ge=0, le=24 * 60 * 60)
+
+
+class PracticeAttemptResponse(BaseModel):
+    question_id: str
+    correct: bool | None
+    score: int
+    feedback: str
+    reference_answer: str
+    explanation: str
+    suggestions: list[str]
+    elapsed_seconds: int | None = None
+
+
 class ImportResultResponse(BaseModel):
     created: int
     updated: int
     total: int
+
+
+class ReviewPlanListItem(BaseModel):
+    id: str
+    plan_key: str = ""
+    title: str = ""
+    subtitle: str = ""
+    status: str = "draft"
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ReviewPhaseResponse(BaseModel):
+    id: str
+    phase_key: str = ""
+    title: str = ""
+    range_label: str = ""
+    goal: str = ""
+    sort_order: int = 0
+
+
+class ReviewTaskResponse(BaseModel):
+    id: str
+    task_key: str = ""
+    title: str = ""
+    tags: list = []
+    critical: bool = False
+    simulation: bool = False
+    docs: list = []
+    reason: str | None = None
+    source: str = "plan"
+    link_type: str = "none"
+    link_payload: dict = {}
+    sort_order: int = 0
+
+
+class ReviewDayResponse(BaseModel):
+    id: str
+    day_key: str = ""
+    day_label: str = ""
+    phase_key: str = ""
+    title: str = ""
+    acceptance: str | None = None
+    scheduled_date: str | None = None
+    sort_order: int = 0
+    tasks: list[ReviewTaskResponse] = []
+
+
+class ReviewProgressResponse(BaseModel):
+    id: str
+    plan_id: str
+    day_id: str
+    task_id: str
+    done: bool = False
+    note: str | None = None
+    elapsed_minutes: int | None = None
+    mastery_score: int | None = None
+    done_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ReviewPlanResponse(BaseModel):
+    id: str
+    plan_key: str = ""
+    title: str = ""
+    subtitle: str = ""
+    description: str = ""
+    status: str = "draft"
+    source_root: str = ""
+    source_documents: list = []
+    commercial_positioning: list = []
+    phases: list[ReviewPhaseResponse] = []
+    days: list[ReviewDayResponse] = []
+    progresses: list[ReviewProgressResponse] = []
+    intro_scripts: list = []
+    star_cards: list = []
+    a4_memory: list = []
+    metadata: dict = {}
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ReviewPlanCreateRequest(BaseModel):
+    title: str = Field(default="", max_length=255)
+    plan_key: str | None = Field(default=None, max_length=128)
+    template: str | None = Field(default=None, max_length=128)
+
+
+class ReviewProgressUpdateRequest(BaseModel):
+    done: bool | None = None
+    note: str | None = Field(default=None, max_length=4000)
+    elapsed_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
+    mastery_score: int | None = Field(default=None, ge=0, le=5)
+
+
+class ReviewCheckinRequest(BaseModel):
+    elapsed_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class IntroScriptResponse(BaseModel):
+    id: str
+    script_key: str = ""
+    label: str = ""
+    duration_seconds: int = 0
+    scenario: str = ""
+    text: str = ""
+    sort_order: int = 0
+
+
+class StarCardResponse(BaseModel):
+    id: str
+    card_key: str = ""
+    title: str = ""
+    tag: str = ""
+    background: str = ""
+    challenge: str = ""
+    solution: str = ""
+    result: str = ""
+    sort_order: int = 0
+
+
+class A4MemoryResponse(BaseModel):
+    id: str
+    content: str = ""
+    side: str = "ALL"
+    sort_order: int = 0
+
+
+class PracticeQuestionResponse(BaseModel):
+    id: str
+    practice_category: str = "internet"
+    source: str = "manual"
+    source_url: str | None = None
+    subject: str | None = None
+    question_type: str | None = None
+    prompt: str = ""
+    choices: list = []
+    answer: str | None = None
+    answer_detail: str | None = None
+    difficulty: str = "medium"
+    tags: list = []
+    content_hash: str = ""
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class PracticeQuestionListResponse(BaseModel):
+    items: list[PracticeQuestionResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ReviewSiteImportRequest(BaseModel):
+    plan_only: bool = False
+    questions_only: bool = False
+
+
+class PlanGenerateRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=255)
+    target_role: str = Field(default="", max_length=255)
+    seniority: str = Field(default="", max_length=128)
+    target_company: str | None = Field(default=None, max_length=255)
+    total_days: int = Field(default=14, ge=3, le=90)
+    hours_per_day: float = Field(default=3.0, ge=0.5, le=12.0)
+    focus_areas: list[str] | None = Field(default=None)
+    template: str | None = Field(default=None, max_length=128)
+    resume_id: str | None = Field(default=None, max_length=64)
+    use_history: bool = Field(default=True)
+
+
+class PlanGenerateResponse(BaseModel):
+    plan_id: str
+    estimated_daily_hours: float
+    breakdown_phases: list[dict] = []
+    generated_by: str = "rule"
+
+
+class ReviewDayUpsertRequest(BaseModel):
+    day_key: str | None = Field(default=None, max_length=64)
+    day_label: str | None = Field(default=None, max_length=64)
+    phase_key: str | None = Field(default=None, max_length=64)
+    title: str | None = Field(default=None, max_length=255)
+    acceptance: str | None = Field(default=None, max_length=2000)
+    scheduled_date: str | None = Field(default=None, max_length=32)
+    sort_order: int | None = Field(default=None, ge=0)
+
+
+class ReviewTaskUpsertRequest(BaseModel):
+    task_key: str | None = Field(default=None, max_length=64)
+    title: str | None = Field(default=None, max_length=255)
+    tags: list[str] | None = None
+    critical: bool | None = None
+    simulation: bool | None = None
+    docs: list | None = None
+    reason: str | None = Field(default=None, max_length=500)
+    link_type: str | None = Field(default=None, max_length=32)
+    link_payload: dict | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+
+
+class MaterialItemRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    script_key: str | None = Field(default=None, max_length=64)
+    duration_seconds: int | None = Field(default=None, ge=0)
+    scenario: str | None = Field(default=None, max_length=255)
+    text: str | None = None
+    card_key: str | None = Field(default=None, max_length=64)
+    title: str | None = Field(default=None, max_length=255)
+    tag: str | None = Field(default=None, max_length=64)
+    background: str | None = None
+    challenge: str | None = None
+    solution: str | None = None
+    result: str | None = None
+    content: str | None = None
+    side: str | None = Field(default=None, max_length=16)
+    sort_order: int | None = Field(default=None, ge=0)
+
+
+class PracticeQuestionMarkRequest(BaseModel):
+    mark_type: str | None = Field(default=None, max_length=32)
+    mastery_level: int | None = Field(default=None, ge=0, le=5)
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class PracticeQuestionAttemptRequest(BaseModel):
+    answer: str = Field(default="", max_length=8000)
+    elapsed_seconds: int | None = Field(default=None, ge=0, le=24 * 60 * 60)
 
 
 @dataclass
@@ -431,6 +692,7 @@ class ApiSession:
     offline: bool = False
     web_search_enabled: bool = False
     resume_id: str | None = None
+    plan_task_id: str | None = None
 
 
 sessions: dict[str, ApiSession] = {}
@@ -1356,6 +1618,27 @@ def create_app(
     ) -> CivilServiceQuestionListResponse:
         return await _list_practice_questions("civil_service", year, subject, question_type, limit, offset, context)
 
+    @app.post("/practice/attempt", response_model=PracticeAttemptResponse)
+    async def submit_practice_attempt(
+        request: PracticeAttemptRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> PracticeAttemptResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            question = await CivilServiceQuestionRepository(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            ).get_question(request.question_id)
+        if question is None:
+            raise HTTPException(status_code=404, detail="题目不存在。")
+        result = _grade_practice_attempt(question, request.answer)
+        return PracticeAttemptResponse(
+            question_id=request.question_id,
+            elapsed_seconds=request.elapsed_seconds,
+            **result,
+        )
+
     async def _import_practice_questions(
         request: CivilServiceQuestionImportRequest,
         context: RequestContext = Depends(request_context),
@@ -1766,9 +2049,11 @@ def create_app(
             thinking_enabled=request.thinking_enabled,
             reasoning_effort=request.reasoning_effort,
         )
-        loop = AgentLoop(config, harness)
-        result = loop.start()
         session_id = str(uuid4())
+        loop = AgentLoop(config, harness)
+        loop.set_thread_id(session_id)
+        result = loop.start()
+        result.orchestration = loop.orchestration_status
         usage = await _record_usage(
             session_id=session_id,
             event_type="start",
@@ -1787,6 +2072,7 @@ def create_app(
             offline=request.offline,
             web_search_enabled=request.web_search,
             resume_id=request.resume_id,
+            plan_task_id=request.plan_task_id,
         )
         await _persist_interview_result(
             session_id,
@@ -1796,6 +2082,7 @@ def create_app(
             request.resume_id,
             context.tenant_id,
             context.user_id,
+            plan_task_id=request.plan_task_id,
         )
         return _response(session_id, result, model_id=model_id, usage=usage)
 
@@ -1923,6 +2210,7 @@ def create_app(
             session.resume_id,
             context.tenant_id,
             context.user_id,
+            plan_task_id=session.plan_task_id,
         )
         return _response(session_id, result, model_id=session.model_id, usage=usage)
 
@@ -2088,6 +2376,7 @@ def create_app(
                 session.resume_id,
                 context.tenant_id,
                 context.user_id,
+                plan_task_id=session.plan_task_id,
             )
             logger.info(
                 "stream_persist_done request_id=%s session_id=%s model_id=%s duration_ms=%s",
@@ -2111,6 +2400,7 @@ def create_app(
                         "model_id": session.model_id,
                         "usage": usage.model_dump(mode="json") if usage else None,
                         "turn_index": len(result.state.turns) or None,
+                        "orchestration": result.orchestration,
                     },
                 )
             else:
@@ -2148,6 +2438,819 @@ def create_app(
         if not session:
             raise HTTPException(status_code=404, detail="session not found")
         return {"transcript": session.loop.state.transcript()}
+
+    @app.get("/interview-reports")
+    async def list_interview_reports(
+        limit: int = Query(default=20, ge=1, le=100),
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            service = InterviewReportService(
+                db, tenant_id=context.tenant_id, user_id=context.user_id
+            )
+            return await service.list_reports(limit=limit)
+
+    @app.get("/interview-reports/{session_id}")
+    async def get_interview_report(
+        session_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            service = InterviewReportService(
+                db, tenant_id=context.tenant_id, user_id=context.user_id
+            )
+            report = await service.get_report(session_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="interview report not found")
+        return report
+
+    @app.post("/review-site/plans/{plan_id}/report-tasks")
+    async def create_tasks_from_report(
+        plan_id: str,
+        payload: dict = Body(default={}),
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        session_id = str(payload.get("session_id") or "").strip()
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id is required")
+        async with session_scope() as db:
+            service = InterviewReportService(
+                db, tenant_id=context.tenant_id, user_id=context.user_id
+            )
+            try:
+                result = await service.add_tasks_from_report(
+                    plan_id=plan_id, session_id=session_id
+                )
+            except LookupError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"code": 0, "message": "ok", "data": result}
+
+    @app.get("/review-site/plans", response_model=list[ReviewPlanListItem])
+    async def list_review_plans(
+        include_archived: bool = Query(default=False),
+        context: RequestContext = Depends(request_context),
+    ) -> list[ReviewPlanListItem]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            plans = await repo.list_plans(include_archived=include_archived)
+        return [
+            ReviewPlanListItem(
+                id=str(p.id),
+                plan_key=p.plan_key,
+                title=p.title,
+                subtitle=p.subtitle,
+                status=p.status,
+                created_at=p.created_at.isoformat() if p.created_at else None,
+                updated_at=p.updated_at.isoformat() if p.updated_at else None,
+            )
+            for p in plans
+        ]
+
+    @app.post("/review-site/plans", response_model=ReviewPlanResponse)
+    async def create_review_plan(
+        request: ReviewPlanCreateRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewPlanResponse:
+        _require_authenticated(context)
+        template = (request.template or "").strip()
+        use_default = template == "cyh-14-day-interview-review" or template == ""
+        plan_key = (request.plan_key or "").strip() or (
+            "cyh-14-day-interview-review" if use_default else f"plan-{int(time.time())}"
+        )
+        title = (request.title or "").strip() or ("陈雨寒面试复习站" if use_default else "面试复习计划")
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            existing = await repo.get_plan_by_key(plan_key) if plan_key else None
+            if existing:
+                plan = existing
+            elif use_default:
+                plan = await repo.seed_plan_from_default()
+                if request.title:
+                    plan = await repo.update_plan(plan.id, {"title": request.title})
+            else:
+                plan = await repo.create_plan(
+                    plan_data={
+                        "plan_key": plan_key,
+                        "title": title,
+                        "status": "draft",
+                    },
+                    phases=[],
+                    days=[],
+                    tasks_per_day={},
+                    intro_scripts=[],
+                    star_cards=[],
+                    a4_memory=[],
+                )
+            full_plan = await repo.get_plan(plan.id)
+        return _review_plan_to_response(full_plan) if full_plan else ReviewPlanResponse(id=str(plan.id))
+
+    @app.get("/review-site/plans/{plan_id}", response_model=ReviewPlanResponse)
+    async def get_review_plan(
+        plan_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewPlanResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            plan = await repo.get_plan(plan_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="plan not found")
+        return _review_plan_to_response(plan)
+
+    @app.patch("/review-site/plans/{plan_id}", response_model=ReviewPlanResponse)
+    async def update_review_plan(
+        plan_id: str,
+        payload: dict,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewPlanResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            updated = await repo.update_plan(plan_id, payload)
+            if not updated:
+                raise HTTPException(status_code=404, detail="plan not found")
+            plan = await repo.get_plan(plan_id)
+        return _review_plan_to_response(plan) if plan else ReviewPlanResponse(id=str(updated.id))
+
+    @app.post("/review-site/plans/{plan_id}/archive", response_model=ReviewPlanResponse)
+    async def archive_review_plan(
+        plan_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewPlanResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            archived = await repo.archive_plan(plan_id)
+            if not archived:
+                raise HTTPException(status_code=404, detail="plan not found")
+            plan = await repo.get_plan(plan_id)
+        return _review_plan_to_response(plan) if plan else ReviewPlanResponse(id=str(archived.id), status="archived")
+
+    def _task_to_response(task) -> ReviewTaskResponse:
+        return ReviewTaskResponse(
+            id=str(task.id),
+            task_key=task.task_key,
+            title=task.title,
+            tags=list(task.tags_json or []),
+            critical=bool(task.critical),
+            simulation=bool(task.simulation),
+            docs=list(task.docs_json or []),
+            reason=task.reason,
+            source=task.source or "plan",
+            link_type=task.link_type or "none",
+            link_payload=dict(task.link_payload_json or {}),
+            sort_order=task.sort_order,
+        )
+
+    def _day_to_response(day) -> ReviewDayResponse:
+        return ReviewDayResponse(
+            id=str(day.id),
+            day_key=day.day_key,
+            day_label=day.day_label,
+            phase_key=day.phase_key,
+            title=day.title,
+            acceptance=day.acceptance,
+            scheduled_date=day.scheduled_date.isoformat() if day.scheduled_date else None,
+            sort_order=day.sort_order,
+            tasks=[],
+        )
+
+    @app.post("/review-site/plans/{plan_id}/days", response_model=ReviewDayResponse, status_code=201)
+    async def create_review_day(
+        plan_id: str,
+        request: ReviewDayUpsertRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewDayResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                day = await repo.create_day(plan_id, request.model_dump(exclude_none=True))
+            except ValueError:
+                raise HTTPException(status_code=404, detail="plan not found") from None
+            if day is None:
+                raise HTTPException(status_code=404, detail="plan not found")
+            return _day_to_response(day)
+
+    @app.patch("/review-site/days/{day_id}", response_model=ReviewDayResponse)
+    async def update_review_day(
+        day_id: str,
+        request: ReviewDayUpsertRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewDayResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                day = await repo.update_day(day_id, request.model_dump(exclude_none=True))
+            except ValueError:
+                day = None
+            if day is None:
+                raise HTTPException(status_code=404, detail="day not found")
+            return _day_to_response(day)
+
+    @app.delete("/review-site/days/{day_id}")
+    async def delete_review_day(
+        day_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                deleted = await repo.delete_day(day_id)
+            except ValueError:
+                deleted = False
+            if not deleted:
+                raise HTTPException(status_code=404, detail="day not found")
+        return {"deleted": True}
+
+    @app.post("/review-site/days/{day_id}/tasks", response_model=ReviewTaskResponse, status_code=201)
+    async def create_review_task(
+        day_id: str,
+        request: ReviewTaskUpsertRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewTaskResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                task = await repo.create_task(day_id, request.model_dump(exclude_none=True))
+            except ValueError:
+                task = None
+            if task is None:
+                raise HTTPException(status_code=404, detail="day not found")
+            return _task_to_response(task)
+
+    @app.patch("/review-site/tasks/{task_id}", response_model=ReviewTaskResponse)
+    async def update_review_task(
+        task_id: str,
+        request: ReviewTaskUpsertRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewTaskResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                task = await repo.update_task(task_id, request.model_dump(exclude_none=True))
+            except ValueError:
+                task = None
+            if task is None:
+                raise HTTPException(status_code=404, detail="task not found")
+            return _task_to_response(task)
+
+    @app.delete("/review-site/tasks/{task_id}")
+    async def delete_review_task(
+        task_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                deleted = await repo.delete_task(task_id)
+            except ValueError:
+                deleted = False
+            if not deleted:
+                raise HTTPException(status_code=404, detail="task not found")
+        return {"deleted": True}
+
+    @app.post("/review-site/plans/{plan_id}/materials/{kind}", status_code=201)
+    async def create_material_item(
+        plan_id: str,
+        kind: str,
+        request: MaterialItemRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        if kind not in ("intro_scripts", "star_cards", "a4_memory"):
+            raise HTTPException(status_code=400, detail="kind must be intro_scripts, star_cards or a4_memory")
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                item = await repo.upsert_material_item(plan_id, kind, request.model_dump(exclude_none=True))
+            except ValueError:
+                raise HTTPException(status_code=404, detail="plan not found") from None
+            if item is None:
+                raise HTTPException(status_code=404, detail="plan not found")
+            await db.refresh(item)
+            return _material_item_to_dict(kind, item)
+
+    @app.patch("/review-site/materials/{kind}/{item_id}")
+    async def update_material_item(
+        kind: str,
+        item_id: str,
+        request: MaterialItemRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        if kind not in ("intro_scripts", "star_cards", "a4_memory"):
+            raise HTTPException(status_code=400, detail="kind must be intro_scripts, star_cards or a4_memory")
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                existing = await repo.get_material_item(kind, item_id)
+            except ValueError:
+                existing = None
+            if existing is None:
+                raise HTTPException(status_code=404, detail="material not found")
+            item = await repo.upsert_material_item(
+                str(existing.plan_id), kind, request.model_dump(exclude_none=True), item_id=item_id
+            )
+            await db.refresh(item)
+            return _material_item_to_dict(kind, item)
+
+    @app.delete("/review-site/materials/{kind}/{item_id}")
+    async def delete_material_item(
+        kind: str,
+        item_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        if kind not in ("intro_scripts", "star_cards", "a4_memory"):
+            raise HTTPException(status_code=400, detail="kind must be intro_scripts, star_cards or a4_memory")
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                deleted = await repo.delete_material_item(kind, item_id)
+            except ValueError:
+                deleted = False
+        if not deleted:
+            raise HTTPException(status_code=404, detail="material not found")
+        return {"deleted": True}
+
+    @app.patch("/review-site/progress/task/{task_id}", response_model=ReviewProgressResponse)
+    async def update_review_progress(
+        task_id: str,
+        request: ReviewProgressUpdateRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> ReviewProgressResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                progress = await repo.update_progress(task_id, {
+                    "done": request.done,
+                    "note": request.note,
+                    "elapsed_minutes": request.elapsed_minutes,
+                    "mastery_score": request.mastery_score,
+                })
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            try:
+                await ReviewCheckinService(
+                    db, tenant_id=context.tenant_id, user_id=context.user_id
+                ).sync_day_checkin(progress.plan_id, progress.day_id)
+            except Exception:  # noqa: BLE001 - 打卡聚合失败不阻断进度更新
+                logger.exception("sync checkin after progress update failed")
+            await safe_evaluate(db, tenant_id=context.tenant_id, user_id=context.user_id)
+        return _progress_to_response(progress)
+
+    @app.get("/review-site/plans/{plan_id}/today")
+    async def get_review_plan_today(
+        plan_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            service = ReviewCheckinService(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                return await service.get_today(plan_id)
+            except LookupError as exc:
+                raise HTTPException(status_code=404, detail="plan not found") from exc
+
+    @app.post("/review-site/plans/{plan_id}/checkin")
+    async def create_review_checkin(
+        plan_id: str,
+        request: ReviewCheckinRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            service = ReviewCheckinService(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                result = await service.checkin(
+                    plan_id,
+                    elapsed_minutes=request.elapsed_minutes,
+                    note=request.note,
+                )
+            except LookupError as exc:
+                raise HTTPException(status_code=404, detail="plan not found") from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            await safe_evaluate(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            return result
+
+    @app.get("/review-site/checkins")
+    async def list_review_checkins(
+        plan_id: str | None = Query(default=None, max_length=64),
+        date_from: str | None = Query(default=None, max_length=10),
+        date_to: str | None = Query(default=None, max_length=10),
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        from datetime import date as _date
+
+        def _parse(value: str | None):
+            if not value:
+                return None
+            try:
+                return _date.fromisoformat(value[:10])
+            except ValueError:
+                raise HTTPException(status_code=400, detail="日期格式应为 YYYY-MM-DD。") from None
+
+        async with session_scope() as db:
+            service = ReviewCheckinService(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            return await service.list_checkins(
+                plan_id=plan_id,
+                date_from=_parse(date_from),
+                date_to=_parse(date_to),
+            )
+
+    @app.get("/study/dashboard")
+    async def get_study_dashboard(
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            advice_provider = None
+            model_id = ""
+            try:
+                advice_provider, model_id = await _build_dashboard_advice_provider(db, context)
+            except InsufficientCreditsError:
+                advice_provider = None
+            service = StudyDashboardService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                advice_provider=advice_provider,
+            )
+            dashboard = await service.build_dashboard()
+            if advice_provider is not None and dashboard.get("advice", {}).get("source") == "llm":
+                try:
+                    await _billing_service(db).record_generation_usage(
+                        tenant_id=context.tenant_id,
+                        user_id=context.user_id,
+                        session_id=None,
+                        event_type="dashboard_advice",
+                        model_id=model_id,
+                        prompt_text="study-dashboard-advice",
+                        response_text=str(dashboard["advice"].get("text") or "")[:500],
+                    )
+                except InsufficientCreditsError:
+                    pass
+            return dashboard
+
+    @app.get("/study/achievements")
+    async def get_study_achievements(
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            service = AchievementService(
+                db, tenant_id=context.tenant_id, user_id=context.user_id
+            )
+            return await service.list_achievements()
+
+    @app.get("/review-site/plans/{plan_id}/intro-scripts", response_model=list[IntroScriptResponse])
+    async def list_intro_scripts(
+        plan_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> list[IntroScriptResponse]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            items = await repo.list_intro_scripts(plan_id)
+        return [
+            IntroScriptResponse(
+                id=str(m.id),
+                script_key=m.script_key,
+                label=m.label,
+                duration_seconds=m.duration_seconds,
+                scenario=m.scenario,
+                text=m.text,
+                sort_order=m.sort_order,
+            )
+            for m in items
+        ]
+
+    @app.get("/review-site/plans/{plan_id}/star-cards", response_model=list[StarCardResponse])
+    async def list_star_cards(
+        plan_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> list[StarCardResponse]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            items = await repo.list_star_cards(plan_id)
+        return [
+            StarCardResponse(
+                id=str(m.id),
+                card_key=m.card_key,
+                title=m.title,
+                tag=m.tag,
+                background=m.background,
+                challenge=m.challenge,
+                solution=m.solution,
+                result=m.result,
+                sort_order=m.sort_order,
+            )
+            for m in items
+        ]
+
+    @app.get("/review-site/plans/{plan_id}/a4-memory", response_model=list[A4MemoryResponse])
+    async def list_a4_memory(
+        plan_id: str,
+        context: RequestContext = Depends(request_context),
+    ) -> list[A4MemoryResponse]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            items = await repo.list_a4_memory(plan_id)
+        return [
+            A4MemoryResponse(
+                id=str(m.id),
+                content=m.content,
+                side=m.side,
+                sort_order=m.sort_order,
+            )
+            for m in items
+        ]
+
+    @app.get("/review-site/practice-questions", response_model=PracticeQuestionListResponse)
+    async def list_practice_questions_v2(
+        category: str | None = Query(default=None, max_length=64),
+        subject: str | None = Query(default=None, max_length=64),
+        question_type: str | None = Query(default=None, max_length=64),
+        difficulty: str | None = Query(default=None, max_length=32),
+        keyword: str | None = Query(default=None, max_length=128),
+        limit: int = Query(default=30, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        context: RequestContext = Depends(request_context),
+    ) -> PracticeQuestionListResponse:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            items, total = await repo.list_questions(
+                category=category,
+                subject=subject,
+                question_type=question_type,
+                difficulty=difficulty,
+                keyword=keyword,
+                limit=limit,
+                offset=offset,
+            )
+        return PracticeQuestionListResponse(
+            items=[PracticeQuestionResponse(**item) for item in items],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.post("/review-site/practice-questions/{question_id}/mark")
+    async def mark_practice_question(
+        question_id: str,
+        request: PracticeQuestionMarkRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            try:
+                entry = await repo.update_wrong_entry(question_id, {
+                    "mark_type": request.mark_type,
+                    "mastery_level": request.mastery_level,
+                    "note": request.note,
+                })
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return entry
+
+    @app.post("/review-site/practice-questions/{question_id}/attempt")
+    async def submit_practice_question_attempt(
+        question_id: str,
+        request: PracticeQuestionAttemptRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            question = await repo.get_question(question_id)
+            if question is None:
+                raise HTTPException(status_code=404, detail="题目不存在。")
+            subjective_grader = None
+            model_id = ""
+            if request.answer.strip() and not is_choice_question(question):
+                subjective_grader, model_id = _build_subjective_grader()
+                if subjective_grader is not None:
+                    try:
+                        await _billing_service(db).ensure_can_use(
+                            tenant_id=context.tenant_id,
+                            user_id=context.user_id,
+                            model_id=model_id,
+                        )
+                    except InsufficientCreditsError as exc:
+                        raise HTTPException(status_code=402, detail=str(exc)) from exc
+            service = PracticeAttemptService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                subjective_grader=subjective_grader,
+            )
+            try:
+                result = await service.submit_attempt(
+                    question_id=question_id,
+                    answer=request.answer,
+                    elapsed_seconds=request.elapsed_seconds,
+                )
+            except LookupError as exc:
+                raise HTTPException(status_code=404, detail="题目不存在。") from exc
+            if subjective_grader is not None and result.get("graded_by") == "llm":
+                try:
+                    await _billing_service(db).record_generation_usage(
+                        tenant_id=context.tenant_id,
+                        user_id=context.user_id,
+                        session_id=None,
+                        event_type="practice_grade",
+                        model_id=model_id,
+                        prompt_text=request.answer[:4000],
+                        response_text=str(result.get("feedback") or "")[:2000],
+                    )
+                except InsufficientCreditsError:
+                    pass  # 评分已完成，扣费失败不阻断结果返回
+            await safe_evaluate(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            return result
+
+    @app.get("/review-site/practice-questions/{question_id}/attempts")
+    async def list_practice_question_attempts(
+        question_id: str,
+        limit: int = Query(default=20, ge=1, le=100),
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            return await repo.list_attempts(question_id=question_id, limit=limit)
+
+    @app.get("/review-site/wrong-book")
+    async def list_wrong_book(
+        mark_type: str | None = Query(default=None, max_length=32),
+        mastery_max: int | None = Query(default=None, ge=0, le=5),
+        category: str | None = Query(default=None, max_length=64),
+        keyword: str | None = Query(default=None, max_length=128),
+        context: RequestContext = Depends(request_context),
+    ) -> list[dict]:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            return await repo.list_wrong_book(
+                mark_type=mark_type,
+                mastery_max=mastery_max,
+                category=category,
+                keyword=keyword,
+            )
+
+    @app.post("/review-site/import")
+    async def run_review_site_import(
+        request: ReviewSiteImportRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> dict:
+        _require_authenticated(context)
+        async with session_scope() as db:
+            service = ReviewSiteImportService(
+                db,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+            return await service.run_import(plan_only=request.plan_only, questions_only=request.questions_only)
+
+    @app.post("/review-site/planner/generate", response_model=PlanGenerateResponse)
+    async def generate_review_plan(
+        request: PlanGenerateRequest,
+        context: RequestContext = Depends(request_context),
+    ) -> PlanGenerateResponse:
+        _require_authenticated(context)
+        total_days = request.total_days
+        hours_per_day = request.hours_per_day
+
+        # 优先 LLM 个性化生成（结合简历/历史报告/错题本）；离线、余额不足或失败时自动降级规则模板
+        template = (request.template or "").strip()
+        if template != "cyh-14-day-interview-review":
+            async with session_scope() as db:
+                llm_plan = await _try_generate_llm_plan(db, request, context)
+            if llm_plan is not None:
+                return PlanGenerateResponse(
+                    plan_id=llm_plan["plan_id"],
+                    estimated_daily_hours=round(hours_per_day, 1),
+                    breakdown_phases=llm_plan["breakdown"],
+                    generated_by="llm",
+                )
+
+        phases_def = [
+            ("p1", "基础储备", 0.22, "简历与自我介绍背诵、素材与题库第一轮通读。"),
+            ("p2", "深挖对齐", 0.28, "项目深挖 STAR 打磨、公司专项题库与答题指南。"),
+            ("p3", "模拟冲刺", 0.28, "多场全真模拟、错题本清零、弱点清单二刷。"),
+            ("p4", "面试前速记", 0.22, "A4 速记单、定制公司面、错题回顾、状态管理。"),
+        ]
+        breakdown: list[dict] = []
+        cursor = 0
+        phases_data: list[dict] = []
+        days_data: list[dict] = []
+        tasks_per_day: dict[str, list[dict]] = {}
+
+        for idx, (phase_key, phase_title, ratio, phase_goal) in enumerate(phases_def):
+            phase_days = max(1, round(total_days * ratio))
+            if idx == len(phases_def) - 1:
+                phase_days = total_days - cursor
+            start_day = cursor + 1
+            end_day = cursor + phase_days
+            range_label = f"Day{start_day}-{end_day}" if start_day != end_day else f"Day{start_day}"
+            phases_data.append({
+                "id": phase_key,
+                "title": phase_title,
+                "range": range_label,
+                "goal": phase_goal,
+            })
+            breakdown.append({
+                "phase_key": phase_key,
+                "title": phase_title,
+                "range_label": range_label,
+                "days": phase_days,
+                "estimated_hours": round(phase_days * hours_per_day, 1),
+                "goal": phase_goal,
+            })
+            for day_offset in range(phase_days):
+                day_num = cursor + day_offset + 1
+                day_key = f"day-{day_num}"
+                day_label = f"Day {day_num}"
+                day_title = _generate_day_title(phase_key, day_offset + 1, phase_days, request.target_role, request.focus_areas)
+                days_data.append({
+                    "id": day_key,
+                    "day": day_label,
+                    "phase": phase_key,
+                    "title": day_title,
+                })
+                tasks_per_day[day_key] = _generate_day_tasks(
+                    day_key=day_key,
+                    phase_key=phase_key,
+                    day_offset=day_offset,
+                    phase_days=phase_days,
+                    focus_areas=request.focus_areas,
+                )
+            cursor += phase_days
+
+        template = (request.template or "").strip()
+        use_default = template == "cyh-14-day-interview-review"
+        plan_key = f"generated-{total_days}d-{int(time.time())}"
+        title = (request.target_role or "面试") + f" {total_days} 天复习计划"
+        if request.seniority:
+            title += f" ({request.seniority})"
+        plan_data = {
+            "plan_key": plan_key,
+            "title": title,
+            "subtitle": f"总时长 {total_days} 天 × 日均 {hours_per_day}h",
+            "description": _generate_plan_description(request),
+            "status": "draft",
+            "source_root": "",
+            "source_documents": [],
+            "commercial_positioning": [],
+            "metadata": {
+                "generated": True,
+                "target_role": request.target_role,
+                "seniority": request.seniority,
+                "target_company": request.target_company or "",
+                "total_days": total_days,
+                "hours_per_day": hours_per_day,
+                "focus_areas": request.focus_areas or [],
+            },
+        }
+        async with session_scope() as db:
+            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
+            if use_default:
+                plan = await repo.seed_plan_from_default()
+                if request.title:
+                    await repo.update_plan(plan.id, {"title": request.title})
+            else:
+                plan = await repo.create_plan(
+                    plan_data=plan_data,
+                    phases=phases_data,
+                    days=days_data,
+                    tasks_per_day=tasks_per_day,
+                    intro_scripts=[],
+                    star_cards=[],
+                    a4_memory=[],
+                )
+        return PlanGenerateResponse(
+            plan_id=str(plan.id),
+            estimated_daily_hours=round(hours_per_day, 1),
+            breakdown_phases=breakdown,
+        )
 
     return app
 
@@ -2384,6 +3487,7 @@ async def _persist_interview_result(
     resume_id: str | None,
     tenant_id: str,
     user_id: str,
+    plan_task_id: str | None = None,
 ) -> None:
     guardrails = [finding.message for finding in result.guardrail_findings or []]
     try:
@@ -2395,6 +3499,7 @@ async def _persist_interview_result(
                     config=config,
                     state=result.state,
                     resume_id=resume_id,
+                    plan_task_id=plan_task_id,
                 )
             await service.persist_turn(
                 session_id=session_id,
@@ -2405,9 +3510,41 @@ async def _persist_interview_result(
                 advanced=result.advanced,
                 fallback_used=result.fallback_used,
                 guardrails=guardrails,
+                plan_task_id=plan_task_id,
             )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"面试记录持久化失败：{exc}") from exc
+
+    if result.state.completed and getattr(result, "evaluation", None):
+        await _persist_interview_report(
+            session_id=session_id,
+            config=config,
+            evaluation=result.evaluation,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+
+
+async def _persist_interview_report(
+    *,
+    session_id: str,
+    config: InterviewConfig,
+    evaluation: dict,
+    tenant_id: str,
+    user_id: str,
+) -> None:
+    """会话收尾时把结构化评分卡落库；失败不阻断聊天主流程。"""
+    try:
+        async with session_scope() as db:
+            service = InterviewReportService(db, tenant_id=tenant_id, user_id=user_id)
+            await service.persist_evaluation(
+                session_id=session_id,
+                config=config,
+                evaluation=evaluation,
+            )
+            await safe_evaluate(db, tenant_id=tenant_id, user_id=user_id)
+    except Exception:
+        logger.exception("interview_report_persist_failed session_id=%s", session_id)
 
 
 async def _get_or_restore_session(session_id: str, tenant_id: str, user_id: str) -> ApiSession | None:
@@ -2427,6 +3564,7 @@ async def _get_or_restore_session(session_id: str, tenant_id: str, user_id: str)
     model_id = _resolve_model_id(config.model_id)
     harness = _create_harness(config, offline=False, web_search_enabled=False, model_id=model_id)
     loop = AgentLoop(config, harness)
+    loop.set_thread_id(session_id)
     loop.state = state
     restored = ApiSession(
         loop=loop,
@@ -2435,6 +3573,7 @@ async def _get_or_restore_session(session_id: str, tenant_id: str, user_id: str)
         user_id=user_id,
         model_id=model_id,
         resume_id=record.get("resume_id"),
+        plan_task_id=record.get("plan_task_id"),
     )
     sessions[session_id] = restored
     return restored
@@ -2593,6 +3732,7 @@ def _response(
         model_id=model_id,
         usage=usage,
         turn_index=len(result.state.turns) or None,
+        orchestration=getattr(result, "orchestration", None),
     )
 
 
@@ -2602,6 +3742,184 @@ def _resolve_model_id(model_id: str | None) -> str:
         return cleaned
     codex_model_config = load_codex_model_config(__import__("pathlib").Path.cwd())
     return codex_model_config.model or DEFAULT_CHAT_MODEL
+
+
+def _build_subjective_grader() -> tuple[LlmSubjectiveGrader | None, str]:
+    """构建主观题 LLM 评分器；离线/无 API key 时返回 (None, model_id) 走关键词降级。"""
+    from interview_agent.core.harness import _create_chat_model
+
+    model_id = _resolve_model_id(None)
+    codex_model_config = load_codex_model_config(__import__("pathlib").Path.cwd())
+    runtime = resolve_model_runtime(model_id, codex_config=codex_model_config)
+    if not runtime.api_key or not is_openai_compatible_provider(runtime.provider):
+        return None, model_id
+    settings = load_settings()
+    try:
+        llm = _create_chat_model(
+            provider=runtime.provider,
+            model=runtime.model,
+            base_url=runtime.base_url,
+            api_key=runtime.api_key,
+            temperature=0.2,
+            timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.llm_max_retries,
+        )
+    except RuntimeError:
+        return None, model_id
+    return LlmSubjectiveGrader(llm, model_id=model_id), model_id
+
+
+def _build_planner_llm():
+    """构建计划生成用 ChatModel；离线/无 API key 时返回 (None, model_id)。"""
+    from interview_agent.core.harness import _create_chat_model
+
+    model_id = _resolve_model_id(None)
+    codex_model_config = load_codex_model_config(__import__("pathlib").Path.cwd())
+    runtime = resolve_model_runtime(model_id, codex_config=codex_model_config)
+    if not runtime.api_key or not is_openai_compatible_provider(runtime.provider):
+        return None, model_id
+    settings = load_settings()
+    try:
+        llm = _create_chat_model(
+            provider=runtime.provider,
+            model=runtime.model,
+            base_url=runtime.base_url,
+            api_key=runtime.api_key,
+            temperature=0.6,
+            timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.llm_max_retries,
+        )
+    except RuntimeError:
+        return None, model_id
+    return llm, model_id
+
+
+async def _try_generate_llm_plan(db, request: PlanGenerateRequest, context: RequestContext) -> dict | None:
+    """尝试 LLM 个性化计划生成；任何失败返回 None 由调用方降级规则模板。"""
+    llm, model_id = _build_planner_llm()
+    if llm is None:
+        return None
+    try:
+        await _billing_service(db).ensure_can_use(
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            model_id=model_id,
+        )
+    except InsufficientCreditsError:
+        return None
+    service = PlanGeneratorService(
+        db,
+        tenant_id=context.tenant_id,
+        user_id=context.user_id,
+        llm=llm,
+        model_id=model_id,
+    )
+    try:
+        result = await service.generate(
+            title=request.title,
+            target_role=request.target_role,
+            seniority=request.seniority,
+            target_company=request.target_company,
+            total_days=request.total_days,
+            hours_per_day=request.hours_per_day,
+            focus_areas=request.focus_areas,
+            resume_id=request.resume_id,
+            use_history=request.use_history,
+        )
+    except Exception:
+        logger.exception("LLM plan generation failed")
+        return None
+    if result is None:
+        return None
+    try:
+        await _billing_service(db).record_generation_usage(
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            session_id=None,
+            event_type="plan_generate",
+            model_id=model_id,
+            prompt_text=result.get("prompt_text", "")[:8000],
+            response_text=result.get("response_text", "")[:8000],
+        )
+    except InsufficientCreditsError:
+        pass  # 计划已生成，扣费失败不阻断
+    return {"plan_id": str(result["plan"].id), "breakdown": result["breakdown"]}
+
+
+def _compact_dashboard_snapshot(snapshot: dict) -> str:
+    streak = snapshot.get("streak") or {}
+    today = snapshot.get("today") or {}
+    minutes = snapshot.get("study_minutes") or {}
+    interviews = snapshot.get("interviews") or {}
+    practice = snapshot.get("practice") or {}
+    weak = "、".join(item["tag"] for item in (snapshot.get("weak_points") or [])) or "暂无"
+    return (
+        f"连续打卡 {streak.get('current_streak', 0)} 天（最长 {streak.get('longest_streak', 0)}）；"
+        f"今日任务 {today.get('tasks_done', 0)}/{today.get('total_tasks', 0)}；"
+        f"本周学习 {minutes.get('week_minutes', 0)} 分钟、累计 {minutes.get('total_minutes', 0)} 分钟；"
+        f"模拟面试 {interviews.get('total_reports', 0)} 场、最近评分 {interviews.get('latest_score')}、"
+        f"均分 {interviews.get('average_score')}；"
+        f"刷题 {practice.get('total_attempts', 0)} 道、正确率 {practice.get('correct_rate', 0)}、"
+        f"错题本 {practice.get('wrong_book_count', 0)} 道；薄弱点：{weak}。"
+    )
+
+
+async def _build_dashboard_advice_provider(db, context) -> tuple:
+    """构建驾驶舱 LLM 建议闭包；离线/无 key/余额不足时返回 (None, model_id) 走规则文案。"""
+    from interview_agent.core.harness import _create_chat_model
+
+    model_id = _resolve_model_id(None)
+    codex_model_config = load_codex_model_config(__import__("pathlib").Path.cwd())
+    runtime = resolve_model_runtime(model_id, codex_config=codex_model_config)
+    if not runtime.api_key or not is_openai_compatible_provider(runtime.provider):
+        return None, model_id
+    await _billing_service(db).ensure_can_use(
+        tenant_id=context.tenant_id, user_id=context.user_id, model_id=model_id
+    )
+    settings = load_settings()
+    try:
+        llm = _create_chat_model(
+            provider=runtime.provider,
+            model=runtime.model,
+            base_url=runtime.base_url,
+            api_key=runtime.api_key,
+            temperature=0.5,
+            timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.llm_max_retries,
+        )
+    except RuntimeError:
+        return None, model_id
+
+    async def provider(snapshot: dict) -> dict | None:
+        import json as _json
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        system = (
+            "你是备考教练。根据用户今日学习数据，给一句具体、有鼓励性的中文建议（不超过 40 字），"
+            "并给一个 2-8 字的推荐动作。只输出 JSON 对象，不要代码块："
+            '{"advice": "一句话建议", "action": "推荐动作"}'
+        )
+        response = llm.invoke([
+            SystemMessage(content=system),
+            HumanMessage(content=_compact_dashboard_snapshot(snapshot)),
+        ])
+        raw = getattr(response, "content", response)
+        if not isinstance(raw, str):
+            raw = str(raw)
+        text = raw.strip()
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            return None
+        try:
+            payload = _json.loads(text[start : end + 1])
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(payload, dict) or not str(payload.get("advice") or "").strip():
+            return None
+        return {"text": str(payload["advice"]).strip(), "action": str(payload.get("action") or "").strip()}
+
+    return provider, model_id
 
 
 async def _record_usage(
@@ -2673,6 +3991,75 @@ def _settings_response(settings: dict | None) -> UserSettingsResponse:
     if mode not in {"interviewer", "candidate"}:
         mode = "interviewer"
     return UserSettingsResponse(default_interview_mode=mode)
+
+
+def _grade_practice_attempt(question: dict, user_answer: str) -> dict:
+    answer = (user_answer or "").strip()
+    reference_answer = str(question.get("answer") or "").strip()
+    explanation = str(question.get("explanation") or "").strip()
+    choices = question.get("choices") if isinstance(question.get("choices"), list) else []
+    if not answer:
+        return {
+            "correct": False if reference_answer else None,
+            "score": 0,
+            "feedback": "还没有作答，先写出你的判断或答题思路。",
+            "reference_answer": reference_answer or "开放题",
+            "explanation": explanation or "暂无解析。",
+            "suggestions": ["先给结论", "补充关键依据", "对照解析复盘遗漏点"],
+        }
+
+    if choices and reference_answer:
+        normalized_answer = _normalize_choice_answer(answer)
+        normalized_reference = _normalize_choice_answer(reference_answer)
+        correct = normalized_answer == normalized_reference
+        return {
+            "correct": correct,
+            "score": 100 if correct else 0,
+            "feedback": "回答正确。" if correct else "答案不一致，建议回看题干限定条件和选项差异。",
+            "reference_answer": reference_answer,
+            "explanation": explanation or "暂无解析。",
+            "suggestions": ["定位题干关键词", "排除绝对化或偷换概念选项", "复做同题型 2-3 道巩固方法"],
+        }
+
+    reference_text = " ".join(part for part in [reference_answer, explanation] if part)
+    overlap = _keyword_overlap(answer, reference_text)
+    score = min(100, max(20, int(overlap * 100))) if reference_text else 60
+    if score >= 75:
+        feedback = "要点覆盖较充分，可以继续优化表达结构和案例证据。"
+    elif score >= 45:
+        feedback = "覆盖了部分要点，但还需要补足关键步骤、指标或依据。"
+    else:
+        feedback = "回答和参考要点重合较少，建议先按结论、依据、步骤、风险重新组织。"
+    return {
+        "correct": None,
+        "score": score,
+        "feedback": feedback,
+        "reference_answer": reference_answer or "开放题",
+        "explanation": explanation or "暂无解析。",
+        "suggestions": ["先讲结论，再讲依据", "补充具体步骤或项目例子", "复盘遗漏关键词并重答一次"],
+    }
+
+
+def _normalize_choice_answer(value: str) -> str:
+    cleaned = value.strip().upper()
+    match = re.search(r"[A-D]", cleaned)
+    return match.group(0) if match else cleaned
+
+
+def _keyword_overlap(answer: str, reference: str) -> float:
+    answer_terms = _practice_terms(answer)
+    reference_terms = _practice_terms(reference)
+    if not reference_terms:
+        return 0.6
+    return len(answer_terms & reference_terms) / len(reference_terms)
+
+
+def _practice_terms(text: str) -> set[str]:
+    lowered = text.lower()
+    ascii_terms = set(re.findall(r"[a-z0-9_+#.-]{2,}", lowered))
+    chinese_terms = set(re.findall(r"[\u4e00-\u9fff]{2,6}", lowered))
+    stopwords = {"需要", "可以", "进行", "说明", "回答", "问题", "建议", "重点", "通过", "结合"}
+    return {term for term in ascii_terms | chinese_terms if term not in stopwords}
 
 
 def _default_job_title(job_type: str) -> str:
@@ -2774,6 +4161,224 @@ def _billing_service(db) -> BillingService:
 def _sse(event: str, data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event}\ndata: {payload}\n\n"
+
+
+def _review_plan_to_response(plan) -> ReviewPlanResponse:
+    phases = [
+        ReviewPhaseResponse(
+            id=str(p.id),
+            phase_key=p.phase_key,
+            title=p.title,
+            range_label=p.range_label,
+            goal=p.goal,
+            sort_order=p.sort_order,
+        )
+        for p in sorted(plan.phases, key=lambda x: x.sort_order)
+    ]
+    progresses = [
+        _progress_to_response(pr)
+        for pr in (plan.progress_records or [])
+    ]
+    day_models = sorted(plan.days, key=lambda d: d.sort_order)
+    days: list[ReviewDayResponse] = []
+    for d in day_models:
+        tasks = [
+            ReviewTaskResponse(
+                id=str(t.id),
+                task_key=t.task_key,
+                title=t.title,
+                tags=list(t.tags_json or []),
+                critical=bool(t.critical),
+                simulation=bool(t.simulation),
+                docs=list(t.docs_json or []),
+                reason=t.reason,
+                source=t.source or "plan",
+                link_type=t.link_type or "none",
+                link_payload=dict(t.link_payload_json or {}),
+                sort_order=t.sort_order,
+            )
+            for t in sorted(d.tasks or [], key=lambda x: x.sort_order)
+        ]
+        days.append(ReviewDayResponse(
+            id=str(d.id),
+            day_key=d.day_key,
+            day_label=d.day_label,
+            phase_key=d.phase_key,
+            title=d.title,
+            acceptance=d.acceptance,
+            scheduled_date=d.scheduled_date.isoformat() if d.scheduled_date else None,
+            sort_order=d.sort_order,
+            tasks=tasks,
+        ))
+    intro_scripts = [
+        {
+            "id": str(m.id),
+            "script_key": m.script_key,
+            "label": m.label,
+            "duration_seconds": m.duration_seconds,
+            "scenario": m.scenario,
+            "text": m.text,
+            "sort_order": m.sort_order,
+        }
+        for m in sorted(plan.intro_scripts or [], key=lambda x: x.sort_order)
+    ]
+    star_cards = [
+        {
+            "id": str(m.id),
+            "card_key": m.card_key,
+            "title": m.title,
+            "tag": m.tag,
+            "background": m.background,
+            "challenge": m.challenge,
+            "solution": m.solution,
+            "result": m.result,
+            "sort_order": m.sort_order,
+        }
+        for m in sorted(plan.star_cards or [], key=lambda x: x.sort_order)
+    ]
+    a4_memory = [
+        {
+            "id": str(m.id),
+            "content": m.content,
+            "side": m.side,
+            "sort_order": m.sort_order,
+        }
+        for m in sorted(plan.a4_memory or [], key=lambda x: x.sort_order)
+    ]
+    return ReviewPlanResponse(
+        id=str(plan.id),
+        plan_key=plan.plan_key,
+        title=plan.title,
+        subtitle=plan.subtitle,
+        description=plan.description,
+        status=plan.status,
+        source_root=plan.source_root or "",
+        source_documents=list(plan.source_documents_json or []),
+        commercial_positioning=list(plan.commercial_positioning_json or []),
+        phases=phases,
+        days=days,
+        progresses=progresses,
+        intro_scripts=intro_scripts,
+        star_cards=star_cards,
+        a4_memory=a4_memory,
+        metadata=dict(plan.metadata_json or {}),
+        created_at=plan.created_at.isoformat() if plan.created_at else None,
+        updated_at=plan.updated_at.isoformat() if plan.updated_at else None,
+    )
+
+
+def _progress_to_response(progress) -> ReviewProgressResponse:
+    return ReviewProgressResponse(
+        id=str(progress.id),
+        plan_id=str(progress.plan_id),
+        day_id=str(progress.day_id),
+        task_id=str(progress.task_id),
+        done=bool(progress.done),
+        note=progress.note,
+        elapsed_minutes=progress.elapsed_minutes,
+        mastery_score=progress.mastery_score,
+        done_at=progress.done_at.isoformat() if progress.done_at else None,
+        created_at=progress.created_at.isoformat() if progress.created_at else None,
+        updated_at=progress.updated_at.isoformat() if progress.updated_at else None,
+    )
+
+
+def _material_item_to_dict(kind: str, item) -> dict:
+    if kind == "intro_scripts":
+        return {
+            "id": str(item.id),
+            "script_key": item.script_key,
+            "label": item.label,
+            "duration_seconds": item.duration_seconds,
+            "scenario": item.scenario,
+            "text": item.text,
+            "sort_order": item.sort_order,
+        }
+    if kind == "star_cards":
+        return {
+            "id": str(item.id),
+            "card_key": item.card_key,
+            "title": item.title,
+            "tag": item.tag,
+            "background": item.background,
+            "challenge": item.challenge,
+            "solution": item.solution,
+            "result": item.result,
+            "sort_order": item.sort_order,
+        }
+    return {
+        "id": str(item.id),
+        "content": item.content,
+        "side": item.side,
+        "sort_order": item.sort_order,
+    }
+
+
+def _generate_plan_description(request: PlanGenerateRequest) -> str:
+    parts = [f"目标岗位：{request.target_role or '通用面试'}"]
+    if request.seniority:
+        parts.append(f"职级：{request.seniority}")
+    parts.append(f"复习周期：{request.total_days} 天，日均约 {request.hours_per_day} 小时")
+    if request.focus_areas:
+        parts.append(f"重点方向：{', '.join(request.focus_areas)}")
+    parts.append("规则版自动生成，按 4 阶段拆分，可按需调整。")
+    return "；".join(parts)
+
+
+def _generate_day_title(
+    phase_key: str,
+    day_in_phase: int,
+    phase_total_days: int,
+    target_role: str | None,
+    focus_areas: list[str] | None,
+) -> str:
+    role_tag = target_role.strip() if target_role else ""
+    if phase_key == "p1":
+        base = ["简历与自我介绍背诵", "基础素材通读", "简历项目与材料整理"]
+    elif phase_key == "p2":
+        base = ["项目深挖与 STAR 打磨", "专项技术深入", "公司题库与答题指南"]
+    elif phase_key == "p3":
+        base = ["全真模拟面试", "错题回顾", "弱点清单二刷"]
+    else:
+        base = ["A4 速记单整理", "定制公司面复盘", "状态调整与错题回顾"]
+    pick_idx = min(len(base) - 1, (day_in_phase - 1) * len(base) // max(1, phase_total_days))
+    title = base[pick_idx]
+    if role_tag and "AI" in role_tag or (focus_areas and any("AI" in f for f in focus_areas)):
+        pass
+    return title
+
+
+def _generate_day_tasks(
+    *,
+    day_key: str,
+    phase_key: str,
+    day_offset: int,
+    phase_days: int,
+    focus_areas: list[str] | None,
+) -> list[dict]:
+    tasks: list[dict] = []
+    focus = set(f.lower() for f in (focus_areas or []))
+    if phase_key == "p1":
+        tasks.append({"id": f"{day_key}-resume", "title": "简历内容通读并标记数据口径", "tags": ["简历"], "critical": True})
+        tasks.append({"id": f"{day_key}-intro", "title": "自我介绍框架梳理，录音 1 遍", "tags": ["开场"], "critical": day_offset == 0})
+        tasks.append({"id": f"{day_key}-base", "title": f"基础题库第一轮，第 {day_offset + 1}/{phase_days} 部分", "tags": ["基础"]})
+        if any("ai" in f or "rag" in f or "agent" in f for f in focus) or True:
+            tasks.append({"id": f"{day_key}-ai", "title": "AI / RAG / Agent 相关素材整理", "tags": ["AI"]})
+    elif phase_key == "p2":
+        tasks.append({"id": f"{day_key}-star", "title": f"STAR 项目卡打磨，第 {day_offset + 1}/{phase_days} 张", "tags": ["STAR"], "critical": True})
+        tasks.append({"id": f"{day_key}-tech", "title": "技术深挖主题阅读并整理要点", "tags": ["深挖"]})
+        tasks.append({"id": f"{day_key}-qna", "title": "面试问答过标题并标记弱点清单", "tags": ["问答"]})
+        tasks.append({"id": f"{day_key}-wrong", "title": "基础错题抄入错题本", "tags": ["基础"]})
+    elif phase_key == "p3":
+        tasks.append({"id": f"{day_key}-mock", "title": f"全真模拟 {day_offset + 1}：自我介绍 + 深挖 + 反向提问", "tags": ["模拟"], "simulation": True, "critical": True})
+        tasks.append({"id": f"{day_key}-algo", "title": "算法 / 前端高频手写练习", "tags": ["算法"]})
+        tasks.append({"id": f"{day_key}-wrong-clear", "title": "错题本回做与整理", "tags": ["错题"], "critical": day_offset == phase_days - 1})
+    else:
+        tasks.append({"id": f"{day_key}-a4", "title": "A4 速记单整理并过一遍", "tags": ["A4"], "critical": day_offset == 0})
+        tasks.append({"id": f"{day_key}-intro", "title": "自我介绍标准版录音一遍", "tags": ["开场"]})
+        tasks.append({"id": f"{day_key}-only-wrong", "title": "只刷错题本，不刷新题", "tags": ["错题"], "critical": True})
+        tasks.append({"id": f"{day_key}-rest", "title": "早睡 + 状态管理，比刷题更重要", "tags": ["心理"]})
+    return tasks
 
 
 app = create_app()

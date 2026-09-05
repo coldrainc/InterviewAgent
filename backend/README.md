@@ -2,7 +2,7 @@
 
 Python 后端子工程，负责面试 Agent 的核心能力：
 
-- AgentLoop / InterviewState
+- AgentLoop / InterviewState / LangGraph 编排
 - LangChain Harness / Scripted Harness
 - HarnessGuardrails
 - RAG 索引、检索、评测
@@ -10,6 +10,9 @@ Python 后端子工程，负责面试 Agent 的核心能力：
 - Qdrant / JSON 向量库适配
 - 本地 FastAPI API
 - CLI 命令和 Python 测试
+- 刷题训练题库、力扣算法样题、样题初始化、答题评分和解析反馈接口
+
+LangChain 负责模型 provider、prompt、RAG 上下文和流式生成封装；LangGraph 负责面试轮次的生产级 loop 编排，包括条件路由、checkpoint、节点事件、短回答/澄清问题分支和显式循环降级。
 
 ## Install
 
@@ -37,6 +40,15 @@ cd backend
 ```bash
 make test
 ```
+
+本地离线 E2E：
+
+```bash
+make install
+make test-e2e-local
+```
+
+该测试使用内存 SQLite、本地对象存储和离线 Scripted harness，覆盖注册、简历上传、创建面试 session、发送回答、LangGraph/显式 loop orchestration 元数据和持久化恢复，不需要真实模型 API key。
 
 ## Layout
 

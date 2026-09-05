@@ -14,8 +14,10 @@ from interview_agent.interfaces.api import SessionRequest, apply_session_request
 
 
 def _register_headers(client: TestClient, email: str = "candidate@example.com") -> dict[str, str]:
+    ip_suffix = int(hashlib.sha256(email.encode("utf-8")).hexdigest()[:2], 16)
     response = client.post(
         "/auth/register",
+        headers={"X-Forwarded-For": f"198.51.100.{ip_suffix}"},
         json={
             "email": email,
             "password": "passw0rd!",
@@ -84,6 +86,178 @@ def test_api_exposes_industry_metadata(tmp_path) -> None:
     ai_option = next(item for item in payload if item["value"] == "ai_application")
     assert "Agent 工程师" in " ".join(ai_option["recommended_focus_areas"])
     assert ai_option["production_signals"]
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_practice_categories_include_leetcode_questions(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "leetcode@example.com")
+        categories = client.get("/practice/categories", headers=headers)
+        canonical = client.get("/practice/questions?category=leetcode&limit=20", headers=headers)
+        alias = client.get("/practice/questions?category=%E5%8A%9B%E6%89%A3&limit=20", headers=headers)
+
+    assert categories.status_code == 200
+    assert "leetcode" in {item["value"] for item in categories.json()}
+    assert canonical.status_code == 200
+    assert canonical.json()["total"] == 8
+    assert {item["practice_category"] for item in canonical.json()["items"]} == {"leetcode"}
+    assert alias.status_code == 200
+    assert alias.json()["total"] == canonical.json()["total"]
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_practice_attempt_grades_choice_question(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "practice-choice@example.com")
+        questions = client.get(
+            "/practice/questions?category=civil_service&subject=xingce&limit=1",
+            headers=headers,
+        )
+        assert questions.status_code == 200
+        question = questions.json()["items"][0]
+
+        correct = client.post(
+            "/practice/attempt",
+            headers=headers,
+            json={"question_id": question["id"], "answer": question["answer"], "elapsed_seconds": 12},
+        )
+        wrong = client.post(
+            "/practice/attempt",
+            headers=headers,
+            json={"question_id": question["id"], "answer": "A"},
+        )
+
+    assert correct.status_code == 200
+    assert correct.json()["correct"] is True
+    assert correct.json()["score"] == 100
+    assert correct.json()["elapsed_seconds"] == 12
+    assert wrong.status_code == 200
+    if question["answer"] != "A":
+        assert wrong.json()["correct"] is False
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_practice_attempt_scores_open_question(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "practice-open@example.com")
+        questions = client.get(
+            "/practice/questions?category=internet&subject=system_design&limit=1",
+            headers=headers,
+        )
+        assert questions.status_code == 200
+        question = questions.json()["items"][0]
+        response = client.post(
+            "/practice/attempt",
+            headers=headers,
+            json={
+                "question_id": question["id"],
+                "answer": "短链服务要考虑短码生成、缓存、限流、监控和降级。",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["correct"] is None
+    assert 0 <= payload["score"] <= 100
+    assert payload["reference_answer"]
+    assert payload["suggestions"]
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_review_site_imports_default_plan_and_saves_progress(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "review-site@example.com")
+        imported = client.post("/review-site/import", headers=headers, json={"plan_only": True})
+        assert imported.status_code == 200
+        assert imported.json()["plan_count"] == 1
+
+        plans = client.get("/review-site/plans", headers=headers)
+        assert plans.status_code == 200
+        assert len(plans.json()) == 1
+        plan_id = plans.json()[0]["id"]
+
+        plan = client.get(f"/review-site/plans/{plan_id}", headers=headers)
+        assert plan.status_code == 200
+        payload = plan.json()
+        assert payload["title"] == "陈雨寒面试复习站"
+        assert len(payload["days"]) == 14
+        first_task_id = payload["days"][0]["tasks"][0]["id"]
+
+        progress = client.patch(
+            f"/review-site/progress/task/{first_task_id}",
+            headers=headers,
+            json={"done": True, "elapsed_minutes": 45, "mastery_score": 4, "note": "简历数字已背完"},
+        )
+        assert progress.status_code == 200
+        assert progress.json()["done"] is True
+        assert progress.json()["elapsed_minutes"] == 45
+
+        refreshed = client.get(f"/review-site/plans/{plan_id}", headers=headers)
+        assert refreshed.status_code == 200
+        assert refreshed.json()["progresses"][0]["task_id"] == first_task_id
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_review_site_generates_custom_plan(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "review-planner@example.com")
+        generated = client.post(
+            "/review-site/planner/generate",
+            headers=headers,
+            json={
+                "target_role": "AI Native 全栈",
+                "seniority": "senior",
+                "target_company": "蚂蚁证券",
+                "total_days": 7,
+                "hours_per_day": 3,
+                "focus_areas": ["AI", "项目深挖", "模拟"],
+                "template": "7d-sprint",
+            },
+        )
+        assert generated.status_code == 200
+        plan_id = generated.json()["plan_id"]
+
+        plan = client.get(f"/review-site/plans/{plan_id}", headers=headers)
+        assert plan.status_code == 200
+        payload = plan.json()
+        assert payload["metadata"]["target_company"] == "蚂蚁证券"
+        assert len(payload["days"]) == 7
+        assert payload["days"][0]["tasks"]
 
     import asyncio
 

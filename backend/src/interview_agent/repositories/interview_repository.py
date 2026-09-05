@@ -28,6 +28,7 @@ class InterviewRepository:
         config: InterviewConfig,
         state: InterviewState,
         resume_id: str | None = None,
+        plan_task_id: str | None = None,
     ) -> None:
         candidate = config.candidate
         model = InterviewSessionModel(
@@ -43,6 +44,7 @@ class InterviewRepository:
             config_json=config.model_dump(mode="json"),
             state_json=state.model_dump(mode="json"),
             status="completed" if state.completed else "active",
+            plan_task_id=uuid.UUID(plan_task_id) if plan_task_id else None,
         )
         self.session.add(model)
         await self.session.flush()
@@ -55,10 +57,16 @@ class InterviewRepository:
         state: InterviewState,
         fallback_used: bool = False,
         guardrails: list[str] | None = None,
+        plan_task_id: str | None = None,
     ) -> None:
         model = await self.session.get(InterviewSessionModel, uuid.UUID(session_id))
         if model is None or model.tenant_id != self.tenant_id or model.user_id != self.user_id:
-            await self.create_session(session_id=session_id, config=config, state=state)
+            await self.create_session(
+                session_id=session_id,
+                config=config,
+                state=state,
+                plan_task_id=plan_task_id,
+            )
             model = await self.session.get(InterviewSessionModel, uuid.UUID(session_id))
         if model is None:
             raise ValueError("failed to create interview session")
@@ -66,6 +74,8 @@ class InterviewRepository:
         model.state_json = state.model_dump(mode="json")
         model.config_json = config.model_dump(mode="json")
         model.status = "completed" if state.completed else "active"
+        if plan_task_id and not model.plan_task_id:
+            model.plan_task_id = uuid.UUID(plan_task_id)
 
         await self.session.execute(
             delete(MemoryItemModel).where(MemoryItemModel.session_id == model.id)
@@ -166,6 +176,7 @@ def _session_to_summary(model: InterviewSessionModel) -> dict:
         "target_role": model.target_role,
         "seniority": model.seniority,
         "status": model.status,
+        "plan_task_id": str(model.plan_task_id) if getattr(model, "plan_task_id", None) else None,
         "created_at": model.created_at.isoformat(),
         "updated_at": model.updated_at.isoformat(),
     }

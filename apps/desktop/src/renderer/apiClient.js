@@ -157,6 +157,15 @@ async function requestJson(route, options = {}, attempt = 0) {
   return enqueueRequest(() => executeJsonRequest(route, options, attempt));
 }
 
+// 统一 JSON 传输：Electron 下走主进程 IPC（复用鉴权/刷新/重试），浏览器下直连 fetch
+async function apiJson(route, options = {}) {
+  const bridge = electronBridge();
+  if (bridge?.apiRequest) {
+    return bridge.apiRequest(route, { method: options.method, body: options.body });
+  }
+  return requestJson(route, options);
+}
+
 async function requestEventStream(route, options = {}, onEvent) {
   return enqueueRequest(() => executeEventStreamRequest(route, options, onEvent));
 }
@@ -653,11 +662,235 @@ const browserClient = {
     )
 };
 
+browserClient.reviewSite = {
+  listPlans: async () => {
+    try {
+      const data = await requestJson("/review-site/plans");
+      return Array.isArray(data) ? data : [];
+    } catch (_error) {
+      return [];
+    }
+  },
+  createPlan: async (payload) => {
+    try {
+      const data = await requestJson("/review-site/plans", {
+        method: "POST",
+        body: JSON.stringify(payload || {})
+      });
+      return data || {};
+    } catch (_error) {
+      return {};
+    }
+  },
+  getPlan: async (planId) => {
+    try {
+      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}`);
+      return data || { plan: {}, phases: [], days: [], progresses: [], intro_scripts: [], star_cards: [], a4_memory: [] };
+    } catch (_error) {
+      return { plan: {}, phases: [], days: [], progresses: [], intro_scripts: [], star_cards: [], a4_memory: [] };
+    }
+  },
+  patchPlan: async (planId, payload) => {
+    try {
+      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload || {})
+      });
+      return data || {};
+    } catch (_error) {
+      return {};
+    }
+  },
+  archivePlan: async (planId) => {
+    try {
+      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/archive`, {
+        method: "POST"
+      });
+      return data || {};
+    } catch (_error) {
+      return {};
+    }
+  },
+  patchProgress: async (taskId, payload) => {
+    try {
+      const data = await requestJson(`/review-site/progress/task/${encodeURIComponent(taskId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload || {})
+      });
+      return data || {};
+    } catch (_error) {
+      return null;
+    }
+  },
+  listIntroScripts: async (planId) => {
+    try {
+      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/intro-scripts`);
+      return Array.isArray(data) ? data : [];
+    } catch (_error) {
+      return [];
+    }
+  },
+  listStarCards: async (planId) => {
+    try {
+      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/star-cards`);
+      return Array.isArray(data) ? data : [];
+    } catch (_error) {
+      return [];
+    }
+  },
+  listA4Memory: async (planId) => {
+    try {
+      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/a4-memory`);
+      return Array.isArray(data) ? data : [];
+    } catch (_error) {
+      return [];
+    }
+  },
+  listPracticeQuestions: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.category) params.set("category", filters.category);
+      if (filters.subject) params.set("subject", filters.subject);
+      if (filters.question_type) params.set("question_type", filters.question_type);
+      if (filters.difficulty) params.set("difficulty", filters.difficulty);
+      if (filters.keyword) params.set("keyword", filters.keyword);
+      params.set("limit", filters.limit || 30);
+      params.set("offset", filters.offset || 0);
+      const data = await requestJson(`/review-site/practice-questions?${params.toString()}`);
+      return data || { items: [], total: 0, limit: 30, offset: 0 };
+    } catch (_error) {
+      return { items: [], total: 0, limit: 30, offset: 0 };
+    }
+  },
+  markQuestion: async (questionId, payload) => {
+    try {
+      const data = await requestJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/mark`, {
+        method: "POST",
+        body: JSON.stringify(payload || {})
+      });
+      return data || {};
+    } catch (_error) {
+      return null;
+    }
+  },
+  listWrongBook: async () => {
+    try {
+      const data = await requestJson("/review-site/wrong-book");
+      return Array.isArray(data) ? data : [];
+    } catch (_error) {
+      return [];
+    }
+  },
+  runImport: async (payload) => {
+    try {
+      const data = await requestJson("/review-site/import", {
+        method: "POST",
+        timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+        body: JSON.stringify(payload || {})
+      });
+      return data || {};
+    } catch (_error) {
+      return {};
+    }
+  },
+  generatePlan: async (payload) => {
+    try {
+      const data = await apiJson("/review-site/planner/generate", {
+        method: "POST",
+        timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+        body: JSON.stringify(payload || {})
+      });
+      return data || {};
+    } catch (_error) {
+      return {};
+    }
+  },
+  // ---- Task 6 新增：天/任务/素材 CRUD ----
+  createDay: (planId, payload) =>
+    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/days`, {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  updateDay: (dayId, payload) =>
+    apiJson(`/review-site/days/${encodeURIComponent(dayId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload || {})
+    }),
+  deleteDay: (dayId) =>
+    apiJson(`/review-site/days/${encodeURIComponent(dayId)}`, { method: "DELETE" }),
+  createTask: (dayId, payload) =>
+    apiJson(`/review-site/days/${encodeURIComponent(dayId)}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  updateTask: (taskId, payload) =>
+    apiJson(`/review-site/tasks/${encodeURIComponent(taskId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload || {})
+    }),
+  deleteTask: (taskId) =>
+    apiJson(`/review-site/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" }),
+  upsertMaterial: (planId, kind, payload) =>
+    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/materials/${encodeURIComponent(kind)}`, {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  updateMaterial: (kind, itemId, payload) =>
+    apiJson(`/review-site/materials/${encodeURIComponent(kind)}/${encodeURIComponent(itemId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload || {})
+    }),
+  deleteMaterial: (kind, itemId) =>
+    apiJson(`/review-site/materials/${encodeURIComponent(kind)}/${encodeURIComponent(itemId)}`, {
+      method: "DELETE"
+    }),
+  // ---- 打卡 ----
+  getToday: (planId) => apiJson(`/review-site/plans/${encodeURIComponent(planId)}/today`),
+  checkin: (planId, payload) =>
+    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/checkin`, {
+      method: "POST",
+      body: JSON.stringify(payload || {})
+    }),
+  listCheckins: (params = {}) => {
+    const search = new URLSearchParams();
+    if (params.planId) search.set("plan_id", params.planId);
+    if (params.dateFrom) search.set("date_from", params.dateFrom);
+    if (params.dateTo) search.set("date_to", params.dateTo);
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return apiJson(`/review-site/checkins${suffix}`);
+  },
+  // ---- 刷题作答 v2 ----
+  submitAttempt: (questionId, payload) =>
+    apiJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/attempt`, {
+      method: "POST",
+      timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+      body: JSON.stringify(payload || {})
+    }),
+  listAttempts: (questionId, limit = 20) =>
+    apiJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/attempts?limit=${limit}`)
+};
+
+// 学习闭环 v2：驾驶舱 / 成就 / 报告
+browserClient.study = {
+  dashboard: () => apiJson("/study/dashboard"),
+  achievements: () => apiJson("/study/achievements"),
+  listReports: (limit = 20) => apiJson(`/interview-reports?limit=${limit}`),
+  getReport: (sessionId) => apiJson(`/interview-reports/${encodeURIComponent(sessionId)}`),
+  addReportTasks: (planId, sessionId) =>
+    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/report-tasks`, {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId })
+    })
+};
+
 export function getInterviewAgentClient() {
   const bridge = electronBridge();
   if (!bridge) return browserClient;
   return {
-    hasToken: () => true,
-    ...bridge
+    ...bridge,
+    ...browserClient,
+    // SSE 流式必须走主进程 IPC（file:// 下 fetch 流不可用）
+    streamMessage: bridge.streamMessage || browserClient.streamMessage,
+    hasToken: () => true
   };
 }

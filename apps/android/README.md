@@ -28,17 +28,21 @@ Android 端使用 Kotlin + Jetpack Compose。当前目录已经补齐 Gradle 工
 
 ## 当前能力
 
-- `InterviewApiClient`：健康检查、行业列表、创建会话、发送消息。
+- `InterviewApiClient`：健康检查、账户、用户设置、行业列表、刷题题库、答题评分、简历库、历史会话、创建会话、发送消息。
 - `InterviewApiClient.devLogin`：本地开发签名 token；生产需替换为手机号/第三方登录。
-- `InterviewApiClient.streamMessage`：解析后端 SSE `message.done` 事件。
-- `ChatViewModel`：最小聊天状态机。
+- `InterviewApiClient.streamMessage`：解析后端 SSE `message.done` / `message.error` 事件，异常时可回退普通消息接口。
+- `ChatViewModel`：统一管理登录、账户、行业、当前简历、历史会话恢复和聊天状态。
 - `ChatScreen`：Compose 对话页。
+- `PracticeScreen`：按训练类型筛题、初始化样题、提交答案、查看评分、参考答案、解析和复盘建议；互联网技术岗支持“力扣算法”分类。
+- `ResumeScreen`：粘贴 Markdown / 文本简历、上传保存、选择当前简历和删除。
+- `HistoryScreen`：列出历史会话、恢复上下文继续对话、删除历史。
+- `ProfileScreen`：开发登录、积分/试用展示、模拟充值、默认面试模式设置。
 
 ## 上线前必须补齐
 
 - 生产登录：手机号验证码、微信/Google/OAuth，后端校验 token。
 - Release 签名、应用市场渠道配置、隐私合规弹窗。
-- 简历文件选择器、上传进度、失败重试和本地缓存。
-- 会话历史、当前简历选择、设置页和数据删除入口。
+- 原生文件选择器、上传进度、失败重试和本地缓存。
+- 数据删除入口、隐私协议入口和生产用户设置。
 - 崩溃采集、性能监控、埋点和日志脱敏。
 - Retrofit/OkHttp、证书固定或域名白名单策略按安全要求补齐。

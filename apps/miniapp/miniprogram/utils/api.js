@@ -141,6 +141,36 @@ function listIndustries(targetRole = "AI 应用工程师") {
   return request(`/metadata/industries?target_role=${encodeURIComponent(targetRole)}`);
 }
 
+function listPracticeCategories() {
+  return request("/practice/categories");
+}
+
+function listPracticeQuestions(filters = {}) {
+  const params = [];
+  if (filters.category) params.push(`category=${encodeURIComponent(filters.category)}`);
+  if (filters.year) params.push(`year=${encodeURIComponent(filters.year)}`);
+  if (filters.subject) params.push(`subject=${encodeURIComponent(filters.subject)}`);
+  if (filters.questionType) params.push(`question_type=${encodeURIComponent(filters.questionType)}`);
+  params.push(`limit=${encodeURIComponent(filters.limit || 30)}`);
+  params.push(`offset=${encodeURIComponent(filters.offset || 0)}`);
+  return request(`/practice/questions?${params.join("&")}`);
+}
+
+function seedPracticeQuestions() {
+  return request("/practice/questions/seed", { method: "POST" });
+}
+
+function submitPracticeAttempt({ questionId, answer, elapsedSeconds }) {
+  return request("/practice/attempt", {
+    method: "POST",
+    data: {
+      question_id: questionId,
+      answer,
+      elapsed_seconds: elapsedSeconds
+    }
+  });
+}
+
 function createSession(payload) {
   return request("/sessions", {
     method: "POST",
@@ -214,6 +244,10 @@ module.exports = {
   account,
   recharge,
   listIndustries,
+  listPracticeCategories,
+  listPracticeQuestions,
+  seedPracticeQuestions,
+  submitPracticeAttempt,
   createSession,
   listResumes,
   getResume,

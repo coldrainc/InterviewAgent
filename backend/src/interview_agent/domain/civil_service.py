@@ -7,8 +7,23 @@ PRACTICE_CATEGORIES: list[dict[str, Any]] = [
     {
         "value": "internet",
         "label": "互联网行业",
-        "description": "高并发、低延迟、增长指标、内容安全、多端体验和项目深挖。",
-        "subjects": ["project", "system_design", "algorithm", "backend", "frontend", "database", "security"],
+        "description": "高并发、低延迟、增长指标、内容安全、多端体验、项目深挖和算法表达。",
+        "subjects": ["project", "system_design", "algorithm", "leetcode", "backend", "frontend", "database", "security"],
+    },
+    {
+        "value": "leetcode",
+        "label": "力扣算法",
+        "description": "互联网技术岗常见 LeetCode 风格算法题，训练解题思路、复杂度、边界和代码表达。",
+        "subjects": [
+            "array",
+            "hash_table",
+            "two_pointers",
+            "sliding_window",
+            "stack",
+            "linked_list",
+            "binary_tree",
+            "dynamic_programming",
+        ],
     },
     {
         "value": "ai_application",
@@ -63,7 +78,7 @@ PRACTICE_LEARNING_PLAN: list[dict[str, Any]] = [
     {
         "stage": "模块训练",
         "title": "按题型建立方法库",
-        "description": "刷题科目跟随面试类型拆分：互联网看工程与项目，AI 应用看 RAG/Agent/评测，电商看搜索导购交易，金融看合规风控审计，ToB 看多租户权限集成，考公看行测申论结构化。",
+        "description": "刷题科目跟随面试类型拆分：互联网看工程、项目和算法，力扣算法看数组、哈希、双指针、滑窗、栈、链表、树和动态规划，AI 应用看 RAG/Agent/评测，电商看搜索导购交易，金融看合规风控审计，ToB 看多租户权限集成，考公看行测申论结构化。",
         "tasks": ["每类题沉淀答题模板", "把高频知识点做成错题集", "同一题型连续练到稳定再切换"],
     },
     {
@@ -231,6 +246,122 @@ INTERNET_SEED_QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
+LEETCODE_SEED_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "hash_table",
+        "question_type": "数组 / 哈希表",
+        "prompt": "给定一个整数数组和目标值 target，返回任意一组下标 i、j，使 nums[i] + nums[j] == target，且 i != j。请说明哈希表解法、复杂度和找不到结果时的处理。",
+        "choices": [],
+        "answer": "遍历数组，用哈希表记录已访问数字到下标的映射。对当前值 x，先查 target - x 是否已出现，命中则返回两个下标，否则写入 x。时间复杂度 O(n)，空间复杂度 O(n)。",
+        "explanation": "这类题重点是把暴力两层循环优化成一次遍历，并说明先查再存可以避免同一个元素被重复使用。",
+        "difficulty": "easy",
+        "tags": ["LeetCode 风格", "数组", "哈希表", "Two Sum"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "sliding_window",
+        "question_type": "字符串 / 滑动窗口",
+        "prompt": "给定字符串 s，求不含重复字符的最长连续子串长度。请说明窗口左右指针如何移动、何时更新答案，以及空串和重复字符的边界。",
+        "choices": [],
+        "answer": "用 left/right 维护窗口，用哈希表记录字符最近位置。遍历 right，若字符上次位置不小于 left，则把 left 移到上次位置 + 1，再更新字符位置和最大长度。时间 O(n)，空间 O(k)。",
+        "explanation": "滑动窗口题要讲清楚窗口不变量：窗口内始终无重复字符。left 只能右移，不能回退。",
+        "difficulty": "medium",
+        "tags": ["LeetCode 风格", "字符串", "滑动窗口", "哈希表"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "two_pointers",
+        "question_type": "数组 / 双指针",
+        "prompt": "给定非负整数数组 height，每个元素表示一条竖线高度，求两条线与 x 轴能组成的最大容器面积。请说明为什么每次移动较短的一侧。",
+        "choices": [],
+        "answer": "左右指针从两端开始，面积由宽度和较短高度决定。记录当前面积后移动较短的一侧，因为移动较高一侧只会让宽度变小且短板不变，不可能得到更大面积。时间 O(n)，空间 O(1)。",
+        "explanation": "双指针面试重点是证明贪心移动的正确性，而不只是写出循环。",
+        "difficulty": "medium",
+        "tags": ["LeetCode 风格", "双指针", "贪心", "数组"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "stack",
+        "question_type": "栈 / 单调栈",
+        "prompt": "给定每日温度数组，返回每一天还要等多少天才会出现更高温度；如果之后没有更高温度则为 0。请说明单调栈里存什么、何时出栈。",
+        "choices": [],
+        "answer": "维护一个存下标的单调递减栈。遍历温度时，如果当前温度高于栈顶下标对应温度，就持续出栈并计算等待天数；然后把当前下标入栈。时间 O(n)，空间 O(n)。",
+        "explanation": "单调栈适合找下一个更大/更小元素。栈里存下标可以同时拿到值和距离。",
+        "difficulty": "medium",
+        "tags": ["LeetCode 风格", "单调栈", "数组"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "linked_list",
+        "question_type": "链表 / 快慢指针",
+        "prompt": "给定单链表头节点，判断链表中是否存在环。请说明快慢指针的判定过程，以及空链表、单节点链表的边界。",
+        "choices": [],
+        "answer": "使用 slow 每次走一步、fast 每次走两步。若 fast 或 fast.next 为空，说明无环；若 slow 与 fast 相遇，说明有环。时间 O(n)，空间 O(1)。",
+        "explanation": "链表环检测考察指针边界和循环条件，面试中要避免空指针访问。",
+        "difficulty": "easy",
+        "tags": ["LeetCode 风格", "链表", "快慢指针"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "binary_tree",
+        "question_type": "二叉树 / 遍历",
+        "prompt": "给定二叉树根节点，返回其最大深度。请分别说明递归 DFS 和层序 BFS 的思路、复杂度和递归栈风险。",
+        "choices": [],
+        "answer": "DFS：空节点深度为 0，非空节点深度为 max(left, right) + 1。BFS：按层遍历，每完成一层深度加 1。时间 O(n)，DFS 递归栈最坏 O(n)，BFS 队列最坏 O(n)。",
+        "explanation": "树题要先定义子问题和终止条件，再说明遍历顺序和空间复杂度。",
+        "difficulty": "easy",
+        "tags": ["LeetCode 风格", "二叉树", "DFS", "BFS"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "dynamic_programming",
+        "question_type": "动态规划",
+        "prompt": "给定一个非负整数数组，每个元素表示当前位置最多能跳的步数，判断能否从第一个位置到达最后一个位置。请说明贪心或 DP 思路。",
+        "choices": [],
+        "answer": "贪心维护当前能到达的最远下标 farthest。遍历到位置 i 时，如果 i > farthest 则不可达；否则更新 farthest = max(farthest, i + nums[i])。若 farthest 到达末尾则返回 true。时间 O(n)，空间 O(1)。",
+        "explanation": "这题常用贪心比 DP 更简洁，关键是维护可达前缀和最远边界。",
+        "difficulty": "medium",
+        "tags": ["LeetCode 风格", "贪心", "动态规划", "数组"],
+    },
+    {
+        "source": "built_in_sample",
+        "practice_category": "leetcode",
+        "exam_year": 2026,
+        "exam_name": "力扣算法训练样题",
+        "subject": "dynamic_programming",
+        "question_type": "动态规划",
+        "prompt": "给定字符串 s 和单词列表 wordDict，判断 s 是否能被拆分成一个或多个字典中的单词。请说明状态定义、转移和剪枝。",
+        "choices": [],
+        "answer": "定义 dp[i] 表示 s[0:i] 是否可拆分。若存在 j < i，使 dp[j] 为真且 s[j:i] 在字典中，则 dp[i] 为真。可用 set 加速查询，并按最大单词长度限制 j 的范围。时间复杂度取决于切片和枚举范围。",
+        "explanation": "字符串 DP 要讲清楚前缀状态、字典查询优化和空串 dp[0] = true 的初始化。",
+        "difficulty": "medium",
+        "tags": ["LeetCode 风格", "动态规划", "字符串", "哈希集合"],
+    },
+]
+
+
 COMMON_INTERVIEW_BASE_QUESTIONS: list[dict[str, Any]] = [
     {
         "source": "built_in_sample",
@@ -264,6 +395,7 @@ COMMON_INTERVIEW_BASE_QUESTIONS: list[dict[str, Any]] = [
 COMMON_INTERVIEW_SEED_QUESTIONS: list[dict[str, Any]] = [
     {**question, "practice_category": category["value"], "exam_name": f"{category['label']}通用表达训练样题"}
     for category in PRACTICE_CATEGORIES
+    if category["value"] != "leetcode"
     for question in COMMON_INTERVIEW_BASE_QUESTIONS
 ]
 
@@ -510,6 +642,7 @@ ENTERPRISE_SAAS_SEED_QUESTIONS: list[dict[str, Any]] = [
 
 DEFAULT_PRACTICE_QUESTIONS: list[dict[str, Any]] = [
     *INTERNET_SEED_QUESTIONS,
+    *LEETCODE_SEED_QUESTIONS,
     *AI_ENGINEERING_SEED_QUESTIONS,
     *ECOMMERCE_SEED_QUESTIONS,
     *FINTECH_SEED_QUESTIONS,

@@ -1,26 +1,28 @@
-import { Bot, Coins, Loader2, MessageSquarePlus, PencilLine, Send, ShieldCheck, Sparkles, Square, Undo2, UserRound } from "lucide-react";
+import { Bot, Coins, Loader2, MessageSquarePlus, Moon, PencilLine, Send, ShieldCheck, Sparkles, Square, Sun, Undo2, UserRound } from "lucide-react";
 import { quickPrompts } from "../../constants/interview";
 import { formatCredits } from "../../utils/interview";
 
-export function Topbar({ sessionId, offline, webSearch, completed, status, profile, model, account, screen, onOpenAccount, onOpenChat }) {
+export function Topbar({ sessionId, offline, webSearch, completed, status, profile, model, account, screen, theme, onToggleTheme, onOpenAccount, onOpenChat }) {
   const mode = completed ? "已完成" : offline ? "离线模式" : "模型模式";
-  const auxiliaryScreen = screen === "account" || screen === "settings" || screen === "setup" || screen === "study" || screen === "ops";
+  const auxiliaryTitles = {
+    home: "今日驾驶舱",
+    account: "账户中心",
+    settings: "设置",
+    setup: "面试配置",
+    practice: "刷题训练",
+    reports: "面试报告",
+    "review-site": "复习站",
+    planner: "计划生成器",
+    ops: "任务与评测"
+  };
+  const auxiliaryScreen = Boolean(auxiliaryTitles[screen]);
   const title =
-    screen === "account"
-      ? "账户中心"
-      : screen === "settings"
-      ? "设置"
-      : screen === "setup"
-      ? "面试配置"
-      : screen === "study"
-      ? "面试刷题"
-      : screen === "ops"
-      ? "任务与评测"
-      : profile.mode === "candidate"
+    auxiliaryTitles[screen]
+    || (profile.mode === "candidate"
       ? `${profile.targetRole || "AI 工程师"}候选人答题`
       : profile.targetRole
         ? `${profile.targetRole}模拟面试`
-        : "中文技术面试";
+        : "中文技术面试");
   return (
     <header className="topbar">
       <div>
@@ -30,6 +32,15 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
         <h2>{title}</h2>
       </div>
       <div className="topbar-actions">
+        <button
+          type="button"
+          className="topbar-button topbar-icon-button"
+          onClick={onToggleTheme}
+          title={theme === "dark" ? "切换到白天模式" : "切换到夜间模式"}
+          aria-label={theme === "dark" ? "切换到白天模式" : "切换到夜间模式"}
+        >
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
         {auxiliaryScreen ? (
           <button type="button" className="topbar-button" onClick={onOpenChat}>
             <MessageSquarePlus size={14} />

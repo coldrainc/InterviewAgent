@@ -2,7 +2,7 @@
 
 一个用于面试场景的 Agent 工程骨架，核心包含：
 
-- `AgentLoop`：显式控制面试阶段、候选人回答、追问、换题和终止。
+- `AgentLoop`：显式控制面试阶段、候选人回答、追问、换题和终止；安装 `langgraph` 后自动使用 LangGraph 图编排每轮输入处理。
 - `LangChainInterviewHarness`：用 LangChain 封装 LLM prompt、模型调用、Responses API 和降级逻辑。
 - `HarnessGuardrails`：输入/输出护栏，覆盖密钥脱敏、评分标准防泄露、中文约束、长度控制和失败降级。
 - `MarkdownKnowledgeBase`：加载本地 Markdown 面试资料，检索相关片段注入 prompt。
@@ -15,12 +15,16 @@
 
 AgentLoop 会对每次正式回答做轻量质量判断：是否有本人职责、技术细节、量化指标、工程取舍、生产化信号。回答证据不足时会继续深挖当前方向；证据较充分或追问次数达到上限时，会给出阶段性判断并切换到其他重点。候选人的澄清问题，例如“什么是 RAG”，只会触发知识解释和答题辅导，不会推进面试轮次，也不会沉淀为历史记忆。
 
+后端的模型调用由 LangChain 统一封装，支持 OpenAI-compatible provider 和 Anthropic 原生 provider；面试轮次由 LangGraph 承接输入清洗、护栏、澄清问题路由、短回答拦截、回答评估和阶段推进。每个 API session 会作为 LangGraph `thread_id` 运行，图执行支持内存 checkpoint、节点级耗时/路由/降级元数据和显式循环 fallback。若运行环境尚未安装 LangGraph，系统会自动回退到原有显式控制循环，离线 demo 和测试路径仍可用。
+
 桌面端支持两种模式：
 
 - `Agent 面试我`：Agent 作为面试官，基于简历、项目经历、AI 知识库和历史记忆追问你。
 - `Agent 回答我`：你作为面试官提问，Agent 作为候选人，结合简历和互联网行业场景回答你的面试题。
 
 行业选择当前暂时只开放 `互联网行业`，后续可以扩展到金融、教育、医疗、制造等行业。
+
+刷题训练现在作为独立能力接入后端和三端客户端：题库支持按训练类型筛选、初始化内置样题、提交答案、获得选择题判分或开放题关键词评分，并返回参考答案、解析和复盘建议。互联网技术岗额外提供“力扣算法”训练分类，内置数组、哈希表、双指针、滑动窗口、栈、链表、二叉树和动态规划等 LeetCode 风格样题。接口覆盖 `GET /practice/categories`、`GET /practice/questions`、`POST /practice/questions/seed` 和 `POST /practice/attempt`。
 
 ## Quick Start
 
@@ -108,7 +112,7 @@ POST /account/recharge    # 本地/后台模拟充值，生产要换成支付回
 GET  /metadata/models     # 查看可选模型和每百万 token 积分价格
 ```
 
-`POST /sessions` 支持传入 `model_id`。试用用完后，系统会按输入/输出 token 和模型价格扣积分；没有真实 provider usage 时会使用本地 token 估算。详细方案见 [docs/billing-and-models.md](/Users/bytedance/Documents/InterViewAgent/docs/billing-and-models.md)。
+`POST /sessions` 支持传入 `model_id`。试用用完后，系统会按输入/输出 token 和模型价格扣积分；没有真实 provider usage 时会使用本地 token 估算。详细方案见 [docs/billing-and-models.md](docs/billing-and-models.md)。
 
 生产级 RAG 推荐先构建持久化索引：
 

@@ -1,4 +1,4 @@
-.PHONY: install up down migrate qdrant embedding-service api desktop mobile-check index index-json run doctor eval-rag test
+.PHONY: install up down migrate qdrant embedding-service api desktop mobile-check index index-json run doctor eval-rag test test-e2e-local check
 
 install:
 	.venv/bin/python -m pip install -e 'backend[dev]'
@@ -57,3 +57,12 @@ eval-rag:
 
 test:
 	cd backend && ../.venv/bin/python -m pytest
+
+test-e2e-local:
+	cd backend && ../.venv/bin/python -m pytest tests/test_local_e2e.py -q
+
+check:
+	.venv/bin/python -m compileall -q backend/src backend/tests
+	$(MAKE) test
+	npm --prefix apps/miniapp run check
+	npm --prefix apps/desktop run build

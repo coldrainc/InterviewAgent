@@ -1,5 +1,21 @@
 import http from '@ohos.net.http';
-import { AccountResponse, AuthTokenResponse, ChatResponse, CreateSessionRequest, IndustryOption, StreamEvent } from '../model/Models';
+import buffer from '@ohos.buffer';
+import {
+  AccountResponse,
+  AuthTokenResponse,
+  ChatResponse,
+  CreateSessionRequest,
+  ImportResultResponse,
+  IndustryOption,
+  PracticeAttemptResponse,
+  PracticeCategory,
+  PracticeQuestionListResponse,
+  ResumeRecord,
+  SessionDetail,
+  SessionSummary,
+  StreamEvent,
+  UserSettingsResponse
+} from '../model/Models';
 
 export class InterviewApiClient {
   private baseUrl: string;
@@ -28,6 +44,16 @@ export class InterviewApiClient {
     return await this.request('/account', 'GET') as AccountResponse;
   }
 
+  async settings(): Promise<UserSettingsResponse> {
+    return await this.request('/settings', 'GET') as UserSettingsResponse;
+  }
+
+  async updateDefaultInterviewMode(mode: string): Promise<UserSettingsResponse> {
+    return await this.request('/settings', 'PUT', {
+      default_interview_mode: mode
+    }) as UserSettingsResponse;
+  }
+
   async recharge(amountCredits: string): Promise<AccountResponse> {
     return await this.request('/account/recharge', 'POST', {
       amount_credits: amountCredits,
@@ -46,8 +72,59 @@ export class InterviewApiClient {
     return await this.request(`/metadata/industries?target_role=${encoded}`, 'GET') as IndustryOption[];
   }
 
+  async listPracticeCategories(): Promise<PracticeCategory[]> {
+    return await this.request('/practice/categories', 'GET') as PracticeCategory[];
+  }
+
+  async listPracticeQuestions(category: string, limit: number = 50): Promise<PracticeQuestionListResponse> {
+    const encoded = encodeURIComponent(category);
+    return await this.request(`/practice/questions?category=${encoded}&limit=${limit}`, 'GET') as PracticeQuestionListResponse;
+  }
+
+  async seedPracticeQuestions(): Promise<ImportResultResponse> {
+    return await this.request('/practice/questions/seed', 'POST') as ImportResultResponse;
+  }
+
+  async submitPracticeAttempt(questionId: string, answer: string, elapsedSeconds: number): Promise<PracticeAttemptResponse> {
+    return await this.request('/practice/attempt', 'POST', {
+      question_id: questionId,
+      answer,
+      elapsed_seconds: elapsedSeconds
+    }) as PracticeAttemptResponse;
+  }
+
+  async listResumes(): Promise<ResumeRecord[]> {
+    return await this.request('/resumes', 'GET') as ResumeRecord[];
+  }
+
+  async importResume(filename: string, text: string): Promise<ResumeRecord> {
+    const encoded = buffer.from(text, 'utf-8').toString('base64');
+    return await this.request('/resumes', 'POST', {
+      filename,
+      content_base64: encoded
+    }) as ResumeRecord;
+  }
+
+  async deleteResume(id: string): Promise<boolean> {
+    const payload = await this.request(`/resumes/${id}`, 'DELETE');
+    return Boolean(payload['deleted']);
+  }
+
   async createSession(request: CreateSessionRequest): Promise<ChatResponse> {
     return await this.request('/sessions', 'POST', request) as ChatResponse;
+  }
+
+  async listSessions(limit: number = 50): Promise<SessionSummary[]> {
+    return await this.request(`/sessions?limit=${limit}`, 'GET') as SessionSummary[];
+  }
+
+  async getSession(id: string): Promise<SessionDetail> {
+    return await this.request(`/sessions/${id}`, 'GET') as SessionDetail;
+  }
+
+  async deleteSession(id: string): Promise<boolean> {
+    const payload = await this.request(`/sessions/${id}`, 'DELETE');
+    return Boolean(payload['deleted']);
   }
 
   async sendMessage(sessionId: string, message: string): Promise<ChatResponse> {
@@ -75,21 +152,34 @@ export class InterviewApiClient {
 
     try {
       const response = await client.request(`${this.baseUrl}${path}`, {
-        method: method === 'POST' ? http.RequestMethod.POST : http.RequestMethod.GET,
+        method: this.toHttpMethod(method),
         header: headers,
         extraData: body ? JSON.stringify(body) : undefined,
         expectDataType: http.HttpDataType.STRING
       });
       const status = response.responseCode;
       const text = String(response.result ?? '{}');
-      const payload = JSON.parse(text);
       if (status < 200 || status >= 300) {
+        const payload = JSON.parse(text);
         throw new Error(String(payload.detail ?? `HTTP ${status}`));
       }
       return text;
     } finally {
       client.destroy();
     }
+  }
+
+  private toHttpMethod(method: string): http.RequestMethod {
+    if (method === 'POST') {
+      return http.RequestMethod.POST;
+    }
+    if (method === 'PUT') {
+      return http.RequestMethod.PUT;
+    }
+    if (method === 'DELETE') {
+      return http.RequestMethod.DELETE;
+    }
+    return http.RequestMethod.GET;
   }
 
   private parseSse(text: string): StreamEvent[] {

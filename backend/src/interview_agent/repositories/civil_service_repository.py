@@ -93,6 +93,32 @@ class CivilServiceQuestionRepository:
         total = len(merged)
         return merged[offset : offset + limit], total
 
+    async def get_question(self, question_id: str) -> dict[str, Any] | None:
+        cleaned = question_id.strip()
+        if not cleaned:
+            return None
+        if cleaned.startswith("default:"):
+            return next(
+                (
+                    item
+                    for item in default_question_dicts()
+                    if item["id"] == cleaned or item.get("content_hash") == cleaned.removeprefix("default:")
+                ),
+                None,
+            )
+        try:
+            parsed_id = uuid.UUID(cleaned)
+        except ValueError:
+            parsed_id = None
+        filters = [
+            CivilServiceQuestionModel.tenant_id == self.tenant_id,
+            CivilServiceQuestionModel.user_id == self.user_id,
+        ]
+        filters.append(CivilServiceQuestionModel.id == parsed_id if parsed_id else CivilServiceQuestionModel.content_hash == cleaned)
+        result = await self.session.execute(select(CivilServiceQuestionModel).where(*filters))
+        model = result.scalar_one_or_none()
+        return question_to_dict(model) if model else None
+
     async def _get_by_hash(self, content_hash: str) -> CivilServiceQuestionModel | None:
         result = await self.session.execute(
             select(CivilServiceQuestionModel).where(
@@ -201,6 +227,13 @@ def normalize_practice_category(value: Any) -> str:
         "技术面试": "internet",
         "面试": "internet",
         "通用面试": "internet",
+        "力扣": "leetcode",
+        "力扣算法": "leetcode",
+        "leetcode": "leetcode",
+        "leet code": "leetcode",
+        "算法": "leetcode",
+        "算法题": "leetcode",
+        "刷题": "leetcode",
         "ai": "ai_application",
         "ai工程": "ai_application",
         "ai 工程": "ai_application",
@@ -239,6 +272,12 @@ def infer_practice_category(payload: dict[str, Any]) -> str:
         return "civil_service"
     if any(marker in joined_tags for marker in ("考公", "国考", "省考", "申论", "行测")):
         return "civil_service"
+    if subject in {"leetcode", "array", "hash_table", "two_pointers", "sliding_window", "stack", "linked_list", "binary_tree", "dynamic_programming"}:
+        return "leetcode"
+    if any(marker in exam_name for marker in ("leetcode", "力扣", "算法")):
+        return "leetcode"
+    if any(marker in joined_tags for marker in ("leetcode", "力扣")):
+        return "leetcode"
     if any(marker in exam_name for marker in ("ai", "agent", "rag", "llm")):
         return "ai_application"
     return "internet"

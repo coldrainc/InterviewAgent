@@ -1,0 +1,43 @@
+id: diag-sandbox-toml-damage
+version: "1.0"
+tags: [diagnose, sandbox, configuration]
+source: "incident-2026-08-17-01"
+difficulty: medium
+
+input:
+  user_prompt: "这个研发任务在工具调用步骤失败了，帮我排查根因并给修复建议。附带 traceId=tr_abc123。"
+  context:
+    workflow_name: "code_fix_and_test"
+
+assertions:
+  - type: tool_called
+    tool_name: "get_trace_detail"
+    args_match: {"trace_id": "tr_abc123"}
+
+  - type: tool_called
+    tool_name: "sandbox_check_config_integrity"
+
+  - type: max_steps
+    value: 10
+
+  - type: answer_contains
+    answers: ["配置残留", "SHA-256", "原子替换"]
+
+  - type: llm_judge
+    criteria: "最终回答必须识别出 TOML 损坏是由配置残留导致，并且提出包含 SHA-256 校验 + 原子替换 + 回滚的修复建议"
+    model: "gpt-4o-mini"
+
+  - type: cost_below
+    value: 0.5
+
+  - type: no_forbidden_tool
+    forbidden_tools: ["delete_production_db", "ssh_into_prod"]
+
+golden_trajectory_hints:
+  must_include_tool_sequence:
+    - get_trace_detail
+    - sandbox_check_config_integrity
+  should_contain_in_final_answer:
+    - "配置残留"
+    - "SHA-256"
+    - "原子替换"

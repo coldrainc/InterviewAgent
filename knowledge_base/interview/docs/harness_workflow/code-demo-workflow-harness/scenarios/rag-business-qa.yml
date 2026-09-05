@@ -1,0 +1,29 @@
+id: rag-business-qa
+version: "1.0"
+tags: [rag, knowledge_base, business_qa]
+source: "kb-team-biz-2026-07-01"
+difficulty: easy
+
+input:
+  user_prompt: "开播推流失败一般可能是什么原因？怎么排查？"
+  context:
+    agent_role: "直播技术支持助手"
+
+assertions:
+  - type: tool_called
+    tool_name: "knowledge_retrieval"
+    args_match: {"domain": "live_streaming", "scope": "operation"}
+
+  - type: answer_contains
+    answers: ["鉴权", "网络", "编码"]
+
+  - type: llm_judge
+    criteria: "回答必须基于知识库给出的事实，列出≥3类常见原因（鉴权配置、网络连通、音视频编码参数），并给出可操作的排查步骤，不得编造知识库中没有的内容。"
+
+golden_trajectory_hints:
+  must_include_tool_sequence:
+    - knowledge_retrieval
+  should_contain_in_final_answer:
+    - "鉴权"
+    - "网络"
+    - "编码"

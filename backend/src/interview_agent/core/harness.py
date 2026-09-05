@@ -9,6 +9,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from interview_agent.core.config import InterviewConfig, InterviewMode, InterviewStage
+from interview_agent.core.evaluation import (
+    degraded_payload,
+    evaluation_prompt_instruction,
+    parse_evaluation_json,
+    render_evaluation_text,
+)
 from interview_agent.core.guardrails import HarnessGuardrails
 from interview_agent.core.harness_result import HarnessResult
 from interview_agent.domain.billing import TokenUsage
@@ -24,6 +30,9 @@ class InterviewHarness(Protocol):
         ...
 
     def generate_result(self, stage: InterviewStage, state: InterviewState) -> HarnessResult:
+        ...
+
+    def generate_evaluation_result(self, state: InterviewState) -> HarnessResult:
         ...
 
     def generate_result_stream(
@@ -66,6 +75,14 @@ class BaseInterviewHarness(ABC):
 
     def generate(self, stage: InterviewStage, state: InterviewState) -> str:
         return self.generate_result(stage, state).text
+
+    def generate_evaluation_result(self, state: InterviewState) -> HarnessResult:
+        """默认实现：用普通 EVALUATION 文本降级为结构化报告（total_score=None）。"""
+        result = self.generate_result(InterviewStage.EVALUATION, state)
+        payload = degraded_payload(result.text, self.config.mode)
+        result.structured = payload
+        result.text = render_evaluation_text(payload, self.config.mode)
+        return result
 
     def generate_result_stream(
         self,
@@ -168,6 +185,43 @@ class LangChainInterviewHarness(BaseInterviewHarness):
         messages, fallback = self._candidate_question_messages(question, state)
         return self._safe_invoke(messages, fallback=fallback)
 
+    def generate_evaluation_result(self, state: InterviewState) -> HarnessResult:
+        """EVALUATION 阶段：要求 LLM 输出结构化 JSON 评分卡，解析失败则降级为文本报告。"""
+        messages = [
+            SystemMessage(content=self._system_prompt()),
+            HumanMessage(
+                content=self._stage_prompt(
+                    InterviewStage.EVALUATION,
+                    state,
+                    instruction_override=evaluation_prompt_instruction(self.config.mode),
+                )
+            ),
+        ]
+        try:
+            response = self.llm.invoke(messages)
+            raw_text = self._content_to_text(response.content)
+            payload = parse_evaluation_json(raw_text, self.config.mode)
+            rendered = render_evaluation_text(payload, self.config.mode)
+            checked = self.guardrails.check_model_output(rendered)
+            return HarnessResult(
+                text=checked.text,
+                findings=checked.findings,
+                usage=_extract_token_usage(response),
+                fallback_used=bool(payload.get("degraded")),
+                structured=payload,
+            )
+        except Exception:
+            fallback_text = self._fallback_message(InterviewStage.EVALUATION, state)
+            payload = degraded_payload(fallback_text, self.config.mode)
+            rendered = render_evaluation_text(payload, self.config.mode)
+            checked = self.guardrails.check_model_output(rendered)
+            return HarnessResult(
+                text=checked.text,
+                findings=checked.findings,
+                fallback_used=True,
+                structured=payload,
+            )
+
     def respond_to_candidate_question_result_stream(
         self,
         question: str,
@@ -253,7 +307,7 @@ class LangChainInterviewHarness(BaseInterviewHarness):
 - 如果面试目标中包含“面试官要求”，必须把它作为优先约束：题目、追问、判断和最终评价都要同时对齐候选人简历证据与面试官要求。
 - 每轮都要结合候选人的回答做判断：如果回答具体、有指标、有取舍，继续深挖；如果回答空泛，要求补充细节；如果当前方向已足够，明确给出阶段性判断后切换到下一个重点。
 - 你会收到 AgentLoop 的回答质量信号；它不是最终评分，但要作为追问、收束或切题的重要参考。
-- 追问要结合 AI 相关知识库，重点覆盖 RAG、Agent、LLMOps、评测、上线、安全、观测和成本治理。
+- 追问要结合 AI 相关知识库，重点覆盖 RAG、Agent、LangChain、LangGraph、LLMOps、评测、上线、安全、观测和成本治理。
 - 不要只问概念，要问候选人在项目中如何设计、如何排查、如何验证、如何上线、出了问题如何复盘。
 - 结合行业画像选择追问角度：优先验证行业核心指标、真实约束、风险控制和生产化证据。
 - 候选人回答缺少行业指标时，要要求补充指标口径，例如 {context["industry_signals"]}。
@@ -286,10 +340,15 @@ class LangChainInterviewHarness(BaseInterviewHarness):
 - 回答要贴合当前行业画像，体现该行业真实业务约束、核心指标、风险治理和生产环境细节。
 - 如果用户追问行业方案，要主动覆盖这些生产化信号：{context["industry_signals"]}。
 - 如果用户追问安全或上线，要主动覆盖这些风险控制：{context["industry_risks"]}。
-- 遇到 RAG、Agent、LLMOps、评测、上线、安全、观测相关问题时，优先结合简历和知识库上下文给出工程化回答。
+- 遇到 RAG、Agent、LangChain、LangGraph、LLMOps、评测、上线、安全、观测相关问题时，优先结合简历和知识库上下文给出工程化回答。
 - 不要编造过于夸张或无法自洽的数据；如果简历没有提供具体事实，可以使用保守、合理的表达。"""
 
-    def _stage_prompt(self, stage: InterviewStage, state: InterviewState) -> str:
+    def _stage_prompt(
+        self,
+        stage: InterviewStage,
+        state: InterviewState,
+        instruction_override: str | None = None,
+    ) -> str:
         transcript = state.transcript() or "No prior turns."
         focus = self._current_focus(state)
         query = self._context_query(stage, state, focus)
@@ -332,10 +391,13 @@ class LangChainInterviewHarness(BaseInterviewHarness):
 1. 通过倾向：通过 / 谨慎通过 / 暂不通过。
 2. 关键证据：列出 3 条来自候选人回答的证据。
 3. 风险点：列出 2-3 条需要继续验证或补强的点。
-4. AI 工程能力判断：覆盖 RAG、Agent、评测、生产化、安全或观测中已验证的能力。
+4. AI 工程能力判断：覆盖 RAG、Agent、LangChain、LangGraph、评测、生产化、安全或观测中已验证的能力。
 5. 后续建议：给出具体学习或项目补强方向。"""
         else:
             instruction = "用中文结束面试。"
+
+        if instruction_override:
+            instruction = instruction_override
 
         return f"""当前阶段：{stage.value}
 当前模式：{self.config.to_prompt_context()["mode_label"]}
@@ -611,6 +673,80 @@ class ScriptedInterviewHarness(BaseInterviewHarness):
             text = "感谢你今天参加面试。"
         checked = self.guardrails.check_model_output(text)
         return HarnessResult(text=checked.text, findings=checked.findings)
+
+    def generate_evaluation_result(self, state: InterviewState) -> HarnessResult:
+        payload = self._scripted_evaluation_payload(state)
+        text = render_evaluation_text(payload, self.config.mode)
+        checked = self.guardrails.check_model_output(text)
+        return HarnessResult(text=checked.text, findings=checked.findings, structured=payload)
+
+    def _scripted_evaluation_payload(self, state: InterviewState) -> dict:
+        from interview_agent.core.evaluation import (
+            INTERVIEWER_DIMENSIONS,
+            empty_payload,
+        )
+
+        if self.config.mode == InterviewMode.CANDIDATE:
+            user_questions = [
+                turn.interviewer
+                for turn in state.turns
+                if turn.stage == InterviewStage.QUESTIONING and turn.interviewer
+            ]
+            payload = empty_payload(InterviewMode.CANDIDATE)
+            payload["verdict"] = "良好"
+            payload["total_score"] = 78
+            payload["dimension_scores"] = {
+                "question_depth": 4,
+                "coverage": 3,
+                "differentiation": 4,
+            }
+            payload["per_question"] = [
+                {
+                    "question": question[:40],
+                    "score": 4,
+                    "comment": "问题聚焦项目细节，有一定区分度；可再追问量化指标。",
+                }
+                for question in user_questions
+            ]
+            payload["strength_tags"] = ["追问具体", "结合项目"]
+            payload["weakness_tags"] = ["方向偏窄", "指标追问少"]
+            payload["suggestions"] = [
+                {
+                    "title": "扩展考察方向",
+                    "category": "interviewer_skill",
+                    "detail": "除项目深挖外，增加系统设计、生产故障复盘和行为类问题。",
+                }
+            ]
+            payload["summary"] = "脚本模拟评估：提问整体聚焦且有层次，建议扩大方向覆盖并加强指标口径追问。"
+            return payload
+
+        answered = [turn for turn in state.turns if turn.candidate]
+        payload = empty_payload(InterviewMode.INTERVIEWER)
+        payload["verdict"] = "谨慎通过"
+        payload["total_score"] = 72
+        payload["dimension_scores"] = {key: 3 for key in INTERVIEWER_DIMENSIONS}
+        payload["dimension_scores"]["communication"] = 4
+        payload["per_question"] = [
+            {
+                "question": turn.interviewer[:40],
+                "score": 3,
+                "comment": "回答有方向，但缺少量化指标与故障复盘证据。",
+            }
+            for turn in answered
+        ]
+        payload["evidence"] = [
+            {"quote": (turn.candidate or "")[:60], "point": "候选人提供了项目事实与技术选型。"}
+            for turn in answered[:2]
+        ]
+        payload["strength_tags"] = ["表达清晰", "项目真实"]
+        payload["weakness_tags"] = ["指标不足", "复盘偏少"]
+        payload["suggestions"] = [
+            {"title": "补强 RAG 评测体系", "category": "rag", "detail": "练习召回率、命中率、答案相关性等离线评测集设计。"},
+            {"title": "梳理 Agent 可观测性", "category": "agent", "detail": "总结一次 LangGraph 状态追踪与失败重试的生产实践。"},
+            {"title": "准备系统设计故事", "category": "system_design", "detail": "用一个高并发场景讲清容量估算、降级与灰度。"},
+        ]
+        payload["summary"] = "脚本模拟评估：具备基础 AI 工程认知，建议补强量化指标、生产复盘与系统设计表达。"
+        return payload
 
     def respond_to_candidate_question_result(
         self, question: str, state: InterviewState

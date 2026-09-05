@@ -43,7 +43,13 @@ class InterviewConfig(BaseModel):
     mode: InterviewMode = InterviewMode.INTERVIEWER
     industry: Industry = Industry.INTERNET
     focus_areas: list[str] = Field(
-        default_factory=lambda: ["简历项目深挖", "AI 工程与 RAG/Agent", "系统设计与生产化", "行为协作能力"]
+        default_factory=lambda: [
+            "简历项目深挖",
+            "AI 工程与 RAG/Agent",
+            "LangChain 与 LangGraph 工程化",
+            "系统设计与生产化",
+            "行为协作能力",
+        ]
     )
     max_turns: int = 8
     questions_per_area: int = 1
@@ -57,6 +63,7 @@ class InterviewConfig(BaseModel):
             "role_fit": "是否体现与目标岗位和级别匹配的证据。",
             "resume_truthfulness": "简历经历是否经得起细节追问，是否能讲出真实参与、难点和结果。",
             "ai_engineering": "是否理解 RAG、Agent、评测、安全、观测和生产化取舍。",
+            "agent_frameworks": "是否理解 LangChain 模型/工具/RAG 封装与 LangGraph 状态图、节点路由、检查点和人机协同。",
         }
     )
 

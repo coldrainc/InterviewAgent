@@ -12,6 +12,7 @@ class HarnessResult:
     findings: list[GuardrailFinding] = field(default_factory=list)
     fallback_used: bool = False
     usage: TokenUsage | None = None
+    structured: dict | None = None
 
     def warning_text(self) -> str:
         if not self.findings:

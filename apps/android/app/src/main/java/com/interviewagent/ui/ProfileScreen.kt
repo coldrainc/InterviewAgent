@@ -44,6 +44,7 @@ fun ProfileScreen(
     onDevLogin: () -> Unit,
     onRefreshAccount: () -> Unit,
     onRecharge: (String) -> Unit,
+    onUpdateDefaultMode: (String) -> Unit,
     onLogout: () -> Unit
 ) {
     LazyColumn(
@@ -115,6 +116,15 @@ fun ProfileScreen(
                     InfoRow("用户", state.account?.userId ?: "-")
                     InfoRow("平台", state.account?.platform ?: "-")
                     InfoRow("服务", state.healthText)
+                    InfoRow("默认模式", if (state.settings?.defaultInterviewMode == "candidate") "Agent 回答我" else "Agent 面试我")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { onUpdateDefaultMode("interviewer") }, modifier = Modifier.weight(1f)) {
+                            Text("默认面试我")
+                        }
+                        OutlinedButton(onClick = { onUpdateDefaultMode("candidate") }, modifier = Modifier.weight(1f)) {
+                            Text("默认回答我")
+                        }
+                    }
                 }
             }
         }
