@@ -29,6 +29,7 @@ class InterviewRepository:
         state: InterviewState,
         resume_id: str | None = None,
         plan_task_id: str | None = None,
+        interviewer_kit_id: str | None = None,
     ) -> None:
         candidate = config.candidate
         model = InterviewSessionModel(
@@ -45,6 +46,7 @@ class InterviewRepository:
             state_json=state.model_dump(mode="json"),
             status="completed" if state.completed else "active",
             plan_task_id=uuid.UUID(plan_task_id) if plan_task_id else None,
+            interviewer_kit_id=uuid.UUID(interviewer_kit_id) if interviewer_kit_id else None,
         )
         self.session.add(model)
         await self.session.flush()
@@ -58,6 +60,7 @@ class InterviewRepository:
         fallback_used: bool = False,
         guardrails: list[str] | None = None,
         plan_task_id: str | None = None,
+        interviewer_kit_id: str | None = None,
     ) -> None:
         model = await self.session.get(InterviewSessionModel, uuid.UUID(session_id))
         if model is None or model.tenant_id != self.tenant_id or model.user_id != self.user_id:
@@ -66,6 +69,7 @@ class InterviewRepository:
                 config=config,
                 state=state,
                 plan_task_id=plan_task_id,
+                interviewer_kit_id=interviewer_kit_id,
             )
             model = await self.session.get(InterviewSessionModel, uuid.UUID(session_id))
         if model is None:
@@ -76,6 +80,8 @@ class InterviewRepository:
         model.status = "completed" if state.completed else "active"
         if plan_task_id and not model.plan_task_id:
             model.plan_task_id = uuid.UUID(plan_task_id)
+        if interviewer_kit_id and not model.interviewer_kit_id:
+            model.interviewer_kit_id = uuid.UUID(interviewer_kit_id)
 
         await self.session.execute(
             delete(MemoryItemModel).where(MemoryItemModel.session_id == model.id)
@@ -136,7 +142,7 @@ class InterviewRepository:
             return None
         return _session_to_dict(model)
 
-    async def list_sessions(self, limit: int = 50) -> list[dict]:
+    async def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
         result = await self.session.execute(
             select(InterviewSessionModel)
             .where(
@@ -145,6 +151,7 @@ class InterviewRepository:
             )
             .order_by(InterviewSessionModel.updated_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return [_session_to_summary(model) for model in result.scalars().all()]
 
@@ -177,6 +184,7 @@ def _session_to_summary(model: InterviewSessionModel) -> dict:
         "seniority": model.seniority,
         "status": model.status,
         "plan_task_id": str(model.plan_task_id) if getattr(model, "plan_task_id", None) else None,
+        "interviewer_kit_id": str(model.interviewer_kit_id) if getattr(model, "interviewer_kit_id", None) else None,
         "created_at": model.created_at.isoformat(),
         "updated_at": model.updated_at.isoformat(),
     }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
-  ChevronLeft,
   Loader2,
   PenLine,
   RefreshCw,
@@ -11,9 +10,15 @@ import {
   Target,
   TrendingUp,
   Undo2,
-  XCircle
+  XCircle,
+  Brain,
+  Crosshair
 } from "lucide-react";
 import { getInterviewAgentClient } from "../../apiClient";
+import { SpecializedDrillPanel } from "../../features/training/SpecializedDrillPanel";
+import { SpacedReviewPanel } from "../../features/training/SpacedReviewPanel";
+import { InfiniteScrollSentinel } from "../common/InfiniteScrollSentinel";
+import { mergeUniqueById } from "../../hooks/useInfiniteScroll";
 
 const api = getInterviewAgentClient();
 
@@ -58,28 +63,47 @@ function choiceText(choice) {
   return String(choice || "");
 }
 
-export function TrainingPage({ account, onRequireAuth }) {
-  const [view, setView] = useState("practice"); // practice | wrong
+export function TrainingPage({ account, navigationTarget, onRequireAuth }) {
+  const [view, setView] = useState("practice"); // practice | drill | spaced | wrong
   const [filters, setFilters] = useState({ category: "", difficulty: "", question_type: "", keyword: "" });
   const [questions, setQuestions] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [offset, setOffset] = useState(0);
   const [wrongBook, setWrongBook] = useState([]);
+  const [wrongBookState, setWrongBookState] = useState({ loading: false, hasMore: true, error: "" });
   const [stats, setStats] = useState(null);
   const [activeId, setActiveId] = useState("");
   const [answerDraft, setAnswerDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const startedAtRef = useRef(0);
+  const requestRef = useRef(0);
+  const loadingRef = useRef(false);
+  const wrongBookRef = useRef([]);
+  const wrongBookLoadingRef = useRef(false);
 
   const pageSize = 20;
 
-  const loadQuestions = useCallback(async (nextOffset = 0, random = false) => {
-    if (!account) return;
+  useEffect(() => {
+    if (!navigationTarget?.nonce) return;
+    const category = String(navigationTarget.category || "");
+    const questionId = String(navigationTarget.question_id || "");
+    setView("practice");
+    if (category) setFilters((current) => ({ ...current, category }));
+    if (questionId) setActiveId(questionId);
+  }, [navigationTarget?.nonce]);
+
+  const loadQuestions = useCallback(async ({ reset = false, random = false } = {}) => {
+    if (!account || (loadingRef.current && !reset)) return;
+    const requestId = reset ? ++requestRef.current : requestRef.current;
+    const nextOffset = reset ? 0 : questions.length;
+    if (!reset && nextOffset >= total) return;
+    loadingRef.current = true;
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
       const params = {
         category: filters.category || undefined,
@@ -92,33 +116,46 @@ export function TrainingPage({ account, onRequireAuth }) {
       const data = await api.reviewSite.listPracticeQuestions(params);
       let items = Array.isArray(data?.items) ? data.items : [];
       if (random) items = [...items].sort(() => Math.random() - 0.5);
-      setQuestions(items);
+      if (requestId !== requestRef.current) return;
+      setQuestions((current) => reset ? items : mergeUniqueById(current, items));
       setTotal(Number(data?.total || 0));
       setOffset(nextOffset);
-      setActiveId(items[0]?.id || "");
+      if (reset) setActiveId(items[0]?.id || "");
       setResult(null);
       setAnswerDraft("");
       startedAtRef.current = Date.now();
     } catch (err) {
-      setError(err?.message || "题目加载失败");
+      if (requestId !== requestRef.current) return;
+      setLoadError(err?.message || "题目加载失败");
+      if (reset) setError(err?.message || "题目加载失败");
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
-  }, [account, filters, total]);
+  }, [account, filters, questions.length, total]);
 
-  const loadWrongBook = useCallback(async () => {
-    if (!account) return;
-    setLoading(true);
+  const loadWrongBook = useCallback(async ({ append = false } = {}) => {
+    if (!account || wrongBookLoadingRef.current || (append && !wrongBookState.hasMore)) return;
+    wrongBookLoadingRef.current = true;
+    setWrongBookState((current) => ({ ...current, loading: true, error: "" }));
     setError("");
     try {
-      const items = await api.reviewSite.listWrongBook();
-      setWrongBook(Array.isArray(items) ? items : []);
+      const items = await api.reviewSite.listWrongBook({ limit: pageSize, offset: append ? wrongBookRef.current.length : 0 });
+      const incoming = Array.isArray(items) ? items : [];
+      const next = append ? mergeUniqueById(wrongBookRef.current, incoming) : incoming;
+      wrongBookRef.current = next;
+      setWrongBook(next);
+      setWrongBookState({ loading: false, hasMore: incoming.length === pageSize, error: "" });
     } catch (err) {
-      setError(err?.message || "错题本加载失败");
+      const message = err?.message || "错题本加载失败";
+      setWrongBookState((current) => ({ ...current, loading: false, error: message }));
+      if (!append) setError(message);
     } finally {
-      setLoading(false);
+      wrongBookLoadingRef.current = false;
     }
-  }, [account]);
+  }, [account, wrongBookState.hasMore]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -132,17 +169,15 @@ export function TrainingPage({ account, onRequireAuth }) {
   useEffect(() => {
     if (!account) return;
     loadStats();
-    if (view === "practice") loadQuestions(0);
-    else loadWrongBook();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account, view]);
+  }, [account]);
 
   useEffect(() => {
-    if (account && view === "practice") {
-      loadQuestions(0);
-    }
+    if (!account) return;
+    if (view === "practice") loadQuestions({ reset: true });
+    else if (view === "wrong") loadWrongBook();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.category, filters.difficulty, filters.question_type]);
+  }, [account, view, filters.category, filters.difficulty, filters.question_type]);
 
   const activeQuestion = useMemo(
     () => questions.find((q) => q.id === activeId) || questions[0] || null,
@@ -154,6 +189,13 @@ export function TrainingPage({ account, onRequireAuth }) {
     setResult(null);
     setAnswerDraft("");
   }, [activeQuestion?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const questionId = String(navigationTarget?.question_id || "");
+    if (questionId && questions.some((question) => question.id === questionId)) {
+      setActiveId(questionId);
+    }
+  }, [navigationTarget?.nonce, navigationTarget?.question_id, questions]);
 
   async function submitAnswer(answerText) {
     if (!account) return onRequireAuth?.();
@@ -212,6 +254,10 @@ export function TrainingPage({ account, onRequireAuth }) {
     setTotal(1);
   }
 
+  function practiceQuestion(question) {
+    practiceWrongEntry({ question });
+  }
+
   if (!account) {
     return (
       <div className="training-page">
@@ -237,6 +283,12 @@ export function TrainingPage({ account, onRequireAuth }) {
         <div className="training-tabs">
           <button type="button" className={view === "practice" ? "active" : ""} onClick={() => setView("practice")}>
             <Target size={14} /> 题库练习
+          </button>
+          <button type="button" className={view === "drill" ? "active" : ""} onClick={() => setView("drill")}>
+            <Crosshair size={14} /> 专项训练
+          </button>
+          <button type="button" className={view === "spaced" ? "active" : ""} onClick={() => setView("spaced")}>
+            <Brain size={14} /> 到期复习
           </button>
           <button type="button" className={view === "wrong" ? "active" : ""} onClick={() => setView("wrong")}>
             <XCircle size={14} /> 错题本 {stats?.wrong_book_count ? `(${stats.wrong_book_count})` : ""}
@@ -270,17 +322,17 @@ export function TrainingPage({ account, onRequireAuth }) {
               placeholder="搜索关键词"
               value={filters.keyword}
               onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === "Enter") loadQuestions(0); }}
+            onKeyDown={(e) => { if (e.key === "Enter") loadQuestions({ reset: true }); }}
             />
-            <button type="button" className="btn-ghost-v3 small" onClick={() => loadQuestions(0)}>
+            <button type="button" className="btn-ghost-v3 small" onClick={() => loadQuestions({ reset: true })}>
               <RefreshCw size={13} /> 查询
             </button>
-            <button type="button" className="btn-primary-v3 small" onClick={() => loadQuestions(0, true)}>
+            <button type="button" className="btn-primary-v3 small" onClick={() => loadQuestions({ reset: true, random: true })}>
               <Shuffle size={13} /> 随机一组
             </button>
           </div>
 
-          {loading ? (
+          {loading && !questions.length ? (
             <div className="home-loading"><Loader2 size={22} className="spin" /> 正在抽题…</div>
           ) : !activeQuestion ? (
             <div className="reports-empty card-v3">
@@ -298,20 +350,17 @@ export function TrainingPage({ account, onRequireAuth }) {
                     className={`training-question-item ${q.id === activeQuestion.id ? "active" : ""}`}
                     onClick={() => setActiveId(q.id)}
                   >
-                    <span>{offset + index + 1}</span>
+                    <span>{index + 1}</span>
                     <strong>{(q.prompt || "未命名题目").slice(0, 28)}</strong>
                     <i>{isChoice(q) ? "选择" : "主观"}</i>
                   </button>
                 ))}
-                <div className="training-pager">
-                  <button type="button" disabled={offset === 0} onClick={() => loadQuestions(Math.max(0, offset - pageSize))}>
-                    <ChevronLeft size={14} /> 上一页
-                  </button>
-                  <span>{Math.floor(offset / pageSize) + 1} / {Math.max(1, Math.ceil(total / pageSize))}</span>
-                  <button type="button" disabled={offset + pageSize >= total} onClick={() => loadQuestions(offset + pageSize)}>
-                    下一页 <ArrowRight size={14} />
-                  </button>
-                </div>
+                <InfiniteScrollSentinel
+                  hasMore={questions.length < total}
+                  loading={loading}
+                  error={loadError}
+                  onLoadMore={() => loadQuestions()}
+                />
               </div>
 
               <QuestionCard
@@ -324,14 +373,18 @@ export function TrainingPage({ account, onRequireAuth }) {
                 onNext={() => {
                   const idx = questions.findIndex((q) => q.id === activeQuestion.id);
                   if (idx >= 0 && idx < questions.length - 1) setActiveId(questions[idx + 1].id);
-                  else loadQuestions(offset + pageSize);
+                  else if (questions.length < total) loadQuestions();
                 }}
               />
             </div>
           )}
         </>
+      ) : view === "wrong" ? (
+        <WrongBookView state={wrongBookState} entries={wrongBook} onLoadMore={() => loadWrongBook({ append: true })} onPractice={practiceWrongEntry} onMark={markWrong} />
+      ) : view === "drill" ? (
+        <SpecializedDrillPanel onPractice={practiceQuestion} />
       ) : (
-        <WrongBookView loading={loading} entries={wrongBook} onPractice={practiceWrongEntry} onMark={markWrong} />
+        <SpacedReviewPanel onPractice={practiceQuestion} />
       )}
     </div>
   );
@@ -434,8 +487,8 @@ function QuestionCard({ question, result, submitting, answerDraft, onDraftChange
   );
 }
 
-function WrongBookView({ loading, entries, onPractice, onMark }) {
-  if (loading) return <div className="home-loading"><Loader2 size={22} className="spin" /> 加载错题本…</div>;
+function WrongBookView({ state, entries, onLoadMore, onPractice, onMark }) {
+  if (state.loading && !entries.length) return <div className="home-loading"><Loader2 size={22} className="spin" /> 加载错题本…</div>;
   if (!entries.length) {
     return (
       <div className="reports-empty card-v3">
@@ -474,6 +527,7 @@ function WrongBookView({ loading, entries, onPractice, onMark }) {
           </article>
         );
       })}
+      <InfiniteScrollSentinel hasMore={state.hasMore} loading={state.loading} error={state.error} onLoadMore={onLoadMore} />
     </div>
   );
 }

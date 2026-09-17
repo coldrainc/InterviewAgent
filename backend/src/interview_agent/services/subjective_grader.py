@@ -10,14 +10,14 @@ import json
 import logging
 from typing import Any
 
+from interview_agent.core.prompt_policy import (
+    subjective_grader_system_prompt,
+    subjective_grader_user_prompt,
+)
+
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "你是一名严谨的公考/技术面试刷题阅卷官。根据题目、参考答案与用户作答评分，"
-    "只输出一个 JSON 对象，不要使用代码块，不要输出多余文字。格式：\n"
-    '{"score": 0到100的整数, "feedback": "一句话中文讲评", '
-    '"suggestions": ["改进建议1", "改进建议2", "改进建议3"]}'
-)
+SYSTEM_PROMPT = subjective_grader_system_prompt()
 
 
 class LlmSubjectiveGrader:
@@ -40,20 +40,7 @@ class LlmSubjectiveGrader:
 
     @staticmethod
     def _build_prompt(question: dict[str, Any], answer: str) -> str:
-        reference = str(question.get("answer") or "").strip() or "（无标准答案，按要点完整性评分）"
-        explanation = str(question.get("answer_detail") or question.get("explanation") or "").strip()
-        subject = str(question.get("subject") or "").strip()
-        parts = [
-            f"题型：{question.get('question_type') or '主观题'}",
-            f"科目/方向：{subject or '综合'}",
-            f"题目：{question.get('prompt') or ''}",
-            f"参考答案：{reference}",
-        ]
-        if explanation:
-            parts.append(f"参考解析：{explanation}")
-        parts.append(f"用户作答：{answer}")
-        parts.append("请按要点覆盖率、逻辑结构、术语准确性给出 0-100 分与中文讲评。")
-        return "\n\n".join(parts)
+        return subjective_grader_user_prompt(question, answer)
 
     @staticmethod
     def _parse(raw: str) -> dict[str, Any] | None:
@@ -69,7 +56,7 @@ class LlmSubjectiveGrader:
         try:
             payload = json.loads(text[start : end + 1])
         except (json.JSONDecodeError, ValueError):
-            logger.warning("subjective grader returned non-json content: %s", raw[:200])
+            logger.warning("subjective grader returned non-json content")
             return None
         if not isinstance(payload, dict):
             return None

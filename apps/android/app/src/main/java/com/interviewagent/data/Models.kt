@@ -59,7 +59,9 @@ data class PracticeQuestionListResponse(
     val items: List<PracticeQuestion>,
     val total: Int,
     val limit: Int,
-    val offset: Int
+    val offset: Int,
+    val hasMore: Boolean = false,
+    val nextOffset: Int? = null
 )
 
 data class PracticeAttemptResponse(
@@ -122,7 +124,8 @@ data class CreateSessionRequest(
     val seniority: String = "高级",
     val interviewGoal: String = "请基于我的简历和 AI 项目经历进行真实面试。",
     val focusAreas: List<String> = listOf("简历项目深挖", "RAG / Agent 生产化", "评测、上线、安全与观测"),
-    val resumeId: String? = null
+    val resumeId: String? = null,
+    val planTaskId: String? = null
 )
 
 data class ChatResponse(
@@ -147,4 +150,52 @@ data class ChatMessage(
 data class StreamEvent(
     val event: String,
     val data: Map<String, Any?>
+)
+
+data class LearningTask(
+    val id: String,
+    val title: String,
+    val taskType: String,
+    val status: String,
+    val version: Int,
+    val done: Boolean,
+    val actionLabel: String,
+    val target: LearningTaskTarget = LearningTaskTarget()
+)
+
+data class LearningTaskTarget(
+    val planId: String = "",
+    val dayId: String = "",
+    val taskId: String = "",
+    val category: String = "",
+    val questionId: String = "",
+    val mode: String = "",
+    val focus: String = ""
+)
+
+data class LearningToday(
+    val tasks: List<LearningTask> = emptyList(),
+    val done: Int = 0,
+    val total: Int = 0,
+    val streak: Int = 0,
+    val advice: String = "",
+    val nextActionTitle: String = ""
+)
+
+data class ReviewPlan(
+    val id: String,
+    val title: String,
+    val status: String,
+    val totalDays: Int = 0,
+    val completedTasks: Int = 0,
+    val totalTasks: Int = 0
+)
+
+data class InterviewKit(
+    val id: String,
+    val title: String,
+    val targetRole: String,
+    val durationMinutes: Int,
+    val questionCount: Int,
+    val version: Int
 )

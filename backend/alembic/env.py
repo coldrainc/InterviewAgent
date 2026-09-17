@@ -10,6 +10,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from interview_agent.infrastructure.db.models import Base
+from interview_agent.learning import models as learning_models  # noqa: F401
+from interview_agent.interviewer import models as interviewer_models  # noqa: F401
+from interview_agent.training import models as training_models  # noqa: F401
+from interview_agent.privacy import models as privacy_models  # noqa: F401
 
 config = context.config
 

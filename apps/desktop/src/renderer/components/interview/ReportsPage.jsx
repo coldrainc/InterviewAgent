@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,7 +14,10 @@ import {
   X
 } from "lucide-react";
 import { getInterviewAgentClient } from "../../apiClient";
-import { formatDateTime } from "../../utils/interview";
+import { formatDateTime, normalizeDesktopError } from "../../utils/interview";
+import { redactSensitiveText } from "../../utils/productSafety";
+import { InfiniteScrollSentinel } from "../common/InfiniteScrollSentinel";
+import { mergeUniqueById } from "../../hooks/useInfiniteScroll";
 
 const api = getInterviewAgentClient();
 
@@ -41,25 +44,38 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [planPicker, setPlanPicker] = useState({ open: false, report: null, plans: [], adding: false });
+  const [planPicker, setPlanPicker] = useState({ open: false, report: null, plans: [], adding: false, loading: false, hasMore: true, error: "" });
+  const planPickerRef = useRef([]);
+  const planPickerLoadingRef = useRef(false);
+  const reportsRef = useRef([]);
+  const sessionsRef = useRef([]);
+  const loadingRef = useRef(false);
 
-  const load = useCallback(async () => {
-    if (!account) return;
-    setState((current) => ({ ...current, status: "loading", error: "" }));
+  const load = useCallback(async ({ append = false } = {}) => {
+    if (!account || loadingRef.current) return;
+    loadingRef.current = true;
+    setState((current) => ({ ...current, status: append ? "loading-more" : "loading", error: "" }));
     try {
       const [result, sessionList] = await Promise.all([
-        api.study.listReports(50),
-        api.listSessions().catch(() => [])
+        api.study.listReports(20, append ? reportsRef.current.length : 0),
+        append ? Promise.resolve(sessionsRef.current) : api.listSessions({ limit: 100 }).catch(() => [])
       ]);
+      const incoming = Array.isArray(result?.reports) ? result.reports : [];
+      const mergedReports = append ? mergeUniqueById(reportsRef.current, incoming) : incoming;
+      reportsRef.current = mergedReports;
       setState({
         status: "ready",
-        reports: Array.isArray(result?.reports) ? result.reports : [],
+        reports: mergedReports,
         trend: result?.trend || null,
+        hasMore: Boolean(result?.has_more),
         error: ""
       });
-      setSessions(Array.isArray(sessionList) ? sessionList : []);
+      sessionsRef.current = Array.isArray(sessionList) ? sessionList : [];
+      setSessions(sessionsRef.current);
     } catch (error) {
-      setState({ status: "error", reports: [], trend: null, error: error?.message || "报告加载失败" });
+      setState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error, "报告加载失败，请稍后重试。") }));
+    } finally {
+      loadingRef.current = false;
     }
   }, [account]);
 
@@ -81,7 +97,7 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
       const data = await api.study.getReport(report.session_id);
       setDetail(data);
     } catch (error) {
-      window.alert(`报告详情加载失败：${error?.message || "未知错误"}`);
+      window.alert(`报告详情加载失败：${normalizeDesktopError(error, "请稍后重试。")}`);
       setSelectedId("");
     } finally {
       setDetailLoading(false);
@@ -89,11 +105,24 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
   }
 
   async function openAddToPlan(report) {
+    planPickerRef.current = [];
+    setPlanPicker({ open: true, report, plans: [], adding: false, loading: true, hasMore: true, error: "" });
+    await loadMorePlans(report, false);
+  }
+
+  async function loadMorePlans(report = planPicker.report, append = true) {
+    if (!report || planPickerLoadingRef.current || (append && !planPicker.hasMore)) return;
+    planPickerLoadingRef.current = true;
+    setPlanPicker((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const plans = await api.reviewSite.listPlans();
-      setPlanPicker({ open: true, report, plans: Array.isArray(plans) ? plans : [], adding: false });
+      const incoming = await api.reviewSite.listPlans({ limit: 20, offset: append ? planPickerRef.current.length : 0 });
+      const next = append ? mergeUniqueById(planPickerRef.current, incoming) : incoming;
+      planPickerRef.current = next;
+      setPlanPicker((current) => ({ ...current, open: true, report, plans: next, loading: false, hasMore: incoming.length === 20, error: "" }));
     } catch (error) {
-      window.alert(`计划加载失败：${error?.message || "未知错误"}`);
+      setPlanPicker((current) => ({ ...current, loading: false, error: normalizeDesktopError(error, "请稍后重试。") }));
+    } finally {
+      planPickerLoadingRef.current = false;
     }
   }
 
@@ -103,10 +132,10 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
       const result = await api.study.addReportTasks(planId, planPicker.report.session_id);
       const count = result?.data?.created?.length ?? result?.created?.length ?? 0;
       window.alert(`已把 ${count || ""} 条改进建议加入复习计划，可在复习站对应日期查看。`);
-      setPlanPicker({ open: false, report: null, plans: [], adding: false });
+      setPlanPicker({ open: false, report: null, plans: [], adding: false, loading: false, hasMore: true, error: "" });
       onNavigate?.("review-site");
     } catch (error) {
-      window.alert(`加入计划失败：${error?.message || "未知错误"}`);
+      window.alert(`加入计划失败：${normalizeDesktopError(error, "请稍后重试。")}`);
       setPlanPicker((current) => ({ ...current, adding: false }));
     }
   }
@@ -149,7 +178,7 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
       {state.status === "loading" && state.reports.length === 0 && (
         <div className="home-loading"><Loader2 size={22} className="spin" /> 正在加载报告…</div>
       )}
-      {state.status === "error" && (
+      {state.status === "error" && state.reports.length === 0 && (
         <div className="home-error card-v3">
           <h3>报告加载失败</h3>
           <p>{state.error}</p>
@@ -205,6 +234,12 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
           );
         })}
       </div>
+      <InfiniteScrollSentinel
+        hasMore={Boolean(state.hasMore)}
+        loading={state.status === "loading-more"}
+        error={state.status === "error" ? state.error : ""}
+        onLoadMore={() => load({ append: true })}
+      />
 
       {selectedId && (
         <ReportDetail
@@ -216,19 +251,21 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
       )}
 
       {planPicker.open && (
-        <div className="modal-mask" onClick={() => setPlanPicker({ open: false, report: null, plans: [], adding: false })}>
+        <div className="modal-mask" onClick={() => setPlanPicker({ open: false, report: null, plans: [], adding: false, loading: false, hasMore: true, error: "" })}>
           <div className="modal-card card-v3" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h3>加入复习计划</h3>
-              <button type="button" className="icon-button" onClick={() => setPlanPicker({ open: false, report: null, plans: [], adding: false })} aria-label="关闭">
+              <button type="button" className="icon-button" onClick={() => setPlanPicker({ open: false, report: null, plans: [], adding: false, loading: false, hasMore: true, error: "" })} aria-label="关闭">
                 <X size={16} />
               </button>
             </div>
             <p className="modal-sub">选择一个计划，报告中的改进建议会生成「重点」任务写入最近的未完成日。</p>
-            {planPicker.plans.length === 0 ? (
+            {planPicker.loading && planPicker.plans.length === 0 ? (
+              <div className="home-loading"><Loader2 size={18} className="spin" /> 正在加载计划…</div>
+            ) : planPicker.plans.length === 0 ? (
               <div className="modal-empty">
                 <p>还没有可用的复习计划。</p>
-                <button type="button" className="btn-primary-v3" onClick={() => { setPlanPicker({ open: false, report: null, plans: [], adding: false }); onNavigate?.("planner"); }}>
+                <button type="button" className="btn-primary-v3" onClick={() => { setPlanPicker({ open: false, report: null, plans: [], adding: false, loading: false, hasMore: true, error: "" }); onNavigate?.("planner"); }}>
                   <Plus size={14} /> 去生成计划
                 </button>
               </div>
@@ -242,6 +279,9 @@ export function ReportsPage({ account, onRequireAuth, onOpenSession, onNavigate 
                     </button>
                   </li>
                 ))}
+                <li className="plan-pick-sentinel">
+                  <InfiniteScrollSentinel hasMore={planPicker.hasMore} loading={planPicker.loading} error={planPicker.error} onLoadMore={() => loadMorePlans()} />
+                </li>
               </ul>
             )}
           </div>
@@ -293,7 +333,7 @@ function ReportDetail({ loading, report, onClose, onOpenSession }) {
                 <small>综合评分</small>
               </div>
               <div className="report-detail-meta">
-                {report.summary && <p>{report.summary}</p>}
+                {report.summary && <p>{redactSensitiveText(report.summary)}</p>}
                 <div className="report-card-tags">
                   {(report.strength_tags || []).map((tag) => <i key={tag} className="v3-chip good"><CheckCircle2 size={12} /> {tag}</i>)}
                   {(report.weakness_tags || []).map((tag) => <i key={tag} className="v3-chip weak">{tag}</i>)}
@@ -324,8 +364,8 @@ function ReportDetail({ loading, report, onClose, onOpenSession }) {
                 <ul className="report-suggestion-list">
                   {suggestions.map((item, index) => (
                     <li key={index}>
-                      <strong>{item.title || `建议 ${index + 1}`}</strong>
-                      {item.detail && <p>{item.detail}</p>}
+                      <strong>{redactSensitiveText(item.title || `建议 ${index + 1}`)}</strong>
+                      {item.detail && <p>{redactSensitiveText(item.detail)}</p>}
                     </li>
                   ))}
                 </ul>

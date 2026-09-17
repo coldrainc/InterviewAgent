@@ -4,7 +4,7 @@ import hashlib
 import re
 import secrets
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
@@ -23,6 +23,7 @@ from interview_agent.domain.billing import (
 )
 from interview_agent.infrastructure.db.models import (
     CreditLedgerModel,
+    ModelPolicyModel,
     RechargeOrderModel,
     UsageRecordModel,
     UserAccountModel,
@@ -73,6 +74,7 @@ class PaymentOrderResult:
     tenant_id: str
     user_id: str
     amount_micros: int
+    credited_amount_micros: int
     payment_provider: str
     external_order_id: str
     status: str
@@ -123,9 +125,23 @@ class BillingService:
         password: str,
     ) -> UserAccountModel | None:
         account = await self._get_by_email(tenant_id, _normalize_email(email))
-        if account is None or account.password_hash is None:
+        if account is None or account.status != "active" or account.password_hash is None:
             return None
         return account if _verify_password(password, account.password_hash) else None
+
+    async def replace_password(
+        self,
+        *,
+        tenant_id: str,
+        email: str,
+        password: str,
+    ) -> UserAccountModel | None:
+        account = await self._get_by_email(tenant_id, _normalize_email(email))
+        if account is None or account.status != "active":
+            return None
+        account.password_hash = _hash_password(password)
+        await self.session.flush()
+        return account
 
     async def get_or_create_account(
         self,
@@ -208,6 +224,7 @@ class BillingService:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 amount_micros=amount_micros,
+                credit_amount_micros=amount_micros,
                 payment_provider=payment_provider,
                 external_order_id=order_id,
                 metadata_json=metadata or {},
@@ -246,11 +263,15 @@ class BillingService:
         tenant_id: str,
         user_id: str,
         amount_credits: Decimal | int | float | str,
+        credited_amount: Decimal | int | float | str | None = None,
         payment_provider: str,
         external_order_id: str | None = None,
         metadata: dict | None = None,
     ) -> PaymentOrderResult:
         amount_micros = _amount_to_micros(amount_credits)
+        credited_amount_micros = _amount_to_micros(
+            credited_amount if credited_amount is not None else amount_credits
+        )
         provider = _clean_payment_provider(payment_provider)
         order_id = _clean_order_id(external_order_id) if external_order_id else f"order-{uuid.uuid4()}"
         existing = await self.session.execute(
@@ -264,6 +285,7 @@ class BillingService:
             if (
                 existing_order.user_id != user_id
                 or existing_order.amount_micros != amount_micros
+                or (existing_order.credit_amount_micros or existing_order.amount_micros) != credited_amount_micros
                 or existing_order.payment_provider != provider
             ):
                 raise BillingError("支付订单已存在，但用户、金额或渠道不一致。")
@@ -271,6 +293,7 @@ class BillingService:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 amount_micros=existing_order.amount_micros,
+                credited_amount_micros=existing_order.credit_amount_micros or existing_order.amount_micros,
                 payment_provider=existing_order.payment_provider,
                 external_order_id=existing_order.external_order_id,
                 status=existing_order.status,
@@ -284,6 +307,7 @@ class BillingService:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 amount_micros=amount_micros,
+                credit_amount_micros=credited_amount_micros,
                 status="pending",
                 payment_provider=provider,
                 external_order_id=order_id,
@@ -295,6 +319,7 @@ class BillingService:
             tenant_id=tenant_id,
             user_id=user_id,
             amount_micros=amount_micros,
+            credited_amount_micros=credited_amount_micros,
             payment_provider=provider,
             external_order_id=order_id,
             status="pending",
@@ -324,6 +349,7 @@ class BillingService:
             tenant_id=tenant_id,
             user_id=user_id,
             amount_micros=order.amount_micros,
+            credited_amount_micros=order.credit_amount_micros or order.amount_micros,
             payment_provider=order.payment_provider,
             external_order_id=order.external_order_id,
             status=order.status,
@@ -347,6 +373,7 @@ class BillingService:
             tenant_id=order.tenant_id,
             user_id=order.user_id,
             amount_micros=order.amount_micros,
+            credited_amount_micros=order.credit_amount_micros or order.amount_micros,
             payment_provider=order.payment_provider,
             external_order_id=order.external_order_id,
             status=order.status,
@@ -384,6 +411,7 @@ class BillingService:
             tenant_id=tenant_id,
             user_id=user_id,
             amount_micros=order.amount_micros,
+            credited_amount_micros=order.credit_amount_micros or order.amount_micros,
             payment_provider=order.payment_provider,
             external_order_id=order.external_order_id,
             status=order.status,
@@ -420,7 +448,8 @@ class BillingService:
                 return RechargeResult(account=_snapshot(account), created=False)
             if existing_order.status not in {"pending", "created"}:
                 raise BillingError("支付订单状态不允许入账。")
-            account.credit_balance_micros += amount_micros
+            credited_amount_micros = existing_order.credit_amount_micros or existing_order.amount_micros
+            account.credit_balance_micros += credited_amount_micros
             existing_order.status = "paid"
             existing_order.payment_provider = provider
             existing_order.metadata_json = {
@@ -434,7 +463,7 @@ class BillingService:
                     tenant_id=tenant_id,
                     user_id=user_id,
                     kind="recharge",
-                    amount_micros=amount_micros,
+                    amount_micros=credited_amount_micros,
                     balance_after_micros=account.credit_balance_micros,
                     external_order_id=order_id,
                     metadata_json=existing_order.metadata_json,
@@ -460,7 +489,7 @@ class BillingService:
         model_id: str,
     ) -> AccountSnapshot:
         account = await self.get_or_create_account(tenant_id=tenant_id, user_id=user_id, for_update=True)
-        model = get_model_pricing(model_id)
+        model = await self.resolve_model_pricing(tenant_id=tenant_id, model_id=model_id)
         minimum_micros = calculate_charge(model, TokenUsage(input_tokens=1, output_tokens=1))
         if account.trial_uses_remaining <= 0 and account.credit_balance_micros < minimum_micros:
             raise InsufficientCreditsError("试用次数已用完，积分余额不足，请先充值。")
@@ -481,7 +510,7 @@ class BillingService:
         idempotency_key: str | None = None,
     ) -> ChargeResult:
         account = await self.get_or_create_account(tenant_id=tenant_id, user_id=user_id, for_update=True)
-        model = get_model_pricing(model_id)
+        model = await self.resolve_model_pricing(tenant_id=tenant_id, model_id=model_id)
         if idempotency_key:
             existing = await self.session.execute(
                 select(UsageRecordModel).where(
@@ -493,7 +522,11 @@ class BillingService:
             if existing_record is not None:
                 return ChargeResult(
                     account=_snapshot(account),
-                    model=get_model_pricing(existing_record.model_id),
+                    model=await self.resolve_model_pricing(
+                        tenant_id=tenant_id,
+                        model_id=existing_record.model_id,
+                        allow_disabled=True,
+                    ),
                     usage=TokenUsage(
                         input_tokens=existing_record.input_tokens,
                         output_tokens=existing_record.output_tokens,
@@ -563,6 +596,86 @@ class BillingService:
             trial_used=trial_used,
         )
 
+    async def adjust_balance(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        amount_credits: Decimal | int | float | str,
+        actor_id: str,
+        reason: str,
+    ) -> AccountSnapshot:
+        amount_micros = credits_to_micros(_decimal_amount(amount_credits))
+        if amount_micros == 0:
+            raise BillingError("余额调整金额不能为 0。")
+        account = await self.get_or_create_account(tenant_id=tenant_id, user_id=user_id, for_update=True)
+        next_balance = account.credit_balance_micros + amount_micros
+        if next_balance < 0:
+            raise BillingError("扣减后余额不能小于 0。")
+        account.credit_balance_micros = next_balance
+        self.session.add(
+            CreditLedgerModel(
+                account_id=account.id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                kind="admin_adjustment",
+                amount_micros=amount_micros,
+                balance_after_micros=next_balance,
+                metadata_json={"actor_id": actor_id, "reason": reason},
+            )
+        )
+        await self.session.flush()
+        return _snapshot(account)
+
+    async def resolve_model_pricing(
+        self,
+        *,
+        tenant_id: str,
+        model_id: str,
+        allow_disabled: bool = False,
+    ) -> ModelPricing:
+        base = get_model_pricing(model_id)
+        result = await self.session.execute(
+            select(ModelPolicyModel).where(
+                ModelPolicyModel.tenant_id == tenant_id,
+                ModelPolicyModel.model_id == base.id,
+            )
+        )
+        policy = result.scalar_one_or_none()
+        enabled = policy.enabled if policy is not None else True
+        if not enabled and not allow_disabled:
+            raise BillingError("当前模型已停用，请选择其他模型。")
+        return replace(
+            base,
+            enabled=enabled,
+            input_usd_per_1m=(
+                Decimal(policy.input_usd_per_1m)
+                if policy is not None and policy.input_usd_per_1m
+                else base.input_usd_per_1m
+            ),
+            output_usd_per_1m=(
+                Decimal(policy.output_usd_per_1m)
+                if policy is not None and policy.output_usd_per_1m
+                else base.output_usd_per_1m
+            ),
+        )
+
+    async def resolve_model_id(self, *, tenant_id: str, requested: str | None, fallback: str) -> str:
+        cleaned = str(requested or "").strip()
+        if cleaned:
+            await self.resolve_model_pricing(tenant_id=tenant_id, model_id=cleaned)
+            return cleaned
+        result = await self.session.execute(
+            select(ModelPolicyModel.model_id).where(
+                ModelPolicyModel.tenant_id == tenant_id,
+                ModelPolicyModel.enabled.is_(True),
+                ModelPolicyModel.is_default.is_(True),
+            )
+        )
+        selected = result.scalar_one_or_none() or fallback
+        await self.resolve_model_pricing(tenant_id=tenant_id, model_id=selected)
+        return selected
+
     async def _get_by_user_id(
         self,
         tenant_id: str,
@@ -591,6 +704,27 @@ class BillingService:
 
 def list_model_catalog() -> list[ModelPricing]:
     return [item for item in default_model_catalog().values() if item.enabled]
+
+
+async def list_model_catalog_for_tenant(session: AsyncSession, tenant_id: str) -> list[ModelPricing]:
+    service = BillingService(session)
+    policy_rows = await session.execute(
+        select(ModelPolicyModel).where(ModelPolicyModel.tenant_id == tenant_id)
+    )
+    policies = {item.model_id: item for item in policy_rows.scalars().all()}
+    values = []
+    for item in default_model_catalog().values():
+        policy = policies.get(item.id)
+        if policy is None and not item.enabled:
+            continue
+        resolved = await service.resolve_model_pricing(
+            tenant_id=tenant_id,
+            model_id=item.id,
+            allow_disabled=True,
+        )
+        if resolved.enabled:
+            values.append(resolved)
+    return values
 
 
 def _normalize_email(value: str) -> str:

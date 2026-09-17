@@ -13,6 +13,14 @@ from interview_agent.rag.vector_store import JsonVectorStore, VectorStore
 
 
 INDEX_VERSION = 1
+PRIVATE_SOURCE_ROOTS = {"memory", "conversations", "resumes"}
+
+
+def is_private_index_source(source: str, metadata: dict[str, Any] | None = None) -> bool:
+    if str((metadata or {}).get("data_scope") or "").lower() == "private":
+        return True
+    path = Path(source)
+    return bool(path.parts and path.parts[0].lower() in PRIVATE_SOURCE_ROOTS)
 
 
 @dataclass(frozen=True)
@@ -186,6 +194,7 @@ class PersistentRagIndex:
                     metadata=dict(item["metadata"]),
                 )
                 for item in self.payload.get("chunks", [])
+                if not is_private_index_source(item["source"], dict(item.get("metadata") or {}))
             ]
         return self._chunks
 

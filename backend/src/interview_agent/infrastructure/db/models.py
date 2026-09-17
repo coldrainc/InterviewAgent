@@ -138,6 +138,30 @@ class SecurityEventModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class ClientRequestLogModel(Base):
+    __tablename__ = "client_request_logs"
+    __table_args__ = (
+        Index("ix_client_request_logs_tenant_created", "tenant_id", "created_at"),
+        Index("ix_client_request_logs_tenant_user_created", "tenant_id", "user_id", "created_at"),
+        Index("ix_client_request_logs_platform_created", "client_platform", "created_at"),
+        Index("ix_client_request_logs_request_id", "request_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    user_id: Mapped[str | None] = mapped_column(String(128))
+    auth_platform: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    client_platform: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    client_version: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    method: Mapped[str] = mapped_column(String(16), nullable=False)
+    path: Mapped[str] = mapped_column(String(255), nullable=False)
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    platform_matched: Mapped[bool | None] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class UserRoleAssignmentModel(Base):
     __tablename__ = "user_role_assignments"
     __table_args__ = (
@@ -193,6 +217,7 @@ class RechargeOrderModel(Base):
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
     user_id: Mapped[str] = mapped_column(String(128), nullable=False)
     amount_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    credit_amount_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="paid")
     payment_provider: Mapped[str] = mapped_column(String(64), nullable=False, default="mock")
     external_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -231,6 +256,52 @@ class UsageRecordModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     account: Mapped[UserAccountModel] = relationship(back_populates="usage_records")
+
+
+class ModelPolicyModel(Base):
+    __tablename__ = "model_policies"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "model_id", name="uq_model_policies_tenant_model"),
+        Index("ix_model_policies_tenant_updated", "tenant_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    model_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    input_usd_per_1m: Mapped[str | None] = mapped_column(String(32))
+    output_usd_per_1m: Mapped[str | None] = mapped_column(String(32))
+    updated_by: Mapped[str | None] = mapped_column(String(128))
+    metadata_json: Mapped[dict] = mapped_column(JsonDict(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class SubscriptionPlanModel(Base):
+    __tablename__ = "subscription_plans"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_subscription_plans_tenant_code"),
+        Index("ix_subscription_plans_tenant_sort", "tenant_id", "sort_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UuidString(), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    price_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    credits_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    features_json: Mapped[list] = mapped_column(JsonDict(), nullable=False, default=list)
+    updated_by: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class ResumeModel(Base):
@@ -285,6 +356,9 @@ class InterviewSessionModel(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     plan_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UuidString(), ForeignKey("review_plan_tasks.id", ondelete="SET NULL")
+    )
+    interviewer_kit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UuidString(), ForeignKey("interviewer_kits.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

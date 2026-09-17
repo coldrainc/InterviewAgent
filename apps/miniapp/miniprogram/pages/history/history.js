@@ -1,32 +1,44 @@
 const api = require("../../utils/api");
 const { formatDateTime, normalizeError } = require("../../utils/format");
+const { isAuthenticated } = require("../../utils/auth");
 
 Page({
   data: {
     loading: false,
     sessions: [],
+    authenticated: false,
+    hasMore: true,
     error: ""
   },
 
   onLoad() {
-    api.restoreToken();
-    this.loadSessions();
+    this.guardAndLoad();
   },
 
   onShow() {
-    this.loadSessions();
+    this.guardAndLoad();
   },
 
-  async loadSessions() {
+  guardAndLoad() {
+    const authenticated = isAuthenticated();
+    this.setData({ authenticated, sessions: authenticated ? this.data.sessions : [] });
+    if (authenticated) this.loadSessions();
+  },
+
+  async loadSessions(append = false) {
+    if (!this.data.authenticated) return;
+    if (this.data.loading || (append && !this.data.hasMore)) return;
     this.setData({ loading: true, error: "" });
     try {
-      const sessions = await api.listSessions(50);
+      const sessions = await api.listSessions(20, append ? this.data.sessions.length : 0);
+      const incoming = sessions.map((item) => ({
+        ...item,
+        updatedLabel: formatDateTime(item.updated_at),
+        modeLabel: item.mode === "candidate" ? "Agent 回答我" : "Agent 面试我"
+      }));
       this.setData({
-        sessions: sessions.map((item) => ({
-          ...item,
-          updatedLabel: formatDateTime(item.updated_at),
-          modeLabel: item.mode === "candidate" ? "Agent 回答我" : "Agent 面试我"
-        }))
+        sessions: append ? mergeById(this.data.sessions, incoming) : incoming,
+        hasMore: sessions.length === 20
       });
     } catch (error) {
       this.setData({ error: normalizeError(error) });
@@ -34,6 +46,8 @@ Page({
       this.setData({ loading: false });
     }
   },
+
+  onReachBottom() { this.loadSessions(true); },
 
   async openSession(event) {
     const sessionId = event.currentTarget.dataset.id;
@@ -69,5 +83,14 @@ Page({
     } finally {
       this.setData({ loading: false });
     }
+  },
+
+  openLogin() {
+    wx.switchTab({ url: "/pages/profile/profile" });
   }
 });
+
+function mergeById(current, incoming) {
+  const ids = new Set(current.map((item) => item.id));
+  return current.concat(incoming.filter((item) => !ids.has(item.id)));
+}

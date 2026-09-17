@@ -27,10 +27,16 @@ final class ChatViewModel: ObservableObject {
     @Published var practiceAnswer = ""
     @Published var practiceResult: PracticeAttemptResponse?
     @Published var practiceMessage = ""
+    @Published var resumesHasMore = true
+    @Published var sessionsHasMore = true
+    @Published var practiceHasMore = true
+    private var activeLearningTarget: LearningTaskTarget?
+    private var pendingPracticeQuestionID: String?
 
     private let api: InterviewApiClient
     private var sessionID: String?
     private var practiceStartedAt = Date()
+    private var paging = Set<String>()
 
     init(api: InterviewApiClient) {
         self.api = api
@@ -56,22 +62,26 @@ final class ChatViewModel: ObservableObject {
         authPromptMessage = ""
     }
 
-    func login() async {
+    func passwordLogin(email: String, password: String) async {
+        await authenticate(label: "登录") { try await self.api.login(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    func register(email: String, password: String, displayName: String) async {
+        await authenticate(label: "注册") { try await self.api.register(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password.trimmingCharacters(in: .whitespacesAndNewlines), displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    private func authenticate(label: String, operation: () async throws -> AuthTokenResponse) async {
         guard !isBusy else { return }
         isBusy = true
         accountMessage = ""
         defer { isBusy = false }
         do {
-            _ = try await api.devLogin()
+            _ = try await operation()
             account = try await api.account()
             settings = try? await api.getSettings()
-            accountMessage = "已登录开发账号"
-            await loadResumes()
-            await loadSessions()
-            await loadPractice()
-        } catch {
-            accountMessage = "开发登录失败：\(error.localizedDescription)"
-        }
+            accountMessage = "\(label)成功"
+            await loadResumes(); await loadSessions(); await loadPractice()
+        } catch { accountMessage = "\(label)失败：\(error.localizedDescription)" }
     }
 
     func logout() {
@@ -140,17 +150,24 @@ final class ChatViewModel: ObservableObject {
         return practiceQuestions[currentPracticeIndex]
     }
 
-    func loadPractice() async {
+    func loadPractice(append: Bool = false) async {
         guard account != nil else { return }
+        guard !paging.contains("practice"), !append || practiceHasMore else { return }
+        paging.insert("practice")
+        defer { paging.remove("practice") }
         do {
             let categories = try await api.listPracticeCategories()
             practiceCategories = categories
             if !categories.contains(where: { $0.value == selectedPracticeCategory }) {
                 selectedPracticeCategory = categories.first?.value ?? "ai_application"
             }
-            let response = try await api.listPracticeQuestions(category: selectedPracticeCategory)
-            practiceQuestions = response.items
-            currentPracticeIndex = 0
+            let response = try await api.listPracticeQuestions(category: selectedPracticeCategory, offset: append ? practiceQuestions.count : 0)
+            practiceQuestions = append ? unique(practiceQuestions + response.items) : response.items
+            practiceHasMore = response.hasMore
+            currentPracticeIndex = pendingPracticeQuestionID.flatMap { pending in
+                response.items.firstIndex(where: { $0.id == pending })
+            } ?? 0
+            pendingPracticeQuestionID = nil
             practiceAnswer = ""
             practiceResult = nil
             practiceStartedAt = Date()
@@ -162,6 +179,11 @@ final class ChatViewModel: ObservableObject {
     func selectPracticeCategory(_ category: String) async {
         selectedPracticeCategory = category
         await loadPractice()
+    }
+
+    func prepareLearningTask(_ task: LearningTask) {
+        activeLearningTarget = task.taskType == "interview" ? task.linkPayload : nil
+        pendingPracticeQuestionID = task.taskType == "practice" ? task.linkPayload?.questionID : nil
     }
 
     func seedPracticeQuestions() async {
@@ -185,6 +207,7 @@ final class ChatViewModel: ObservableObject {
         practiceAnswer = ""
         practiceResult = nil
         practiceStartedAt = Date()
+        if currentPracticeIndex >= practiceQuestions.count - 6 { Task { await loadPractice(append: true) } }
     }
 
     func submitPracticeAnswer() async {
@@ -204,10 +227,15 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    func loadResumes() async {
+    func loadResumes(append: Bool = false) async {
         guard account != nil else { return }
+        guard !paging.contains("resumes"), !append || resumesHasMore else { return }
+        paging.insert("resumes")
+        defer { paging.remove("resumes") }
         do {
-            resumes = try await api.listResumes()
+            let incoming = try await api.listResumes(offset: append ? resumes.count : 0)
+            resumes = append ? unique(resumes + incoming) : incoming
+            resumesHasMore = incoming.count == 20
             if selectedResumeID == nil {
                 selectedResumeID = resumes.first?.id
             }
@@ -258,13 +286,23 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    func loadSessions() async {
+    func loadSessions(append: Bool = false) async {
         guard account != nil else { return }
+        guard !paging.contains("sessions"), !append || sessionsHasMore else { return }
+        paging.insert("sessions")
+        defer { paging.remove("sessions") }
         do {
-            sessions = try await api.listSessions()
+            let incoming = try await api.listSessions(offset: append ? sessions.count : 0)
+            sessions = append ? unique(sessions + incoming) : incoming
+            sessionsHasMore = incoming.count == 20
         } catch {
             historyMessage = "加载历史失败：\(error.localizedDescription)"
         }
+    }
+
+    private func unique<T: Identifiable>(_ items: [T]) -> [T] where T.ID: Hashable {
+        var seen = Set<T.ID>()
+        return items.filter { seen.insert($0.id).inserted }
     }
 
     func restoreSession(_ id: String) async {
@@ -333,6 +371,13 @@ final class ChatViewModel: ObservableObject {
                 request.offline = true
                 request.industry = selectedIndustry
                 request.resumeID = selectedResumeID
+                request.planTaskID = activeLearningTarget?.taskID
+                if let mode = activeLearningTarget?.mode, let parsedMode = InterviewMode(rawValue: mode) {
+                    request.mode = parsedMode
+                }
+                if let focus = activeLearningTarget?.focus, !focus.isEmpty {
+                    request.interviewGoal = focus
+                }
                 let response = try await api.createSession(request)
                 sessionID = response.sessionID
                 messages.append(ChatMessage(role: .agent, text: response.message))

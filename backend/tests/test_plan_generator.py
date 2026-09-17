@@ -317,7 +317,49 @@ def test_api_generate_falls_back_to_rule_when_offline(monkeypatch, tmp_path) -> 
         assert body["generated_by"] == "rule"
         detail = client.get(f"/review-site/plans/{body['plan_id']}", headers=headers)
         assert detail.status_code == 200
-        assert len(detail.json()["days"]) == 7
+        payload = detail.json()
+        assert len(payload["days"]) == 7
+        first_task = payload["days"][0]["tasks"][0]
+        first_material = first_task["link_payload"]["detail"]["materials"][0]
+        assert first_material["label"].startswith("复习精讲")
+        assert "核心知识正文" in first_material["content"]
+        assert "生产项目中的落地方式" in first_material["content"]
+
+
+def test_api_generate_agent_plan_uses_interview_specific_rule(monkeypatch, tmp_path) -> None:
+    engine, app = _make_app(tmp_path)
+    monkeypatch.setattr(api_module, "_build_planner_llm", lambda: (None, "fake"))
+    with TestClient(app) as client:
+        headers = _register_headers(client, "planner-agent-rule@example.com")
+        resp = client.post(
+            "/review-site/planner/generate",
+            headers=headers,
+            json={
+                "target_role": "AI Agent 开发工程师",
+                "seniority": "高级",
+                "total_days": 14,
+                "hours_per_day": 2,
+                "focus_areas": ["Agent Runtime", "RAG", "Codex 源码"],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["generated_by"] == "rule"
+        detail = client.get(f"/review-site/plans/{body['plan_id']}", headers=headers).json()
+        assert len(detail["days"]) == 14
+        titles = " ".join(
+            [day["title"] for day in detail["days"]]
+            + [task["title"] for day in detail["days"] for task in day["tasks"]]
+        )
+        assert "Agent Runtime" in titles
+        assert "RAG" in titles
+        assert "Claude Code" in titles
+        assert "Codex" in titles
+        assert "安全" in titles
+        assert "评测" in titles
+        first_material = detail["days"][0]["tasks"][0]["link_payload"]["detail"]["materials"][0]
+        assert "多轮面试考察方式" in first_material["content"]
+        assert "岗位专项精讲" in first_material["content"]
 
 
 def test_api_generate_with_fake_llm(monkeypatch, tmp_path) -> None:
@@ -353,6 +395,10 @@ def test_api_generate_with_fake_llm(monkeypatch, tmp_path) -> None:
         assert all(task["reason"] for task in tasks)
         assert any(task["link_type"] == "interview" for task in tasks)
         assert any(task["link_type"] == "practice" for task in tasks)
+        first_material = tasks[0]["link_payload"]["detail"]["materials"][0]
+        assert first_material["label"].startswith("复习精讲")
+        assert "核心知识正文" in first_material["content"]
+        assert "生产项目中的落地方式" in first_material["content"]
 
 
 # ---- TR-6.3 CRUD ----

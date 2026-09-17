@@ -1,8 +1,13 @@
 const { config } = require("./config");
 
 function request(path, options = {}, attempt = 0) {
+  const clientRequestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const headers = {
     "Content-Type": "application/json",
+    "X-Request-ID": clientRequestId,
+    "X-Client-Request-Id": clientRequestId,
+    "X-Client-Platform": "miniapp",
+    "X-Client-Version": config.clientVersion,
     ...(options.header || {})
   };
   if (config.apiToken) {
@@ -26,13 +31,25 @@ function request(path, options = {}, attempt = 0) {
             .catch(reject);
           return;
         }
-        reject(new Error(response.data?.message || response.data?.detail || `HTTP ${response.statusCode}`));
+        reject(apiError(response));
       },
       fail(error) {
         reject(new Error(error.errMsg || "请求 Interview Agent API 失败"));
       }
     });
   });
+}
+
+function apiError(response) {
+  const payload = response.data || {};
+  const detail = payload.details || (typeof payload.detail === "object" ? payload.detail : null);
+  const error = new Error(
+    payload.message || (typeof payload.detail === "string" ? payload.detail : "") || `HTTP ${response.statusCode}`
+  );
+  error.status = response.statusCode;
+  error.code = payload.error || (detail && detail.code) || "";
+  error.details = detail;
+  return error;
 }
 
 function unwrapResponse(payload) {
@@ -49,9 +66,11 @@ function restoreToken() {
   const token = wx.getStorageSync(config.storageKeys.token);
   const refreshToken = wx.getStorageSync(config.storageKeys.refreshToken);
   const tenantId = wx.getStorageSync(config.storageKeys.tenantId);
+  const userId = wx.getStorageSync(config.storageKeys.userId);
   setApiToken(token || "");
   config.refreshToken = refreshToken || "";
   config.tenantId = tenantId || "default";
+  config.userId = userId || "anonymous";
   return config.apiToken;
 }
 
@@ -59,14 +78,25 @@ function health() {
   return request("/health");
 }
 
-function devLogin(payload = {}) {
-  return request("/auth/dev-login", {
+function login(email, password) {
+  return request("/auth/login", {
     method: "POST",
     data: {
-      user_id: "miniapp-dev-user",
-      display_name: "小程序开发用户",
-      platform: "miniapp",
-      ...payload
+      email: String(email || "").trim(),
+      password: String(password || "").trim(),
+      platform: "miniapp"
+    }
+  });
+}
+
+function register(email, password, displayName) {
+  return request("/auth/register", {
+    method: "POST",
+    data: {
+      email: String(email || "").trim(),
+      password: String(password || "").trim(),
+      display_name: String(displayName || "").trim(),
+      platform: "miniapp"
     }
   });
 }
@@ -95,6 +125,7 @@ function setAuthTokens(auth = {}) {
   setApiToken(auth.access_token || "");
   config.refreshToken = auth.refresh_token || "";
   config.tenantId = auth.tenant_id || "default";
+  config.userId = auth.user_id || "anonymous";
   if (config.refreshToken) {
     wx.setStorageSync(config.storageKeys.refreshToken, config.refreshToken);
   } else {
@@ -102,6 +133,11 @@ function setAuthTokens(auth = {}) {
   }
   if (config.tenantId) {
     wx.setStorageSync(config.storageKeys.tenantId, config.tenantId);
+  }
+  if (auth.user_id) {
+    wx.setStorageSync(config.storageKeys.userId, auth.user_id);
+  } else {
+    wx.removeStorageSync(config.storageKeys.userId);
   }
 }
 
@@ -135,6 +171,51 @@ function recharge(payload = {}) {
     method: "POST",
     data: payload
   });
+}
+
+function learningToday() {
+  return request("/learning/today");
+}
+
+function getLearningTask(taskId) {
+  return request(`/learning/tasks/${encodeURIComponent(taskId)}`);
+}
+
+function executeLearningTask(taskId, command, idempotencyKey) {
+  return request(`/learning/tasks/${encodeURIComponent(taskId)}/commands`, {
+    method: "POST",
+    data: command,
+    header: { "Idempotency-Key": idempotencyKey }
+  });
+}
+
+function pullLearningChanges(cursor, limit = 100) {
+  const query = [`limit=${encodeURIComponent(limit)}`];
+  if (cursor) query.push(`cursor=${encodeURIComponent(cursor)}`);
+  return request(`/learning/sync?${query.join("&")}`);
+}
+
+function listReviewPlans({ limit = 20, offset = 0 } = {}) {
+  return request(`/review-site/plans?limit=${limit}&offset=${offset}`);
+}
+
+function generateReviewPlan(payload) {
+  return request("/review-site/planner/generate", { method: "POST", data: payload });
+}
+
+function checkinReviewPlan(planId, payload) {
+  return request(`/review-site/plans/${encodeURIComponent(planId)}/checkin`, {
+    method: "POST",
+    data: payload
+  });
+}
+
+function listInterviewKits({ limit = 20, offset = 0 } = {}) {
+  return request(`/interviewer-workspace/kits?limit=${limit}&offset=${offset}`);
+}
+
+function createInterviewKit(payload) {
+  return request("/interviewer-workspace/kits", { method: "POST", data: payload });
 }
 
 function listIndustries(targetRole = "AI 应用工程师") {
@@ -178,8 +259,8 @@ function createSession(payload) {
   });
 }
 
-function listResumes() {
-  return request("/resumes");
+function listResumes({ limit = 20, offset = 0 } = {}) {
+  return request(`/resumes?limit=${limit}&offset=${offset}`);
 }
 
 function getResume(resumeId) {
@@ -203,8 +284,8 @@ function deleteResume(resumeId) {
   });
 }
 
-function listSessions(limit = 50) {
-  return request(`/sessions?limit=${limit}`);
+function listSessions(limit = 20, offset = 0) {
+  return request(`/sessions?limit=${limit}&offset=${offset}`);
 }
 
 function getSession(sessionId) {
@@ -236,13 +317,23 @@ function streamMessage(sessionId, message) {
 module.exports = {
   restoreToken,
   health,
-  devLogin,
+  login,
+  register,
   wechatLogin,
   setApiToken,
   setAuthTokens,
   me,
   account,
   recharge,
+  learningToday,
+  getLearningTask,
+  executeLearningTask,
+  pullLearningChanges,
+  listReviewPlans,
+  generateReviewPlan,
+  checkinReviewPlan,
+  listInterviewKits,
+  createInterviewKit,
   listIndustries,
   listPracticeCategories,
   listPracticeQuestions,

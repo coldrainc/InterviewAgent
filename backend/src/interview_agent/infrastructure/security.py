@@ -12,11 +12,13 @@ from threading import Lock
 from typing import Any
 
 from fastapi import Header, HTTPException, Request, status
+from sqlalchemy import select
 
 from interview_agent.infrastructure.settings import AppSettings, load_settings
 
 
 TENANT_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+CLIENT_PLATFORMS = frozenset({"web", "desktop", "android", "ios", "harmony", "miniapp"})
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,28 @@ class RequestContext:
     platform: str = "unknown"
     role: str = "user"
     request_id: str | None = None
+    client_platform: str = "unknown"
+    client_version: str = "unknown"
+    client_request_id: str | None = None
+    platform_matched: bool | None = None
+
+
+@dataclass(frozen=True)
+class ClientRequestMetadata:
+    platform: str = "unknown"
+    version: str = "unknown"
+    request_id: str | None = None
+
+
+def client_request_metadata(request: Request) -> ClientRequestMetadata:
+    request_id = clean_request_id(
+        request.headers.get("X-Client-Request-Id") or request.headers.get("X-Request-ID")
+    )
+    return ClientRequestMetadata(
+        platform=clean_client_platform(request.headers.get("X-Client-Platform")),
+        version=clean_client_version(request.headers.get("X-Client-Version")),
+        request_id=request_id,
+    )
 
 
 class FixedWindowRateLimiter:
@@ -78,14 +102,24 @@ async def request_context(
     x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
 ) -> RequestContext:
     settings = load_settings()
+    client = client_request_metadata(request)
     context = authenticate_request(settings, authorization=authorization, x_api_key=x_api_key)
+    request_id = (
+        getattr(request.state, "request_id", None)
+        or clean_request_id(x_request_id)
+        or client.request_id
+    )
     context = RequestContext(
         tenant_id=context.tenant_id,
         authenticated=context.authenticated,
         user_id=context.user_id,
         platform=context.platform,
         role=context.role,
-        request_id=_clean_request_id(x_request_id),
+        request_id=request_id,
+        client_platform=client.platform,
+        client_version=client.version,
+        client_request_id=client.request_id,
+        platform_matched=_platforms_match(context, client),
     )
     client_host = request.client.host if request.client else "unknown"
     limit_key = f"{context.tenant_id}:{client_host}"
@@ -94,6 +128,53 @@ async def request_context(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="请求过于频繁，请稍后再试。",
         )
+    if context.authenticated and context.platform != "server":
+        from interview_agent.infrastructure.db.models import UserAccountModel, UserRoleAssignmentModel
+        from interview_agent.infrastructure.db.session import session_scope
+
+        async with session_scope() as db:
+            account_row = (
+                await db.execute(
+                    select(UserAccountModel.status, UserAccountModel.id).where(
+                        UserAccountModel.tenant_id == context.tenant_id,
+                        UserAccountModel.user_id == context.user_id,
+                    )
+                )
+            ).one_or_none()
+            account_status = account_row[0] if account_row else None
+            active_roles = list(
+                (
+                    await db.execute(
+                        select(UserRoleAssignmentModel.role).where(
+                            UserRoleAssignmentModel.tenant_id == context.tenant_id,
+                            UserRoleAssignmentModel.user_id == context.user_id,
+                            UserRoleAssignmentModel.revoked_at.is_(None),
+                        )
+                    )
+                ).scalars().all()
+            )
+        if account_status is not None:
+            role_order = {"user": 10, "support": 20, "admin": 30}
+            resolved_role = max(active_roles, key=lambda item: role_order.get(item, 0), default="user")
+            context = RequestContext(
+                tenant_id=context.tenant_id,
+                authenticated=context.authenticated,
+                user_id=context.user_id,
+                platform=context.platform,
+                role=resolved_role,
+                request_id=context.request_id,
+                client_platform=context.client_platform,
+                client_version=context.client_version,
+                client_request_id=context.client_request_id,
+                platform_matched=context.platform_matched,
+            )
+        if account_status in {"deleted", "suspended"}:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=("账号已删除。" if account_status == "deleted" else "账号当前不可用，请联系管理员。"),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    request.state.request_context = context
     return context
 
 
@@ -252,11 +333,36 @@ def _clean_role(value: str) -> str:
     return cleaned if cleaned in {"user", "support", "server", "admin"} else "user"
 
 
-def _clean_request_id(value: str | None) -> str | None:
+def clean_request_id(value: str | None) -> str | None:
     if not value:
         return None
     cleaned = re.sub(r"[^a-zA-Z0-9_.:@-]", "", value.strip())
     return cleaned[:128] or None
+
+
+def clean_client_platform(value: str | None) -> str:
+    if not value:
+        return "unknown"
+    cleaned = _clean_platform(value)
+    return cleaned if cleaned in CLIENT_PLATFORMS else "unknown"
+
+
+def clean_client_version(value: str | None) -> str:
+    if not value:
+        return "unknown"
+    cleaned = value.strip()
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.+\-]{0,63}", cleaned):
+        return "unknown"
+    return cleaned
+
+
+def _platforms_match(context: RequestContext, client: ClientRequestMetadata) -> bool | None:
+    if not context.authenticated or context.platform == "server" or client.platform == "unknown":
+        return None
+    return context.platform == client.platform
+
+
+_clean_request_id = clean_request_id
 
 
 def _sign(secret: str, payload_part: str) -> str:

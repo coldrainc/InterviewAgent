@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 import pytest_asyncio
@@ -82,6 +82,52 @@ async def _seed_active_plan(factory, today: date) -> uuid.UUID:
         await ReviewCheckinRepository(db, tenant_id=TENANT, user_id=USER).upsert_checkin(
             plan.id, today, tasks_done=1, total_tasks=2, elapsed_minutes=30, note="打卡"
         )
+        await db.commit()
+        return plan.id
+
+
+async def _seed_overdue_incomplete_plan(factory, start: date) -> uuid.UUID:
+    async with factory() as db:
+        plan = ReviewPlanModel(
+            tenant_id=TENANT,
+            user_id=USER,
+            plan_key=f"overdue-{uuid.uuid4().hex[:8]}",
+            title="过期未完成计划",
+            status="draft",
+        )
+        db.add(plan)
+        await db.flush()
+        day_ids = []
+        for index in range(2):
+            day = ReviewDayModel(
+                plan_id=plan.id,
+                tenant_id=TENANT,
+                user_id=USER,
+                day_key=f"day-{index + 1:02d}",
+                sort_order=index + 1,
+                scheduled_date=start + timedelta(days=index),
+                title=f"第 {index + 1} 天",
+            )
+            db.add(day)
+            await db.flush()
+            day_ids.append(day.id)
+            db.add(
+                ReviewTaskModel(
+                    plan_id=plan.id,
+                    day_id=day.id,
+                    tenant_id=TENANT,
+                    user_id=USER,
+                    task_key=f"overdue-task-{index}",
+                    title=f"过期任务{index}",
+                    sort_order=1,
+                )
+            )
+        await db.commit()
+        repo = ReviewSiteRepository(db, tenant_id=TENANT, user_id=USER)
+        await repo.update_plan(plan.id, {"status": "active", "start_date": start.isoformat()})
+        days = await repo.list_days(plan.id)
+        first_task = sorted(days[0].tasks, key=lambda task: task.sort_order)[0]
+        await repo.update_progress(first_task.id, {"done": True, "elapsed_minutes": 20})
         await db.commit()
         return plan.id
 
@@ -179,6 +225,23 @@ async def test_dashboard_aggregates_match_dataset(db_factory) -> None:
 
         assert dashboard["advice"]["source"] == "rule"
         assert dashboard["advice"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_overdue_plan_uses_next_unfinished_day(db_factory) -> None:
+    start = date.today() - timedelta(days=3)
+    target = start + timedelta(days=3)
+    await _seed_overdue_incomplete_plan(db_factory, start)
+
+    async with db_factory() as db:
+        service = StudyDashboardService(db, tenant_id=TENANT, user_id=USER)
+        dashboard = await service.build_dashboard(today=target)
+
+        assert dashboard["plan"]["tasks_done"] == 1
+        assert dashboard["plan"]["total_tasks"] == 2
+        assert dashboard["today"]["day"]["day_key"] == "day-02"
+        assert dashboard["today"]["total_tasks"] == 1
+        assert dashboard["today"]["tasks_done"] == 0
 
 
 # ---- TR-5.2 LLM 建议失败降级 ----

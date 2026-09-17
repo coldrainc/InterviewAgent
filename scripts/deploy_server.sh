@@ -162,6 +162,7 @@ show_status() {
 choose_action() {
   cat <<'MENU'
 请选择部署操作：
+  8) 推荐：Docker Compose 单机部署/升级（自动备份 + 迁移 + Web/API/存储）
   1) 全部：git pull + 后端依赖按需安装/迁移/重启 + 前端依赖按需安装/构建 + Nginx 配置/reload
   2) 只更新后端：依赖按需安装 + 迁移 + 重启服务
   3) 只更新前端：依赖按需安装 + build + Nginx reload
@@ -173,6 +174,7 @@ choose_action() {
 MENU
   read -r -p "输入选项: " choice
   case "$choice" in
+    8) run_git_pull; "$APP_DIR/deploy/stack.sh" deploy ;;
     1) deploy_all ;;
     2) run_git_pull; deploy_backend ;;
     3) run_git_pull; deploy_frontend ;;
@@ -194,6 +196,7 @@ case "${1:-menu}" in
   security) configure_security ;;
   pull) run_git_pull ;;
   status) show_status ;;
+  stack) run_git_pull; "$APP_DIR/deploy/stack.sh" deploy ;;
   *)
     cat <<USAGE >&2
 用法：
@@ -205,6 +208,7 @@ case "${1:-menu}" in
   $0 security   # 配置 Nginx WAF/限流 + fail2ban
   $0 pull       # 只拉代码
   $0 status     # 查看状态
+  $0 stack      # 推荐：Docker Compose 单机部署/升级
 
 可选环境变量：
   APP_DIR=/opt/aivago/InterviewAgent

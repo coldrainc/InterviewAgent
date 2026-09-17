@@ -1,4 +1,4 @@
-import { currentModel, formatCredits } from "../../utils/interview";
+import { currentModel } from "../../utils/interview";
 
 export function ModelSelector({
   models,
@@ -37,8 +37,7 @@ export function ModelSelector({
       {model && (
         <small>
           {model.category ? `${model.category} · ` : ""}
-          {model.provider} · 输入 {formatCredits(model.input_credits_per_1m)} / 百万 token · 输出{" "}
-          {formatCredits(model.output_credits_per_1m)} / 百万 token
+          不同模型消耗标准不同，完成后会展示本次积分明细
         </small>
       )}
       </label>

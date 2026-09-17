@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from interview_agent.infrastructure.db.models import Base
+from interview_agent.learning import models as learning_models  # noqa: F401
+from interview_agent.interviewer import models as interviewer_models  # noqa: F401
+from interview_agent.training import models as training_models  # noqa: F401
+from interview_agent.privacy import models as privacy_models  # noqa: F401
 from interview_agent.infrastructure.settings import load_settings
 
 

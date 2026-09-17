@@ -1,50 +1,63 @@
 const api = require("../../utils/api");
-const { config } = require("../../utils/config");
+const { clearPrivateData, isAuthenticated } = require("../../utils/auth");
 const { normalizeError } = require("../../utils/format");
 
 Page({
   data: {
     loading: false,
-    me: null,
+    authenticated: false,
+    registerMode: false,
+    email: "",
+    password: "",
+    displayName: "",
     account: null,
-    health: null,
-    error: "",
-    rechargeOptions: ["10", "50", "100"],
-    rechargeStatus: ""
-  },
-
-  onLoad() {
-    api.restoreToken();
-    this.load();
+    error: ""
   },
 
   onShow() {
-    this.load();
+    const authenticated = isAuthenticated();
+    this.setData({ authenticated });
+    if (authenticated) this.loadAccount();
   },
 
-  async load() {
-    this.setData({ loading: true, error: "", rechargeStatus: "" });
+  async loadAccount() {
+    this.setData({ loading: true, error: "" });
     try {
-      const [me, account, health] = await Promise.all([
-        api.me().catch(() => null),
-        api.account().catch(() => null),
-        api.health()
-      ]);
-      this.setData({ me, account, health });
+      const account = await api.account();
+      this.setData({ account, authenticated: true });
     } catch (error) {
       this.setData({ error: normalizeError(error) });
+      if (error.status === 401) clearPrivateData();
     } finally {
       this.setData({ loading: false });
     }
   },
 
-  async devLogin() {
+  onInput(event) {
+    this.setData({ [event.currentTarget.dataset.key]: event.detail.value });
+  },
+
+  toggleMode() {
+    this.setData({ registerMode: !this.data.registerMode, error: "" });
+  },
+
+  async submitAuth() {
+    if (this.data.loading) return;
+    const email = this.data.email.trim();
+    const password = this.data.password.trim();
+    if (!email || password.length < 8) {
+      this.setData({ error: "请输入有效邮箱，密码至少 8 位。" });
+      return;
+    }
     this.setData({ loading: true, error: "" });
     try {
-      const auth = await api.devLogin();
+      const auth = this.data.registerMode
+        ? await api.register(email, password, this.data.displayName.trim())
+        : await api.login(email, password);
       api.setAuthTokens(auth);
-      await this.load();
-      wx.showToast({ title: "已登录", icon: "success" });
+      this.setData({ authenticated: true, password: "" });
+      await this.loadAccount();
+      wx.showToast({ title: this.data.registerMode ? "注册成功" : "登录成功", icon: "success" });
     } catch (error) {
       this.setData({ error: normalizeError(error) });
     } finally {
@@ -53,12 +66,14 @@ Page({
   },
 
   async wechatLogin() {
+    if (this.data.loading) return;
     this.setData({ loading: true, error: "" });
     try {
       const code = await wxLogin();
       const auth = await api.wechatLogin(code);
       api.setAuthTokens(auth);
-      await this.load();
+      this.setData({ authenticated: true });
+      await this.loadAccount();
       wx.showToast({ title: "微信登录成功", icon: "success" });
     } catch (error) {
       this.setData({ error: normalizeError(error) });
@@ -68,57 +83,21 @@ Page({
   },
 
   logout() {
-    api.setAuthTokens({});
-    wx.removeStorageSync(config.storageKeys.selectedResumeId);
-    wx.removeStorageSync(`${config.storageKeys.selectedResumeId}:name`);
-    this.setData({ me: null, account: null });
-    wx.showToast({ title: "已清除本地登录", icon: "success" });
+    clearPrivateData();
+    this.setData({ authenticated: false, account: null, password: "", error: "" });
+    wx.showToast({ title: "已退出登录", icon: "success" });
   },
 
-  async recharge(event) {
-    const amount = event.currentTarget.dataset.amount;
-    if (!config.apiToken) {
-      wx.showModal({
-        title: "需要登录",
-        content: "充值积分前需要先登录账号。",
-        confirmText: "去登录"
-      });
-      return;
-    }
-    this.setData({ loading: true, error: "", rechargeStatus: "" });
-    try {
-      const account = await api.recharge({
-        amount_credits: amount,
-        payment_provider: "miniapp-mock",
-        external_order_id: `miniapp-${Date.now()}`
-      });
-      this.setData({ account, rechargeStatus: `已充值 ${amount} 积分` });
-      wx.showToast({ title: "充值成功", icon: "success" });
-    } catch (error) {
-      this.setData({ error: normalizeError(error) });
-    } finally {
-      this.setData({ loading: false });
-    }
-  },
-
-  openPrivacy() {
-    wx.navigateTo({ url: "/pages/privacy/privacy" });
-  }
+  openResumes() { wx.navigateTo({ url: "/pages/resumes/resumes" }); },
+  openHistory() { wx.navigateTo({ url: "/pages/history/history" }); },
+  openPrivacy() { wx.navigateTo({ url: "/pages/privacy/privacy" }); }
 });
 
 function wxLogin() {
   return new Promise((resolve, reject) => {
     wx.login({
-      success(result) {
-        if (result.code) {
-          resolve(result.code);
-          return;
-        }
-        reject(new Error("微信登录未返回 code"));
-      },
-      fail(error) {
-        reject(new Error(error.errMsg || "微信登录失败"));
-      }
+      success(result) { result.code ? resolve(result.code) : reject(new Error("微信登录未返回 code")); },
+      fail(error) { reject(new Error(error.errMsg || "微信登录失败")); }
     });
   });
 }

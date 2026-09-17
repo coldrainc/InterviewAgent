@@ -12,6 +12,17 @@ const API_RETRY_DELAY_MS = 350;
 const APP_ICON_PATH = path.join(__dirname, "assets", "app-icon.png");
 const streamControllers = new Map();
 
+function clientHeaders(extra = {}) {
+  const requestId = globalThis.crypto.randomUUID();
+  return {
+    "X-Request-ID": requestId,
+    "X-Client-Request-Id": requestId,
+    "X-Client-Platform": "desktop",
+    "X-Client-Version": app.getVersion(),
+    ...extra
+  };
+}
+
 // ---- 本地学习提醒通知 ----
 const DEFAULT_NOTIFY_SETTINGS = {
   enabled: false,
@@ -239,8 +250,8 @@ ipcMain.handle("practice:seed", async () => {
   return requestJson("/practice/questions/seed", { method: "POST" });
 });
 
-ipcMain.handle("review-site:plans", async () => {
-  return requestJson("/review-site/plans");
+ipcMain.handle("review-site:plans", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/review-site/plans?limit=${limit}&offset=${offset}`);
 });
 
 ipcMain.handle("review-site:create-plan", async (_event, payload) => {
@@ -303,15 +314,8 @@ ipcMain.handle("review-site:mark-question", async (_event, questionId, payload) 
   });
 });
 
-ipcMain.handle("review-site:wrong-book", async () => {
-  return requestJson("/review-site/wrong-book");
-});
-
-ipcMain.handle("review-site:import", async (_event, payload) => {
-  return requestJson("/review-site/import", {
-    method: "POST",
-    body: JSON.stringify(payload || {})
-  });
+ipcMain.handle("review-site:wrong-book", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/review-site/wrong-book?limit=${limit}&offset=${offset}`);
 });
 
 ipcMain.handle("review-site:generate-plan", async (_event, payload) => {
@@ -321,8 +325,12 @@ ipcMain.handle("review-site:generate-plan", async (_event, payload) => {
   });
 });
 
-ipcMain.handle("jobs:list", async () => {
-  return requestJson("/jobs");
+ipcMain.handle("admin:create-review-site-test-data", async () => {
+  return requestJson("/admin/test-data/review-site", { method: "POST" });
+});
+
+ipcMain.handle("jobs:list", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/jobs?limit=${limit}&offset=${offset}`);
 });
 
 ipcMain.handle("jobs:get", async (_event, jobId) => {
@@ -354,12 +362,12 @@ ipcMain.handle("eval-runs:create", async (_event, payload) => {
   });
 });
 
-ipcMain.handle("eval-runs:list", async () => {
-  return requestJson("/eval-runs");
+ipcMain.handle("eval-runs:list", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/eval-runs?limit=${limit}&offset=${offset}`);
 });
 
-ipcMain.handle("ops:traces", async () => {
-  return requestJson("/ops/traces");
+ipcMain.handle("ops:traces", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/ops/traces?limit=${limit}&offset=${offset}`);
 });
 
 ipcMain.handle("ops:trace", async (_event, traceId) => {
@@ -537,8 +545,8 @@ ipcMain.handle("payments:get-order", async (_event, orderId) => {
   return requestJson(`/payments/orders/${encodeURIComponent(orderId)}`);
 });
 
-ipcMain.handle("resumes:list", async () => {
-  return requestJson("/resumes");
+ipcMain.handle("resumes:list", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/resumes?limit=${limit}&offset=${offset}`);
 });
 
 ipcMain.handle("resumes:get", async (_event, resumeId) => {
@@ -549,8 +557,8 @@ ipcMain.handle("resumes:delete", async (_event, resumeId) => {
   return requestJson(`/resumes/${resumeId}`, { method: "DELETE" });
 });
 
-ipcMain.handle("sessions:list", async () => {
-  return requestJson("/sessions");
+ipcMain.handle("sessions:list", async (_event, { limit = 20, offset = 0 } = {}) => {
+  return requestJson(`/sessions?limit=${limit}&offset=${offset}`);
 });
 
 ipcMain.handle("sessions:get", async (_event, sessionId) => {
@@ -897,7 +905,7 @@ function normalizeList(value) {
 
 async function requestJson(route, options = {}, attempt = 0) {
   try {
-    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+    const headers = clientHeaders({ "Content-Type": "application/json", ...(options.headers || {}) });
     if (apiToken) {
       headers.Authorization = `Bearer ${apiToken}`;
     }
@@ -938,7 +946,7 @@ async function requestJson(route, options = {}, attempt = 0) {
 async function refreshApiToken() {
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: clientHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
     body: JSON.stringify({ refresh_token: apiRefreshToken, tenant_id: apiTenantId })
   });
   const text = await response.text();
@@ -966,7 +974,11 @@ async function requestEventStream(route, options = {}, onEvent, streamId, attemp
   const controller = new AbortController();
   streamControllers.set(streamId, controller);
   try {
-    const headers = { "Content-Type": "application/json", Accept: "text/event-stream", ...(options.headers || {}) };
+    const headers = clientHeaders({
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      ...(options.headers || {})
+    });
     if (apiToken) {
       headers.Authorization = `Bearer ${apiToken}`;
     }

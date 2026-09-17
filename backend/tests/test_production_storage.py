@@ -7,6 +7,7 @@ from interview_agent.core.state import InterviewState
 from interview_agent.infrastructure.db.models import Base
 from interview_agent.infrastructure.db.session import create_engine_for_url
 from interview_agent.infrastructure.object_storage import LocalObjectStorage
+from interview_agent.infrastructure.owner_scope import owner_namespace
 from interview_agent.repositories.interview_repository import InterviewRepository
 from interview_agent.services.billing_service import BillingService
 from interview_agent.services.interview_persistence_service import InterviewPersistenceService
@@ -35,6 +36,9 @@ async def test_resume_service_persists_resume_to_database_and_object_storage(tmp
         assert first.content_hash == second.content_hash
         assert first.object_bucket == "test-bucket"
         assert first.object_key is not None
+        assert first.object_key.startswith(
+            f"resumes/{owner_namespace('default', 'anonymous')}/"
+        )
         assert (tmp_path / "objects" / "test-bucket" / first.object_key).exists()
 
     await engine.dispose()
@@ -118,6 +122,43 @@ async def test_interview_persistence_writes_turns_and_memory(tmp_path):
 
         assert memory
         assert "生产级 RAG" in memory[0]
-        assert (tmp_path / "conversations" / "00000000-0000-0000-0000-000000000001.md").exists()
+        namespace = owner_namespace("default", "anonymous")
+        assert (
+            tmp_path
+            / "conversations"
+            / namespace
+            / "00000000-0000-0000-0000-000000000001.md"
+        ).exists()
+        assert not (
+            tmp_path / "conversations" / "00000000-0000-0000-0000-000000000001.md"
+        ).exists()
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_identical_resume_bytes_are_stored_in_distinct_owner_namespaces(tmp_path):
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="test-bucket")
+    content = b"# Same bytes\n\nPrivate resume"
+    async with factory() as session:
+        first = await ResumeService(
+            session, storage, tenant_id="default", user_id="user-a"
+        ).save_bytes("resume.md", content)
+        second = await ResumeService(
+            session, storage, tenant_id="default", user_id="user-b"
+        ).save_bytes("resume.md", content)
+        await session.commit()
+
+    assert first.content_hash == second.content_hash
+    assert first.object_key != second.object_key
+    assert f"/{owner_namespace('default', 'user-a')}/" in first.object_key
+    assert f"/{owner_namespace('default', 'user-b')}/" in second.object_key
 
     await engine.dispose()

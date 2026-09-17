@@ -32,12 +32,13 @@ class ResumeRepository:
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None
 
-    async def list_recent(self, limit: int = 100) -> list[StoredResume]:
+    async def list_recent(self, limit: int = 100, offset: int = 0) -> list[StoredResume]:
         result = await self.session.execute(
             select(ResumeModel)
             .where(ResumeModel.tenant_id == self.tenant_id, ResumeModel.user_id == self.user_id)
             .order_by(ResumeModel.updated_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return [_to_domain(model) for model in result.scalars().all()]
 
@@ -49,6 +50,19 @@ class ResumeRepository:
         await self.session.delete(model)
         await self.session.flush()
         return deleted
+
+    async def object_referenced_by_other_owner(self, bucket: str, key: str) -> bool:
+        result = await self.session.execute(
+            select(ResumeModel.id).where(
+                ResumeModel.object_bucket == bucket,
+                ResumeModel.object_key == key,
+                ~(
+                    (ResumeModel.tenant_id == self.tenant_id)
+                    & (ResumeModel.user_id == self.user_id)
+                ),
+            ).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def upsert(
         self,

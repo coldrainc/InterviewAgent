@@ -1,0 +1,21 @@
+Interview Agent complete source package
+Generated: 2026-09-06T13:09:03Z
+Revision: b125c82
+
+Included source surfaces:
+- desktop web and Electron application
+- Android, iOS, HarmonyOS, and mini program clients
+- backend, database migrations, tests, and examples
+- shared packages, API contracts, scripts, deployment files, and documentation
+- non-personal public knowledge-base content and product specifications
+
+Excluded by design:
+- installed dependencies and generated build/cache output
+- Git history and generated codebase graph cache
+- local credentials, databases, uploads, backups, and test runtime output
+- knowledge_base/interview personal content
+
+Install dependencies locally with the repository lockfiles, or deploy directly:
+  PUBLIC_URL=https://example.com ./deploy/stack.sh init
+  edit .env.production and configure at least one model provider key
+  ./deploy/stack.sh deploy

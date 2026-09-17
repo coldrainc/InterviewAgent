@@ -73,7 +73,7 @@ class LocalEmbeddingClient:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise RuntimeError(
-                "本地 embedding 需要安装 sentence-transformers，请先运行 pip install -e '.[dev]'。"
+                "本地 embedding 需要安装 sentence-transformers，请先运行 pip install -e '.[embeddings]'。"
             ) from exc
 
         kwargs = {}

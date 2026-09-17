@@ -35,6 +35,32 @@ pip install -e "backend[dev]"
 cp .env.example .env
 ```
 
+## 单服务器部署
+
+新版支持把 Web、API、PostgreSQL、MinIO、Qdrant 和本地 Embedding 服务部署在同一台 Linux 服务器，并使用 Docker 卷持久化全部业务数据：
+
+```bash
+PUBLIC_URL=https://你的域名 ./deploy/stack.sh init
+# 编辑 .env.production，至少填写一个模型 API Key
+./deploy/stack.sh deploy
+```
+
+同一条 `deploy` 命令也用于后续升级。升级前会自动备份，执行 Alembic 迁移，并保留已有 PostgreSQL、MinIO、Qdrant 和运行时数据。完整的首次部署、旧版升级、备份恢复和反向代理说明见 [单服务器部署手册](docs/deployment-single-server.md)。
+
+需要离线传输源码时，可生成不含本机依赖、密钥、用户数据和个人知识库的服务器发布包：
+
+```bash
+make package-server
+```
+
+ZIP 的首次部署与已有服务器升级步骤见 [ZIP 部署说明](docs/deploy-from-zip.md)。
+
+需要交付完整工程源码（所有客户端、后端、测试、文档和部署配置）时使用：
+
+```bash
+make package-full-source
+```
+
 离线 demo：
 
 ```bash
@@ -267,7 +293,7 @@ PostgreSQL interview_turns              # 每轮面试官/候选人对话
 PostgreSQL memory_items                 # 筛选后的可复用历史问答记忆
 .interview_agent/conversations/*.jsonl  # 导出事件流，便于调试和阅读
 .interview_agent/conversations/*.md     # 导出完整面试记录
-.interview_agent/memory/*.md            # 导出可检索历史问答记忆
+.interview_agent/memory/<用户命名空间>/*.md # 用户私有历史问答导出，不进入共享索引
 ```
 
 生产职责边界：
@@ -279,7 +305,7 @@ MinIO/S3：只放原始文件和大对象，不把 PDF/Markdown 二进制塞进�
 Redis：后续可接入缓存、任务队列、限流和短期会话状态。
 ```
 
-重新构建索引时，默认会把静态知识库和历史面试 memory 一起纳入索引：
+重新构建索引时，只会索引可共享的静态知识库：
 
 ```bash
 ./interview index
@@ -290,10 +316,9 @@ Redis：后续可接入缓存、任务队列、限流和短期会话状态。
 ```text
 knowledge_base/ai-interview-guide/docs
 knowledge_base/github-ai-knowledge
-.interview_agent/memory
 ```
 
-只索引静态知识库：
+简历、会话、回答、报告和历史 memory 都是用户私有数据，禁止进入共享 RAG 索引。`--include-memory` 已被禁用并会直接报错。升级旧部署后必须重建一次索引，以彻底移除旧版本可能写入的私有片段：
 
 ```bash
 ./interview index --no-include-memory

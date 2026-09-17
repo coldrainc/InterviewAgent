@@ -1,60 +1,43 @@
 <view class="page">
-  <view class="header">
-    <view>
-      <text class="eyebrow">Account</text>
-      <text class="title">我的</text>
-    </view>
-    <button class="refresh" loading="{{loading}}" bindtap="load">刷新</button>
+  <view class="page-head">
+    <text class="eyebrow">MINE</text>
+    <text class="title">我的</text>
+    <text class="summary">管理简历、面试记录与账号</text>
   </view>
 
   <view wx:if="{{error}}" class="notice error">{{error}}</view>
 
-  <view class="profile-card {{me && me.authenticated ? 'signed' : ''}}">
-    <view class="avatar">{{me && me.authenticated ? '我' : '未'}}</view>
-    <view class="profile-main">
-      <text class="value">{{account ? (account.display_name || account.user_id) : '未登录'}}</text>
-      <text class="meta">{{account ? (account.email || account.user_id) : '登录后保存简历、会话和用量记录'}}</text>
-    </view>
+  <view wx:if="{{!authenticated}}" class="auth-card">
+    <text class="section-title">{{registerMode ? '创建账号' : '欢迎回来'}}</text>
+    <text class="muted">登录后，学习数据只会同步到你的账号。</text>
+    <input wx:if="{{registerMode}}" value="{{displayName}}" data-key="displayName" bindinput="onInput" placeholder="你的称呼" />
+    <input value="{{email}}" data-key="email" bindinput="onInput" placeholder="邮箱" />
+    <input value="{{password}}" data-key="password" bindinput="onInput" password placeholder="密码，至少 8 位" />
+    <button class="primary" loading="{{loading}}" bindtap="submitAuth">{{registerMode ? '注册并开始' : '登录'}}</button>
+    <button class="wechat" loading="{{loading}}" bindtap="wechatLogin">微信快捷登录</button>
+    <button class="text-button" bindtap="toggleMode">{{registerMode ? '已有账号，去登录' : '没有账号，立即注册'}}</button>
   </view>
 
-  <view class="card quota-card">
-    <text class="label">权益</text>
-    <view class="quota-grid">
-      <view>
-        <text class="meta">剩余试用</text>
-        <text class="quota-value">{{account ? account.trial_uses_remaining : '-'}}</text>
+  <block wx:else>
+    <view class="profile-card">
+      <view class="avatar">我</view>
+      <view class="profile-main">
+        <text class="name">{{account && account.display_name || 'Interview Agent 用户'}}</text>
+        <text class="muted">{{account && account.email || '学习进度已安全同步'}}</text>
       </view>
-      <view>
-        <text class="meta">积分余额</text>
-        <text class="quota-value">{{account ? account.credit_balance : '-'}}</text>
-      </view>
     </view>
-    <view class="recharge-grid">
-      <block wx:for="{{rechargeOptions}}" wx:key="*this">
-        <button class="recharge" data-amount="{{item}}" loading="{{loading}}" bindtap="recharge">充 {{item}}</button>
-      </block>
+
+    <view class="stats">
+      <view><text class="muted">剩余试用</text><text class="stat">{{account ? account.trial_uses_remaining : '-'}}</text></view>
+      <view><text class="muted">积分余额</text><text class="stat">{{account ? account.credit_balance : '-'}}</text></view>
     </view>
-    <text wx:if="{{rechargeStatus}}" class="success">{{rechargeStatus}}</text>
-  </view>
 
-  <view class="card">
-    <text class="label">账号信息</text>
-    <text class="meta">租户：{{account ? account.tenant_id : '-'}}</text>
-    <text class="meta">用户：{{account ? account.user_id : '-'}}</text>
-    <text class="meta">平台：{{account ? account.platform : '-'}}</text>
-  </view>
+    <view class="menu">
+      <view class="menu-row" bindtap="openResumes"><view><text class="menu-title">简历管理</text><text class="muted">上传、选择和删除简历</text></view><text>›</text></view>
+      <view class="menu-row" bindtap="openHistory"><view><text class="menu-title">面试历史</text><text class="muted">恢复会话与查看训练记录</text></view><text>›</text></view>
+      <view class="menu-row" bindtap="openPrivacy"><view><text class="menu-title">隐私与数据</text><text class="muted">查看数据使用与删除说明</text></view><text>›</text></view>
+    </view>
 
-  <view class="card">
-    <text class="label">服务状态</text>
-    <text class="value">{{health ? health.status : '-'}}</text>
-    <text class="meta">Embedding：{{health ? health.embedding_service_url : '-'}}</text>
-    <text class="meta">对象存储：{{health ? health.object_storage_backend : '-'}}</text>
-  </view>
-
-  <view class="actions">
-    <button class="primary" loading="{{loading}}" bindtap="wechatLogin">微信登录</button>
-    <button class="primary" loading="{{loading}}" bindtap="devLogin">开发登录</button>
-    <button class="secondary" bindtap="openPrivacy">隐私说明</button>
-    <button class="danger" bindtap="logout">清除本地登录</button>
-  </view>
+    <button class="logout" bindtap="logout">退出登录</button>
+  </block>
 </view>

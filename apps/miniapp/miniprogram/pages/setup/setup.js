@@ -116,7 +116,7 @@ Page({
   },
 
   openResumePage() {
-    wx.switchTab({ url: "/pages/resumes/resumes" });
+    wx.navigateTo({ url: "/pages/resumes/resumes" });
   },
 
   startInterview() {

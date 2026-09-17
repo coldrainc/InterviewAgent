@@ -1,0 +1,225 @@
+name: interview-agent
+
+x-api-environment: &api-environment
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-interview_agent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-interview_agent}
+  INTERVIEW_STORAGE_BACKEND: database
+  INTERVIEW_OBJECT_STORAGE_BACKEND: minio
+  OBJECT_STORAGE_ENDPOINT: minio:9000
+  OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-interview_agent}
+  OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-interview-agent}
+  OBJECT_STORAGE_SECURE: "false"
+  INTERVIEW_VECTOR_STORE: qdrant
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_COLLECTION: ${QDRANT_COLLECTION:-interview_agent}
+  EMBEDDING_PROVIDER: service
+  EMBEDDING_SERVICE_URL: http://embedding:8010
+  INTERVIEW_KNOWLEDGE_BASE: /app/knowledge_base/ai-interview-guide/docs
+  INTERVIEW_RAG_INDEX: /app/.interview_agent/rag_index.json
+  INTERVIEW_RAG_VECTORS: /app/.interview_agent/rag_vectors.json
+  INTERVIEW_VECTOR_STORE_METADATA: /app/.interview_agent/vector_store.json
+  INTERVIEW_MEMORY_PATH: /app/.interview_agent/memory
+  INTERVIEW_SECURITY_ALERT_LOG: /app/.interview_agent/security_alerts.log
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-interview_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-interview_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-interview_agent} -d ${POSTGRES_DB:-interview_agent}"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [backend]
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2024-07-16T23-46-41Z}
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-interview_agent}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [backend]
+
+  qdrant:
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.11.5}
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks: [backend]
+
+  embedding:
+    image: interview-agent-embedding:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: embedding
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
+    restart: unless-stopped
+    command:
+      - interview-agent
+      - embedding-service
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8010"
+      - --embedding-download
+    environment:
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      HF_HOME: /home/interview/.cache/huggingface
+    volumes:
+      - model_cache:/home/interview/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 20
+    networks: [backend]
+
+  migration:
+    image: interview-agent-backend:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    command: ["alembic", "upgrade", "head"]
+    working_dir: /app/backend
+    env_file: ${APP_ENV_FILE:-../.env.production}
+    environment:
+      <<: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  indexer:
+    image: interview-agent-backend:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    command:
+      - interview-agent
+      - index
+      - --no-embeddings
+      - --no-include-memory
+    env_file: ${APP_ENV_FILE:-../.env.production}
+    environment:
+      <<: *api-environment
+    volumes:
+      - runtime_data:/app/.interview_agent
+    restart: "no"
+    networks: [backend]
+    profiles: [tools]
+
+  vector-indexer:
+    image: interview-agent-backend:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    command:
+      - interview-agent
+      - index
+      - --embeddings
+      - --no-include-memory
+      - --embedding-provider
+      - service
+      - --vector-store
+      - qdrant
+    env_file: ${APP_ENV_FILE:-../.env.production}
+    environment:
+      <<: *api-environment
+    volumes:
+      - runtime_data:/app/.interview_agent
+    depends_on:
+      embedding:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: "no"
+    networks: [backend]
+    profiles: [tools]
+
+  api:
+    image: interview-agent-backend:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    restart: unless-stopped
+    env_file: ${APP_ENV_FILE:-../.env.production}
+    environment:
+      <<: *api-environment
+      EMBEDDING_PROVIDER: disabled
+      EMBEDDING_SERVICE_URL: ""
+    ports:
+      - "127.0.0.1:${API_PORT:-8020}:8020"
+    volumes:
+      - runtime_data:/app/.interview_agent
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks: [backend]
+
+  web:
+    image: interview-agent-web:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: apps/desktop/Dockerfile.web
+      args:
+        VITE_INTERVIEW_AGENT_API_URL: /api
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [backend]
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-postgres_data}
+  minio_data:
+    name: ${MINIO_VOLUME_NAME:-minio_data}
+  qdrant_data:
+    name: ${QDRANT_VOLUME_NAME:-qdrant_storage}
+  runtime_data:
+    name: ${RUNTIME_VOLUME_NAME:-interview_agent_runtime}
+  model_cache:
+    name: ${MODEL_CACHE_VOLUME_NAME:-interview_agent_model_cache}

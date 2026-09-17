@@ -11,14 +11,14 @@ import {
   PenLine,
   RefreshCw,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   Wand2
 } from "lucide-react";
 import { formatDateTime } from "../../utils/interview";
 import { AccountEntry } from "../account/AccountCenter";
-
-const HISTORY_PREVIEW_COUNT = 6;
+import { InfiniteScrollSentinel } from "../common/InfiniteScrollSentinel";
 
 export default function Sidebar({
   screen,
@@ -38,7 +38,7 @@ export default function Sidebar({
 }) {
   const isAdmin = account?.role === "admin";
   return (
-    <aside className="sidebar">
+    <aside id="app-sidebar" className="sidebar" aria-label="主菜单">
       <div className="brand">
         <div className="brand-mark">
           <img src="./favicon.svg" alt="" aria-hidden="true" />
@@ -91,6 +91,13 @@ export default function Sidebar({
           onClick={() => onScreenChange("reports")}
         />
         <NavButton
+          active={screen === "interviewer-workspace"}
+          icon={<ClipboardList size={17} />}
+          label="面试官工作台"
+          detail="题纲 · 证据 · 评价"
+          onClick={() => onScreenChange("interviewer-workspace")}
+        />
+        <NavButton
           active={screen === "setup"}
           icon={<SlidersHorizontal size={17} />}
           label="面试配置"
@@ -124,6 +131,15 @@ export default function Sidebar({
         />
 
         <div className="nav-group-label">我的</div>
+        {isAdmin && (
+          <NavButton
+            active={screen === "admin"}
+            icon={<ShieldCheck size={17} />}
+            label="管理后台"
+            detail="用户 · 模型 · 付费"
+            onClick={() => onScreenChange("admin")}
+          />
+        )}
         {isAdmin && (
           <NavButton
             active={screen === "ops"}
@@ -171,6 +187,7 @@ export default function Sidebar({
           reportScores={reportScores}
           onRestore={onRestoreSession}
           onDelete={onDeleteSession}
+          onLoadMore={() => onReloadSessions?.({ append: true })}
         />
       </section>
     </aside>
@@ -189,23 +206,20 @@ function NavButton({ active, icon, label, detail, onClick }) {
   );
 }
 
-function SessionHistory({ sessions, activeSessionId, state, busy, reportScores, onRestore, onDelete }) {
+function SessionHistory({ sessions, activeSessionId, state, busy, reportScores, onRestore, onDelete, onLoadMore }) {
   const [modeFilter, setModeFilter] = useState("all");
-  const [expanded, setExpanded] = useState(false);
 
   const filtered = useMemo(() => {
     if (modeFilter === "all") return sessions;
     return sessions.filter((session) => (session.mode || "interviewer") === modeFilter);
   }, [sessions, modeFilter]);
 
-  if (state?.status === "error") {
+  if (state?.status === "error" && !sessions.length) {
     return <p className="resume-hint error">{state.error}</p>;
   }
   if (!sessions.length) {
     return <p className="resume-hint">暂无历史会话，开始一次面试后会自动保存。</p>;
   }
-
-  const visible = expanded ? filtered : filtered.slice(0, HISTORY_PREVIEW_COUNT);
 
   return (
     <div className="history-list">
@@ -225,7 +239,7 @@ function SessionHistory({ sessions, activeSessionId, state, busy, reportScores, 
           </button>
         ))}
       </div>
-      {visible.map((session) => {
+      {filtered.map((session) => {
         const score = reportScores?.[session.id];
         return (
           <div key={session.id} className={`history-item ${session.id === activeSessionId ? "active" : ""}`}>
@@ -255,11 +269,12 @@ function SessionHistory({ sessions, activeSessionId, state, busy, reportScores, 
         );
       })}
       {filtered.length === 0 && <p className="resume-hint">该筛选下暂无会话。</p>}
-      {filtered.length > HISTORY_PREVIEW_COUNT && (
-        <button type="button" className="history-expand" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "收起" : `查看全部 ${filtered.length} 条`}
-        </button>
-      )}
+      <InfiniteScrollSentinel
+        hasMore={Boolean(state?.hasMore)}
+        loading={state?.status === "loading-more"}
+        error={state?.status === "error" ? state.error : ""}
+        onLoadMore={onLoadMore}
+      />
       {state?.status === "success" && <p className="resume-hint success">{state.message}</p>}
     </div>
   );

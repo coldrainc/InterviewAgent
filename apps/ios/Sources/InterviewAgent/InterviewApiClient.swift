@@ -7,35 +7,56 @@ final class InterviewApiClient {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(baseURL: URL, token: String?, session: URLSession = .shared) {
+    private let onTokenChanged: (String?) -> Void
+
+    private var clientVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    }
+
+    init(baseURL: URL, token: String?, session: URLSession = .shared, onTokenChanged: @escaping (String?) -> Void = { _ in }) {
         self.baseURL = baseURL
         self.token = token
         self.session = session
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
+        self.onTokenChanged = onTokenChanged
     }
 
     func health() async throws -> HealthResponse {
         try await request(path: "/health")
     }
 
-    func devLogin(userID: String = "ios-dev-user") async throws -> AuthTokenResponse {
-        let response: AuthTokenResponse = try await request(
-            path: "/auth/dev-login",
-            method: "POST",
-            body: [
-                "user_id": userID,
-                "display_name": "iOS 开发用户",
-                "platform": "ios"
-            ]
-        )
+    func login(email: String, password: String) async throws -> AuthTokenResponse {
+        let response: AuthTokenResponse = try await request(path: "/auth/login", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password.trimmingCharacters(in: .whitespacesAndNewlines), "platform": "ios"])
         token = response.accessToken
+        onTokenChanged(response.accessToken)
+        return response
+    }
+
+    func register(email: String, password: String, displayName: String) async throws -> AuthTokenResponse {
+        let response: AuthTokenResponse = try await request(path: "/auth/register", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password.trimmingCharacters(in: .whitespacesAndNewlines), "display_name": displayName.trimmingCharacters(in: .whitespacesAndNewlines), "platform": "ios"])
+        token = response.accessToken
+        onTokenChanged(response.accessToken)
         return response
     }
 
     func logout() {
         token = nil
+        onTokenChanged(nil)
     }
+
+    func learningToday() async throws -> LearningTodayResponse { try await request(path: "/learning/today") }
+
+    func commandLearningTask(_ task: LearningTask, action: String) async throws -> LearningTask {
+        let response: LearningCommandResponse = try await request(path: "/learning/tasks/\(task.id)/commands", method: "POST", body: LearningCommandRequest(action: action, expectedVersion: task.version), headers: ["Idempotency-Key": "ios-\(UUID().uuidString)"])
+        return response.task
+    }
+
+    func listReviewPlans(limit: Int = 20, offset: Int = 0) async throws -> [ReviewPlan] { try await request(path: "/review-site/plans?limit=\(limit)&offset=\(offset)") }
+    func generateReviewPlan(_ body: PlanGenerateRequest) async throws -> PlanGenerateResponse { try await request(path: "/review-site/planner/generate", method: "POST", body: body) }
+    func checkin(planID: String, minutes: Int, note: String) async throws -> CheckinResponse { try await request(path: "/review-site/plans/\(planID)/checkin", method: "POST", body: CheckinRequest(elapsedMinutes: minutes, note: note)) }
+    func listInterviewKits(limit: Int = 20, offset: Int = 0) async throws -> [InterviewKit] { try await request(path: "/interviewer-workspace/kits?limit=\(limit)&offset=\(offset)") }
+    func createInterviewKit(_ body: InterviewKitRequest) async throws -> InterviewKit { try await request(path: "/interviewer-workspace/kits", method: "POST", body: body) }
 
     func account() async throws -> AccountResponse {
         try await request(path: "/account")
@@ -74,9 +95,9 @@ final class InterviewApiClient {
         try await request(path: "/practice/categories")
     }
 
-    func listPracticeQuestions(category: String, limit: Int = 50) async throws -> PracticeQuestionListResponse {
+    func listPracticeQuestions(category: String, limit: Int = 20, offset: Int = 0) async throws -> PracticeQuestionListResponse {
         let encoded = category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? category
-        return try await request(path: "/practice/questions?category=\(encoded)&limit=\(limit)")
+        return try await request(path: "/practice/questions?category=\(encoded)&limit=\(limit)&offset=\(offset)")
     }
 
     func seedPracticeQuestions() async throws -> ImportResultResponse {
@@ -91,8 +112,8 @@ final class InterviewApiClient {
         )
     }
 
-    func listResumes() async throws -> [ResumeRecord] {
-        try await request(path: "/resumes")
+    func listResumes(limit: Int = 20, offset: Int = 0) async throws -> [ResumeRecord] {
+        try await request(path: "/resumes?limit=\(limit)&offset=\(offset)")
     }
 
     func importResume(filename: String, text: String) async throws -> ResumeRecord {
@@ -112,8 +133,8 @@ final class InterviewApiClient {
         try await request(path: "/sessions", method: "POST", body: body)
     }
 
-    func listSessions(limit: Int = 50) async throws -> [SessionSummary] {
-        try await request(path: "/sessions?limit=\(limit)")
+    func listSessions(limit: Int = 20, offset: Int = 0) async throws -> [SessionSummary] {
+        try await request(path: "/sessions?limit=\(limit)&offset=\(offset)")
     }
 
     func getSession(id: String) async throws -> SessionDetail {
@@ -144,7 +165,8 @@ final class InterviewApiClient {
     private func request<Response: Decodable, Body: Encodable>(
         path: String,
         method: String = "GET",
-        body: Body? = Optional<String>.none
+        body: Body? = Optional<String>.none,
+        headers: [String: String] = [:]
     ) async throws -> Response {
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
             throw InterviewApiError.invalidResponse
@@ -152,6 +174,8 @@ final class InterviewApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        setClientHeaders(on: &request)
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -181,6 +205,7 @@ final class InterviewApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        setClientHeaders(on: &request)
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -193,6 +218,14 @@ final class InterviewApiClient {
             throw InterviewApiError.server("HTTP \(http.statusCode)")
         }
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func setClientHeaders(on request: inout URLRequest) {
+        let requestID = UUID().uuidString
+        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        request.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
+        request.setValue("ios", forHTTPHeaderField: "X-Client-Platform")
+        request.setValue(clientVersion, forHTTPHeaderField: "X-Client-Version")
     }
 
     private func parseSSE(_ text: String) -> [StreamEvent] {

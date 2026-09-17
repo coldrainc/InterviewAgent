@@ -2,13 +2,19 @@ import base64
 import hashlib
 import hmac
 import json
+from datetime import timedelta
 
 import pytest
 
 from fastapi.testclient import TestClient
 
 from interview_agent.core.config import InterviewConfig
-from interview_agent.infrastructure.db.session import create_engine_for_url
+from interview_agent.domain.resume import StoredResume
+from interview_agent.infrastructure.db.models import SecurityEventModel, utcnow
+from interview_agent.infrastructure.db.session import create_engine_for_url, session_scope
+from interview_agent.infrastructure.security import issue_client_token
+from interview_agent.infrastructure.settings import load_settings
+from interview_agent.infrastructure.settings import AppSettings
 from interview_agent.infrastructure.object_storage import LocalObjectStorage
 from interview_agent.interfaces.api import SessionRequest, apply_session_request, create_app
 
@@ -26,6 +32,204 @@ def _register_headers(client: TestClient, email: str = "candidate@example.com") 
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def _admin_headers() -> dict[str, str]:
+    token, _ = issue_client_token(
+        load_settings(),
+        tenant_id="default",
+        user_id="fixture-admin",
+        platform="test",
+        role="admin",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _client_password_derived(email: str, password: str) -> str:
+    normalized_email = email.strip().lower()
+    normalized_password = password.strip()
+    return hashlib.sha256(
+        f"interview-agent:password:v1:{normalized_email}\0{normalized_password}".encode("utf-8")
+    ).hexdigest()
+
+
+def test_password_auth_trims_outer_spaces_and_accepts_client_derived(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        raw_registered = client.post(
+            "/auth/register",
+            json={
+                "email": " Spacey@example.com ",
+                "password": "  passw0rd!  ",
+                "display_name": "Spacey",
+            },
+        )
+        assert raw_registered.status_code == 200, raw_registered.text
+        raw_login = client.post(
+            "/auth/login",
+            json={"email": " spacey@example.com ", "password": "  passw0rd!  "},
+        )
+        assert raw_login.status_code == 200, raw_login.text
+        raw_derived = _client_password_derived("spacey@example.com", "  passw0rd!  ")
+        migrated_login = client.post(
+            "/auth/login",
+            json={
+                "email": " spacey@example.com ",
+                "password": "  passw0rd!  ",
+                "password_derived": raw_derived,
+                "password_scheme": "client_sha256_v1",
+            },
+        )
+        assert migrated_login.status_code == 200, migrated_login.text
+        derived_only_after_migration = client.post(
+            "/auth/login",
+            json={
+                "email": "spacey@example.com",
+                "password_derived": raw_derived,
+                "password_scheme": "client_sha256_v1",
+            },
+        )
+        assert derived_only_after_migration.status_code == 200, derived_only_after_migration.text
+
+        derived_email = "derived@example.com"
+        derived_password = "  Test123456!  "
+        derived_registered = client.post(
+            "/auth/register",
+            json={
+                "email": derived_email,
+                "password_derived": _client_password_derived(derived_email, derived_password),
+                "password_scheme": "client_sha256_v1",
+                "display_name": "Derived",
+            },
+        )
+        assert derived_registered.status_code == 200, derived_registered.text
+        derived_login = client.post(
+            "/auth/login",
+            json={
+                "email": f" {derived_email} ",
+                "password_derived": _client_password_derived(derived_email, derived_password),
+                "password_scheme": "client_sha256_v1",
+            },
+        )
+        assert derived_login.status_code == 200, derived_login.text
+        derived_account_raw_login = client.post(
+            "/auth/login",
+            json={"email": f" {derived_email} ", "password": derived_password},
+        )
+        assert derived_account_raw_login.status_code == 200, derived_account_raw_login.text
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_login_failed_attempt_limit_is_scoped_to_email_and_ip(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        registered = client.post(
+            "/auth/register",
+            json={
+                "email": "scoped-login@example.com",
+                "password": "Test123456!",
+                "display_name": "Scoped Login",
+            },
+        )
+        assert registered.status_code == 200, registered.text
+
+        async def seed_other_account_failures() -> None:
+            async with session_scope() as db:
+                for index in range(8):
+                    db.add(
+                        SecurityEventModel(
+                            tenant_id="default",
+                            user_id="email:other-scoped-login@example.com",
+                            event_type="login_failed",
+                            severity="warning",
+                            ip_address="198.51.100.24",
+                            created_at=utcnow() - timedelta(minutes=index),
+                        )
+                    )
+
+        import asyncio
+
+        asyncio.run(seed_other_account_failures())
+
+        blocked_other = client.post(
+            "/auth/login",
+            headers={"X-Forwarded-For": "198.51.100.24"},
+            json={"email": "other-scoped-login@example.com", "password": "wrong"},
+        )
+        assert blocked_other.status_code == 429, blocked_other.text
+
+        login = client.post(
+            "/auth/login",
+            headers={"X-Forwarded-For": "198.51.100.24"},
+            json={"email": "scoped-login@example.com", "password": "Test123456!"},
+        )
+        assert login.status_code == 200, login.text
+
+    asyncio.run(engine.dispose())
+
+
+def test_login_failed_attempt_limit_blocks_same_email_and_ip(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        for _ in range(8):
+            failed = client.post(
+                "/auth/login",
+                headers={"X-Forwarded-For": "198.51.100.25"},
+                json={"email": "same-scoped-login@example.com", "password": "wrong"},
+            )
+            assert failed.status_code == 401, failed.text
+
+        blocked = client.post(
+            "/auth/login",
+            headers={"X-Forwarded-For": "198.51.100.25"},
+            json={"email": "same-scoped-login@example.com", "password": "wrong"},
+        )
+        assert blocked.status_code == 429, blocked.text
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_refresh_token_rotates_and_rejects_reuse_with_sqlite(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        registered = client.post(
+            "/auth/register",
+            json={
+                "email": "refresh-sqlite@example.com",
+                "password": "passw0rd!",
+                "display_name": "Refresh SQLite",
+            },
+        )
+        assert registered.status_code == 200
+        original = registered.json()["refresh_token"]
+
+        rotated = client.post("/auth/refresh", json={"refresh_token": original})
+        assert rotated.status_code == 200, rotated.text
+        assert rotated.json()["refresh_token"] != original
+
+        replayed = client.post("/auth/refresh", json={"refresh_token": original})
+        assert replayed.status_code == 401
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
 
 
 def test_apply_session_request_updates_resume_profile() -> None:
@@ -49,6 +253,30 @@ def test_apply_session_request_updates_resume_profile() -> None:
     assert updated.candidate.project_experience == "主导知识库问答、评测和上线治理。"
     assert updated.candidate.interview_goal == "重点深挖真实项目。"
     assert updated.focus_areas == ["简历项目深挖", "Agent 工具调用"]
+
+
+def test_stored_resume_is_authoritative_over_client_resume_fields() -> None:
+    stored = StoredResume(
+        id="owned-resume",
+        filename="owned.md",
+        file_type="markdown",
+        summary="当前用户服务端简历摘要",
+        text="当前用户服务端简历正文",
+        truncated=False,
+        created_at="2026-09-05T00:00:00+00:00",
+        updated_at="2026-09-05T00:00:00+00:00",
+    )
+    request = SessionRequest(
+        resume_id="owned-resume",
+        resume_summary="客户端伪造的其他用户摘要",
+        resume_text="客户端伪造的其他用户正文",
+    )
+
+    updated = apply_session_request(InterviewConfig(), request, stored_resume=stored)
+
+    assert updated.candidate.resume_summary == stored.summary
+    assert updated.candidate.resume_text == stored.text
+    assert "其他用户" not in updated.candidate.resume_text
 
 
 def test_apply_session_request_ignores_blank_values() -> None:
@@ -110,6 +338,85 @@ def test_practice_categories_include_leetcode_questions(tmp_path) -> None:
     assert {item["practice_category"] for item in canonical.json()["items"]} == {"leetcode"}
     assert alias.status_code == 200
     assert alias.json()["total"] == canonical.json()["total"]
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_practice_question_pages_prefetch_without_cross_user_leakage(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        owner = _register_headers(client, "paging-owner@example.com")
+        other = _register_headers(client, "paging-other@example.com")
+        private_prompt = "owner-only-pagination-question-6fbeff5b"
+        imported = client.post(
+            "/practice/questions/import",
+            headers=owner,
+            json={
+                "questions": [{
+                    "prompt": private_prompt,
+                    "exam_year": 2026,
+                    "practice_category": "leetcode",
+                    "question_type": "subjective",
+                    "difficulty": "medium",
+                    "answer": "owner answer",
+                }]
+            },
+        )
+        first = client.get(
+            "/practice/questions?category=leetcode&limit=3&offset=0", headers=owner
+        )
+        second = client.get(
+            "/practice/questions?category=leetcode&limit=3&offset=3", headers=owner
+        )
+        other_first = client.get(
+            "/practice/questions?category=leetcode&limit=3&offset=0", headers=other
+        )
+
+        owner_all = client.get(
+            "/practice/questions?category=leetcode&limit=100&offset=0", headers=owner
+        )
+        other_all = client.get(
+            "/practice/questions?category=leetcode&limit=100&offset=0", headers=other
+        )
+
+    assert imported.status_code == 200, imported.text
+    assert first.status_code == second.status_code == other_first.status_code == 200
+    assert first.json()["has_more"] is True
+    assert first.json()["next_offset"] == 3
+    assert second.json()["offset"] == 3
+    first_ids = {item["id"] for item in first.json()["items"]}
+    second_ids = {item["id"] for item in second.json()["items"]}
+    assert first_ids.isdisjoint(second_ids)
+    assert private_prompt in {item["prompt"] for item in owner_all.json()["items"]}
+    assert private_prompt not in {item["prompt"] for item in other_all.json()["items"]}
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_seeded_practice_questions_can_create_training_drill(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "seed-to-drill@example.com")
+        seeded = client.post("/practice/questions/seed", headers=headers)
+        assert seeded.status_code == 200, seeded.text
+
+        questions = client.get("/review-site/practice-questions", headers=headers)
+        assert questions.status_code == 200
+        assert questions.json()["total"] > 0
+
+        drill = client.post("/training/drills", headers=headers, json={"count": 3})
+        assert drill.status_code == 200, drill.text
+        assert drill.json()["question_count"] == 3
 
     import asyncio
 
@@ -188,14 +495,14 @@ def test_practice_attempt_scores_open_question(tmp_path) -> None:
     asyncio.run(engine.dispose())
 
 
-def test_review_site_imports_default_plan_and_saves_progress(tmp_path) -> None:
+def test_admin_can_create_anonymous_review_fixture_and_save_progress(tmp_path) -> None:
     engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
     storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
     app = create_app(object_storage=storage, database_engine=engine)
 
     with TestClient(app) as client:
-        headers = _register_headers(client, "review-site@example.com")
-        imported = client.post("/review-site/import", headers=headers, json={"plan_only": True})
+        headers = _admin_headers()
+        imported = client.post("/admin/test-data/review-site", headers=headers)
         assert imported.status_code == 200
         assert imported.json()["plan_count"] == 1
 
@@ -207,14 +514,15 @@ def test_review_site_imports_default_plan_and_saves_progress(tmp_path) -> None:
         plan = client.get(f"/review-site/plans/{plan_id}", headers=headers)
         assert plan.status_code == 200
         payload = plan.json()
-        assert payload["title"] == "陈雨寒面试复习站"
-        assert len(payload["days"]) == 14
+        assert payload["title"] == "管理员测试计划"
+        assert payload["metadata"]["fixture_kind"] == "admin_test"
+        assert len(payload["days"]) == 7
         first_task_id = payload["days"][0]["tasks"][0]["id"]
 
         progress = client.patch(
             f"/review-site/progress/task/{first_task_id}",
             headers=headers,
-            json={"done": True, "elapsed_minutes": 45, "mastery_score": 4, "note": "简历数字已背完"},
+            json={"done": True, "elapsed_minutes": 45, "mastery_score": 4, "note": "测试任务已完成"},
         )
         assert progress.status_code == 200
         assert progress.json()["done"] is True
@@ -223,6 +531,125 @@ def test_review_site_imports_default_plan_and_saves_progress(tmp_path) -> None:
         refreshed = client.get(f"/review-site/plans/{plan_id}", headers=headers)
         assert refreshed.status_code == 200
         assert refreshed.json()["progresses"][0]["task_id"] == first_task_id
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_review_plan_response_hides_local_document_links(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "review-doc-owner@example.com")
+        created = client.post("/review-site/plans", headers=headers, json={"title": "资料访问测试"})
+        assert created.status_code == 200
+        plan_id = created.json()["id"]
+
+        updated = client.patch(
+            f"/review-site/plans/{plan_id}",
+            headers=headers,
+            json={
+                "source_root": "/Users/example/private/interview",
+                "source_documents": ["file:///Users/example/private/interview/codex.md"],
+            },
+        )
+        assert updated.status_code == 200
+
+        day = client.post(
+            f"/review-site/plans/{plan_id}/days",
+            headers=headers,
+            json={"day_key": "day-1", "day_label": "Day 1", "title": "资料日"},
+        )
+        assert day.status_code == 201
+        task = client.post(
+            f"/review-site/days/{day.json()['id']}/tasks",
+            headers=headers,
+            json={
+                "task_key": "doc-task",
+                "title": "Codex 资料阅读",
+                "docs": [{"label": "Codex 文档", "url": "file:///Users/example/private/interview/codex.md"}],
+                "link_payload": {
+                    "detail": {
+                        "materials": [
+                            {
+                                "label": "Codex 文档",
+                                "path": "/Users/example/private/interview/codex.md",
+                                "content": "# Codex\n\n任务隔离、上下文和交付闭环。",
+                            }
+                        ]
+                    }
+                },
+            },
+        )
+        assert task.status_code == 201
+
+        plan = client.get(f"/review-site/plans/{plan_id}", headers=headers)
+        assert plan.status_code == 200
+        body = plan.json()
+        body_text = json.dumps(body, ensure_ascii=False)
+        assert "file://" not in body_text
+        assert "/Users/example/private" not in body_text
+        assert body["source_root"] == ""
+        assert body["source_documents"] == [{"label": "codex.md", "source_index": 0}]
+        public_task = body["days"][0]["tasks"][0]
+        assert public_task["docs"] == [
+            {"label": "Codex 文档", "source_index": 0, "page_url": "/review-site/materials/0"}
+        ]
+        assert public_task["link_payload"]["detail"]["materials"] == [
+            {
+                "label": "Codex 文档",
+                "source_index": 0,
+                "page_url": "/review-site/materials/0",
+                "content": "# Codex\n\n任务隔离、上下文和交付闭环。",
+            }
+        ]
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_regular_user_cannot_create_admin_review_fixture(tmp_path) -> None:
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+
+    with TestClient(app) as client:
+        headers = _register_headers(client, "review-site-user@example.com")
+        response = client.post("/admin/test-data/review-site", headers=headers)
+        assert response.status_code == 403
+
+    import asyncio
+
+    asyncio.run(engine.dispose())
+
+
+def test_production_rejects_admin_review_fixture(tmp_path, monkeypatch) -> None:
+    import interview_agent.interfaces.api as api_module
+
+    production_settings = AppSettings(environment="production")
+    monkeypatch.setattr(api_module, "load_settings", lambda: production_settings)
+    monkeypatch.setattr(api_module, "validate_production_security", lambda _settings: None)
+    engine = create_engine_for_url("sqlite+aiosqlite:///:memory:")
+    storage = LocalObjectStorage(root=tmp_path / "objects", bucket="api-test")
+    app = create_app(object_storage=storage, database_engine=engine)
+    token, _ = issue_client_token(
+        production_settings,
+        tenant_id="default",
+        user_id="fixture-admin",
+        platform="test",
+        role="admin",
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/admin/test-data/review-site",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
 
     import asyncio
 
@@ -634,6 +1061,19 @@ def test_api_user_isolation_within_same_tenant(tmp_path) -> None:
         assert client.get(f"/resumes/{resume_id}", headers=user_b).status_code == 404
         assert client.get("/sessions", headers=user_b).json() == []
         assert client.get(f"/sessions/{session_id}", headers=user_b).status_code == 404
+
+        forged = client.post(
+            "/sessions",
+            headers=user_b,
+            json={
+                "offline": True,
+                "resume_id": resume_id,
+                "resume_summary": "尝试绑定用户 A 简历",
+                "resume_text": content,
+            },
+        )
+        assert forged.status_code == 404
+        assert client.get("/sessions", headers=user_b).json() == []
 
     import asyncio
 

@@ -169,7 +169,7 @@ export function StudyCenter({
           {studyState.error && <p className="resume-hint error">{studyState.error}</p>}
           {studyState.seedMessage && <p className="resume-hint success">{studyState.seedMessage}</p>}
           {studyState.importMessage && <p className="resume-hint success">{studyState.importMessage}</p>}
-          <p className="resume-hint">当前筛选共 {total} 道题，题库类型与面试配置保持同一套分类。CSV 字段支持 category、exam_year、exam_name、subject、question_type、prompt、choices、answer、explanation、difficulty、tags。</p>
+          <p className="resume-hint">当前筛选共 {total} 道题。支持上传常见 CSV 题库文件，系统会自动识别题目、选项、答案和解析。</p>
           <div className="question-list">
             {questions.length ? questions.map((question) => (
               <QuestionCard key={question.id} question={question} />

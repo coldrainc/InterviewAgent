@@ -4,6 +4,7 @@ set -euo pipefail
 WEB_DOMAIN="${WEB_DOMAIN:-www.aivago.cn}"
 APP_DIR="${APP_DIR:-/opt/aivago/InterviewAgent}"
 WEB_ROOT="${WEB_ROOT:-$APP_DIR/apps/desktop/dist}"
+WEB_UPSTREAM="${WEB_UPSTREAM:-}"
 API_UPSTREAM="${API_UPSTREAM:-http://127.0.0.1:8020}"
 CONFIG_NAME="${CONFIG_NAME:-aivago-web}"
 SITES_AVAILABLE="${SITES_AVAILABLE:-/etc/nginx/sites-available}"
@@ -34,7 +35,9 @@ require_root() {
 }
 
 check_inputs() {
-  [[ -d "$WEB_ROOT" ]] || die "前端目录不存在：$WEB_ROOT，请先构建前端。"
+  if [[ -z "$WEB_UPSTREAM" ]]; then
+    [[ -d "$WEB_ROOT" ]] || die "前端目录不存在：$WEB_ROOT，请先构建前端。"
+  fi
   [[ -f "$CERT_DIR/fullchain.pem" ]] || die "证书不存在：$CERT_DIR/fullchain.pem，请先为 $WEB_DOMAIN 申请 HTTPS 证书。"
   [[ -f "$CERT_DIR/privkey.pem" ]] || die "证书私钥不存在：$CERT_DIR/privkey.pem"
 }
@@ -50,8 +53,36 @@ backup_existing_config() {
 render_config() {
   local target="$1"
   local security_include=""
+  local web_location=""
   if [[ -f "$SECURITY_SNIPPET" ]]; then
     security_include="    include $SECURITY_SNIPPET;"
+  fi
+  if [[ -n "$WEB_UPSTREAM" ]]; then
+    web_location=$(cat <<WEBPROXY
+    location / {
+        proxy_pass $WEB_UPSTREAM;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Request-ID \$request_id;
+    }
+WEBPROXY
+)
+  else
+    web_location=$(cat <<'STATIC'
+    location /assets/ {
+        try_files $uri =404;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+STATIC
+)
   fi
   cat > "$target" <<NGINX
 server {
@@ -87,7 +118,7 @@ $security_include
         proxy_pass $API_UPSTREAM;
         proxy_http_version 1.1;
 
-        proxy_set_header Host api.aivago.cn;
+        proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -110,7 +141,7 @@ $security_include
         proxy_pass $API_UPSTREAM/;
         proxy_http_version 1.1;
 
-        proxy_set_header Host api.aivago.cn;
+        proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -128,15 +159,7 @@ $security_include
         add_header X-Accel-Buffering no always;
     }
 
-    location /assets/ {
-        try_files \$uri =404;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
+$web_location
 }
 NGINX
 }

@@ -8,10 +8,15 @@ import com.interviewagent.data.ChatMessage
 import com.interviewagent.data.CreateSessionRequest
 import com.interviewagent.data.IndustryOption
 import com.interviewagent.data.InterviewApiClient
+import com.interviewagent.data.InterviewKit
+import com.interviewagent.data.LearningTask
+import com.interviewagent.data.LearningTaskTarget
+import com.interviewagent.data.LearningToday
 import com.interviewagent.data.PracticeAttemptResponse
 import com.interviewagent.data.PracticeCategory
 import com.interviewagent.data.PracticeQuestion
 import com.interviewagent.data.ResumeRecord
+import com.interviewagent.data.ReviewPlan
 import com.interviewagent.data.SessionSummary
 import com.interviewagent.data.UserSettingsResponse
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +51,21 @@ data class ChatUiState(
     val currentPracticeIndex: Int = 0,
     val practiceAnswer: String = "",
     val practiceResult: PracticeAttemptResponse? = null,
-    val practiceMessage: String = ""
+    val practiceMessage: String = "",
+    val learningToday: LearningToday = LearningToday(),
+    val learningMessage: String = "",
+    val reviewPlans: List<ReviewPlan> = emptyList(),
+    val selectedReviewPlanId: String? = null,
+    val reviewMessage: String = "",
+    val interviewKits: List<InterviewKit> = emptyList(),
+    val interviewerMessage: String = "",
+    val activeLearningTarget: LearningTaskTarget? = null
+    ,val activeLearningTaskType: String = "",
+    val practiceHasMore: Boolean = true,
+    val resumesHasMore: Boolean = true,
+    val sessionsHasMore: Boolean = true,
+    val reviewPlansHasMore: Boolean = true,
+    val interviewKitsHasMore: Boolean = true
 )
 
 class ChatViewModel(
@@ -55,6 +74,7 @@ class ChatViewModel(
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state
     private var practiceStartedAtMillis: Long = System.currentTimeMillis()
+    private var paging = mutableSetOf<String>()
 
     init {
         load()
@@ -91,39 +111,39 @@ class ChatViewModel(
     val currentPracticeQuestion: PracticeQuestion?
         get() = _state.value.practiceQuestions.getOrNull(_state.value.currentPracticeIndex)
 
-    fun devLogin() {
+    fun passwordLogin(email: String, password: String) = authenticate("登录") {
+        api.login(email.trim(), password.trim())
+    }
+
+    fun register(email: String, password: String, displayName: String) = authenticate("注册") {
+        api.register(email.trim(), password.trim(), displayName.trim())
+    }
+
+    private fun authenticate(label: String, block: () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, accountMessage = "") }
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    api.devLogin()
-                    val account = api.account()
-                    val settings = runCatching { api.settings() }.getOrNull()
-                    account to settings
+                    block()
+                    api.account() to runCatching { api.settings() }.getOrNull()
                 }
             }.onSuccess { (account, settings) ->
-                _state.update {
-                    it.copy(
-                        busy = false,
-                        account = account,
-                        settings = settings,
-                        accountMessage = "已登录开发账号",
-                        authPrompt = null
-                    )
-                }
-                loadResumes()
-                loadSessions()
-                loadPractice()
+                _state.update { it.copy(busy = false, account = account, settings = settings, accountMessage = "$label 成功", authPrompt = null) }
+                loadPrivateWorkspaces()
             }.onFailure { error ->
-                _state.update {
-                    it.copy(
-                        busy = false,
-                        accountMessage = "开发登录失败：${error.message}"
-                    )
-                }
+                _state.update { it.copy(busy = false, accountMessage = "$label 失败：${error.message}") }
             }
         }
+    }
+
+    private fun loadPrivateWorkspaces() {
+        loadResumes()
+        loadSessions()
+        loadPractice()
+        loadLearningToday()
+        loadReviewPlans()
+        loadInterviewKits()
     }
 
     fun logout() {
@@ -139,7 +159,10 @@ class ChatViewModel(
                 selectedResumeId = null,
                 settings = null,
                 practiceQuestions = emptyList(),
-                practiceResult = null
+                practiceResult = null,
+                learningToday = LearningToday(),
+                reviewPlans = emptyList(),
+                interviewKits = emptyList()
             )
         }
     }
@@ -154,12 +177,111 @@ class ChatViewModel(
                 }
             }.onSuccess { (account, settings) ->
                 _state.update { it.copy(account = account, settings = settings) }
-                loadResumes()
-                loadSessions()
-                loadPractice()
+                loadPrivateWorkspaces()
             }.onFailure {
                 _state.update { it.copy(account = null) }
             }
+        }
+    }
+
+    fun loadLearningToday() {
+        if (_state.value.account == null) return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.learningToday() } }
+                .onSuccess { today -> _state.update { it.copy(learningToday = today, learningMessage = "") } }
+                .onFailure { error -> _state.update { it.copy(learningMessage = "加载今日任务失败：${error.message}") } }
+        }
+    }
+
+    fun runLearningTask(task: LearningTask) {
+        if (!requireAccount("执行学习任务前需要登录。") || _state.value.busy) return
+        val action = if (task.done) "reopen" else if (task.status == "todo") "start" else "complete"
+        _state.update { it.copy(busy = true, learningMessage = "") }
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.commandLearningTask(task, action) } }
+                .onSuccess {
+                    _state.update { state -> state.copy(busy = false, learningMessage = "任务状态已更新") }
+                    loadLearningToday()
+                }
+                .onFailure { error -> _state.update { it.copy(busy = false, learningMessage = "更新失败：${error.message}") } }
+        }
+    }
+
+    fun openLearningTask(task: LearningTask) {
+        _state.update {
+            it.copy(
+                activeLearningTarget = task.target,
+                activeLearningTaskType = task.taskType,
+                selectedPracticeCategory = task.target.category.ifBlank { it.selectedPracticeCategory },
+                selectedReviewPlanId = task.target.planId.takeIf { planId -> planId.isNotBlank() }
+                    ?: it.selectedReviewPlanId
+            )
+        }
+        if (task.taskType == "practice") loadPractice()
+    }
+
+    fun loadReviewPlans(append: Boolean = false) {
+        if (_state.value.account == null) return
+        if (!paging.add("plans") || (append && !_state.value.reviewPlansHasMore)) return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.listReviewPlans(offset = if (append) _state.value.reviewPlans.size else 0) } }
+                .onSuccess { plans -> _state.update { state ->
+                    val merged = if (append) (state.reviewPlans + plans).distinctBy { it.id } else plans
+                    state.copy(reviewPlans = merged, reviewPlansHasMore = plans.size == 20, selectedReviewPlanId = state.selectedReviewPlanId ?: merged.firstOrNull()?.id)
+                } }
+                .onFailure { error -> _state.update { it.copy(reviewMessage = "加载复习计划失败：${error.message}") } }
+            paging.remove("plans")
+        }
+    }
+
+    fun generateReviewPlan(targetRole: String, days: Int, hours: Double, focus: String) {
+        if (!requireAccount("生成复习计划前需要登录。") || _state.value.busy) return
+        _state.update { it.copy(busy = true, reviewMessage = "正在生成计划…") }
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.generateReviewPlan(targetRole, days, hours, focus, _state.value.selectedResumeId) } }
+                .onSuccess { id ->
+                    _state.update { it.copy(busy = false, selectedReviewPlanId = id, reviewMessage = "计划已生成") }
+                    loadReviewPlans()
+                    loadLearningToday()
+                }
+                .onFailure { error -> _state.update { it.copy(busy = false, reviewMessage = "生成失败：${error.message}") } }
+        }
+    }
+
+    fun checkinReview(minutes: Int, note: String) {
+        val planId = _state.value.selectedReviewPlanId ?: return
+        if (_state.value.busy) return
+        _state.update { it.copy(busy = true, reviewMessage = "") }
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.checkin(planId, minutes, note) } }
+                .onSuccess { streak ->
+                    _state.update { it.copy(busy = false, reviewMessage = "打卡成功，连续 $streak 天") }
+                    loadLearningToday()
+                }
+                .onFailure { error -> _state.update { it.copy(busy = false, reviewMessage = "打卡失败：${error.message}") } }
+        }
+    }
+
+    fun loadInterviewKits(append: Boolean = false) {
+        if (_state.value.account == null) return
+        if (!paging.add("kits") || (append && !_state.value.interviewKitsHasMore)) return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.listInterviewKits(offset = if (append) _state.value.interviewKits.size else 0) } }
+                .onSuccess { kits -> _state.update { state -> state.copy(interviewKits = if (append) (state.interviewKits + kits).distinctBy { it.id } else kits, interviewKitsHasMore = kits.size == 20) } }
+                .onFailure { error -> _state.update { it.copy(interviewerMessage = "加载面试题单失败：${error.message}") } }
+            paging.remove("kits")
+        }
+    }
+
+    fun createInterviewKit(targetRole: String, duration: Int, dimensions: List<String>) {
+        if (!requireAccount("创建面试官题单前需要登录。") || _state.value.busy) return
+        _state.update { it.copy(busy = true, interviewerMessage = "") }
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api.createInterviewKit(targetRole, duration, dimensions) } }
+                .onSuccess { kit ->
+                    _state.update { it.copy(busy = false, interviewKits = listOf(kit) + it.interviewKits, interviewerMessage = "面试题单已创建") }
+                }
+                .onFailure { error -> _state.update { it.copy(busy = false, interviewerMessage = "创建失败：${error.message}") } }
         }
     }
 
@@ -213,8 +335,9 @@ class ChatViewModel(
         _state.update { it.copy(input = value) }
     }
 
-    fun loadPractice() {
+    fun loadPractice(append: Boolean = false) {
         if (_state.value.account == null) return
+        if (!paging.add("practice") || (append && !_state.value.practiceHasMore)) return
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -222,7 +345,7 @@ class ChatViewModel(
                     val selected = _state.value.selectedPracticeCategory.takeIf { current ->
                         categories.any { it.value == current }
                     } ?: (categories.firstOrNull()?.value ?: "ai_application")
-                    val questions = api.listPracticeQuestions(selected)
+                    val questions = api.listPracticeQuestions(selected, offset = if (append) _state.value.practiceQuestions.size else 0)
                     Triple(categories, selected, questions)
                 }
             }.onSuccess { (categories, selected, questions) ->
@@ -231,8 +354,12 @@ class ChatViewModel(
                     it.copy(
                         practiceCategories = categories,
                         selectedPracticeCategory = selected,
-                        practiceQuestions = questions.items,
-                        currentPracticeIndex = 0,
+                        practiceQuestions = if (append) (it.practiceQuestions + questions.items).distinctBy { question -> question.id } else questions.items,
+                        practiceHasMore = questions.hasMore,
+                        currentPracticeIndex = it.activeLearningTarget?.questionId
+                            ?.takeIf { questionId -> it.activeLearningTaskType == "practice" && questionId.isNotBlank() }
+                            ?.let { questionId -> questions.items.indexOfFirst { question -> question.id == questionId } }
+                            ?.takeIf { index -> index >= 0 } ?: 0,
                         practiceAnswer = "",
                         practiceResult = null
                     )
@@ -240,6 +367,7 @@ class ChatViewModel(
             }.onFailure { error ->
                 _state.update { it.copy(practiceMessage = "加载刷题失败：${error.message}") }
             }
+            paging.remove("practice")
         }
     }
 
@@ -267,6 +395,7 @@ class ChatViewModel(
                 practiceResult = null
             )
         }
+        if (_state.value.currentPracticeIndex >= _state.value.practiceQuestions.size - 6) loadPractice(append = true)
     }
 
     fun seedPracticeQuestions() {
@@ -300,21 +429,24 @@ class ChatViewModel(
         }
     }
 
-    fun loadResumes() {
+    fun loadResumes(append: Boolean = false) {
         if (_state.value.account == null) return
+        if (!paging.add("resumes") || (append && !_state.value.resumesHasMore)) return
         viewModelScope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { api.listResumes() }
+                withContext(Dispatchers.IO) { api.listResumes(offset = if (append) _state.value.resumes.size else 0) }
             }.onSuccess { resumes ->
                 _state.update {
                     it.copy(
-                        resumes = resumes,
+                        resumes = if (append) (it.resumes + resumes).distinctBy { resume -> resume.id } else resumes,
+                        resumesHasMore = resumes.size == 20,
                         selectedResumeId = it.selectedResumeId ?: resumes.firstOrNull()?.id
                     )
                 }
             }.onFailure { error ->
                 _state.update { it.copy(resumeMessage = "加载简历失败：${error.message}") }
             }
+            paging.remove("resumes")
         }
     }
 
@@ -367,16 +499,18 @@ class ChatViewModel(
         }
     }
 
-    fun loadSessions() {
+    fun loadSessions(append: Boolean = false) {
         if (_state.value.account == null) return
+        if (!paging.add("sessions") || (append && !_state.value.sessionsHasMore)) return
         viewModelScope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { api.listSessions() }
+                withContext(Dispatchers.IO) { api.listSessions(offset = if (append) _state.value.sessions.size else 0) }
             }.onSuccess { sessions ->
-                _state.update { it.copy(sessions = sessions) }
+                _state.update { it.copy(sessions = if (append) (it.sessions + sessions).distinctBy { session -> session.id } else sessions, sessionsHasMore = sessions.size == 20) }
             }.onFailure { error ->
                 _state.update { it.copy(historyMessage = "加载历史失败：${error.message}") }
             }
+            paging.remove("sessions")
         }
     }
 
@@ -458,7 +592,11 @@ class ChatViewModel(
                     api.createSession(
                         CreateSessionRequest(
                             industry = current.selectedIndustry,
-                            resumeId = current.selectedResumeId
+                            resumeId = current.selectedResumeId,
+                            mode = current.activeLearningTarget?.mode?.takeIf { current.activeLearningTaskType == "interview" && it.isNotBlank() } ?: "interviewer",
+                            interviewGoal = current.activeLearningTarget?.focus?.takeIf { current.activeLearningTaskType == "interview" && it.isNotBlank() }
+                                ?: "请基于我的简历和 AI 项目经历进行真实面试。",
+                            planTaskId = current.activeLearningTarget?.taskId?.takeIf { current.activeLearningTaskType == "interview" && it.isNotBlank() }
                         )
                     )
                 }

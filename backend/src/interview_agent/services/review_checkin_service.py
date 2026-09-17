@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from interview_agent.learning.contracts import project_task
 from interview_agent.repositories.review_checkin_repository import (
     ReviewCheckinRepository,
     checkin_to_dict,
@@ -53,9 +54,17 @@ class ReviewCheckinService:
         checkin = await self.checkin_repo.get_checkin(plan.id, target)
         response["checkin"] = checkin_to_dict(checkin) if checkin else None
         if day is None:
+            if checkin is not None:
+                response["summary"] = {
+                    "tasks_done": checkin.tasks_done,
+                    "total_tasks": checkin.total_tasks,
+                    "elapsed_minutes": checkin.elapsed_minutes,
+                }
             return response
 
         tasks, done_map, tasks_done, total_tasks, elapsed = await self._aggregate_day(plan.id, day)
+        if checkin is not None:
+            elapsed = max(elapsed, int(checkin.elapsed_minutes or 0))
         response["day"] = {
             "id": str(day.id),
             "day_key": day.day_key,
@@ -64,20 +73,7 @@ class ReviewCheckinService:
             "scheduled_date": day.scheduled_date.isoformat() if day.scheduled_date else None,
             "sort_order": day.sort_order,
         }
-        response["tasks"] = [
-            {
-                "id": str(task.id),
-                "task_key": task.task_key,
-                "title": task.title,
-                "sort_order": task.sort_order,
-                "critical": bool(task.critical),
-                "tags": list(task.tags_json or []),
-                "done": bool(done_map[task.id].done) if task.id in done_map else False,
-                "elapsed_minutes": int(done_map[task.id].elapsed_minutes or 0) if task.id in done_map else 0,
-                "mastery_score": done_map[task.id].mastery_score if task.id in done_map else None,
-            }
-            for task in tasks
-        ]
+        response["tasks"] = [project_task(task, done_map.get(task.id)) for task in tasks]
         response["summary"] = {
             "tasks_done": tasks_done,
             "total_tasks": total_tasks,
@@ -187,12 +183,20 @@ class ReviewCheckinService:
         for day in days:
             if day.scheduled_date == target:
                 return day
+        ordered = sorted(days, key=lambda d: d.sort_order)
         if plan.start_date:
-            ordered = sorted(days, key=lambda d: d.sort_order)
             index = (target - plan.start_date).days
             if 0 <= index < len(ordered):
                 return ordered[index]
-        return None
+        if not ordered:
+            return None
+        progresses = await self.repo.list_progresses(plan.id)
+        done_task_ids = {progress.task_id for progress in progresses if progress.done}
+        for day in ordered:
+            tasks = day.tasks or []
+            if tasks and any(task.id not in done_task_ids for task in tasks):
+                return day
+        return ordered[-1]
 
     async def _aggregate_day(self, plan_id, day) -> tuple[list, dict, int, int, int]:
         progresses = await self.repo.list_progresses(plan_id, day.id)

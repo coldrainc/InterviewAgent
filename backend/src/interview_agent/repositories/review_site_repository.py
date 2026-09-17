@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from interview_agent.domain.review_site import DEFAULT_REVIEW_SITE
 from interview_agent.infrastructure.db.models import (
     A4MemoryItemModel,
     IntroScriptModel,
@@ -20,6 +19,7 @@ from interview_agent.infrastructure.db.models import (
     StarCardModel,
     utcnow,
 )
+from interview_agent.services.review_study_material_service import ensure_direct_study_material
 
 
 class ReviewSiteRepository:
@@ -33,7 +33,13 @@ class ReviewSiteRepository:
         self.tenant_id = tenant_id
         self.user_id = user_id
 
-    async def list_plans(self, include_archived: bool = False) -> list[ReviewPlanModel]:
+    async def list_plans(
+        self,
+        include_archived: bool = False,
+        *,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[ReviewPlanModel]:
         filters = [
             ReviewPlanModel.tenant_id == self.tenant_id,
             ReviewPlanModel.user_id == self.user_id,
@@ -44,6 +50,8 @@ class ReviewSiteRepository:
             select(ReviewPlanModel)
             .where(*filters)
             .order_by(ReviewPlanModel.updated_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
         return list(result.scalars().all())
 
@@ -152,6 +160,7 @@ class ReviewSiteRepository:
             if not day_model:
                 continue
             for task_idx, task_data in enumerate(tasks):
+                task_data = ensure_direct_study_material(task_data, day_model_to_context(day_model))
                 self.session.add(ReviewTaskModel(
                     id=uuid.uuid4(),
                     plan_id=plan.id,
@@ -372,6 +381,7 @@ class ReviewSiteRepository:
         )
         existing_tasks = tasks_result.scalars().all()
         next_sort = max((task.sort_order for task in existing_tasks), default=-1) + 1
+        data = ensure_direct_study_material(data, day_model_to_context(day))
         model = ReviewTaskModel(
             id=uuid.uuid4(),
             plan_id=day.plan_id,
@@ -414,6 +424,23 @@ class ReviewSiteRepository:
             task.simulation = bool(data["simulation"])
         if data.get("sort_order") is not None:
             task.sort_order = int(data["sort_order"])
+        refreshed_data = ensure_direct_study_material(
+            {
+                "title": task.title,
+                "tags": task.tags_json,
+                "critical": task.critical,
+                "simulation": task.simulation,
+                "docs": task.docs_json,
+                "reason": task.reason,
+                "source": task.source,
+                "source_ref": task.source_ref,
+                "link_type": task.link_type,
+                "link_payload": task.link_payload_json,
+            },
+            day_model_to_context(task.day) if task.day else {},
+        )
+        task.docs_json = _safe_list(refreshed_data.get("docs"))
+        task.link_payload_json = _safe_dict(refreshed_data.get("link_payload"))
         await self.session.flush()
         return task
 
@@ -701,8 +728,7 @@ class ReviewSiteRepository:
         await self.session.flush()
         return output
 
-    async def seed_plan_from_default(self, default_plan_dict: dict[str, Any] | None = None) -> ReviewPlanModel:
-        payload = default_plan_dict or DEFAULT_REVIEW_SITE
+    async def create_plan_from_fixture(self, payload: dict[str, Any]) -> ReviewPlanModel:
         plan_info = payload.get("plan") or {}
         phases = list(payload.get("phases") or [])
         days = list(payload.get("days") or [])
@@ -722,6 +748,20 @@ class ReviewSiteRepository:
             star_cards=star_cards,
             a4_memory=a4_memory,
         )
+
+
+def day_model_to_context(day: ReviewDayModel | None) -> dict[str, Any]:
+    if day is None:
+        return {}
+    return {
+        "id": day.day_key,
+        "day": day.day_label,
+        "day_label": day.day_label,
+        "phase": day.phase_key,
+        "phase_key": day.phase_key,
+        "title": day.title,
+        "acceptance": day.acceptance or "",
+    }
 
 
 def _safe_list(value: Any) -> list[Any]:

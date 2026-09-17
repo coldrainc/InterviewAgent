@@ -9,12 +9,18 @@
 
   <view wx:if="{{error}}" class="notice error">{{error}}</view>
 
-  <view wx:if="{{!sessions.length && !loading}}" class="empty">
+  <view wx:if="{{!authenticated}}" class="empty">
+    <text class="empty-title">登录后查看面试历史</text>
+    <text class="empty-text">会话记录仅对创建它的账号可见。</text>
+    <button class="refresh" bindtap="openLogin">前往登录</button>
+  </view>
+
+  <view wx:if="{{authenticated && !sessions.length && !loading}}" class="empty">
     <text class="empty-title">还没有面试记录</text>
     <text class="empty-text">开始一次面试后，会自动保存到历史会话。</text>
   </view>
 
-  <view class="list">
+  <view wx:if="{{authenticated}}" class="list">
     <block wx:for="{{sessions}}" wx:key="id">
       <view class="session-card">
         <view bindtap="openSession" data-id="{{item.id}}">

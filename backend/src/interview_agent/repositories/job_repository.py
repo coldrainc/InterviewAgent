@@ -55,11 +55,11 @@ class JobRepository:
             return None
         return model
 
-    async def list_jobs(self, *, status: str | None = None, limit: int = 50) -> list[JobModel]:
+    async def list_jobs(self, *, status: str | None = None, limit: int = 50, offset: int = 0) -> list[JobModel]:
         query = select(JobModel).where(JobModel.tenant_id == self.tenant_id, JobModel.user_id == self.user_id)
         if status:
             query = query.where(JobModel.status == status)
-        result = await self.session.execute(query.order_by(JobModel.updated_at.desc()).limit(limit))
+        result = await self.session.execute(query.order_by(JobModel.updated_at.desc()).limit(limit).offset(offset))
         return list(result.scalars().all())
 
     async def set_job_status(
@@ -105,6 +105,8 @@ class JobRepository:
         error_message: str | None = None,
     ) -> JobStepModel:
         parsed_job_id = _uuid(job_id)
+        if await self.get_job(parsed_job_id) is None:
+            raise LookupError("job not found")
         result = await self.session.execute(
             select(JobStepModel).where(JobStepModel.job_id == parsed_job_id, JobStepModel.step_key == step_key)
         )
@@ -150,8 +152,11 @@ class JobRepository:
         message: str,
         payload: dict | None = None,
     ) -> JobEventModel:
+        parsed_job_id = _uuid(job_id)
+        if await self.get_job(parsed_job_id) is None:
+            raise LookupError("job not found")
         event = JobEventModel(
-            job_id=_uuid(job_id),
+            job_id=parsed_job_id,
             event_type=event_type,
             message=message,
             payload_json=payload or {},
@@ -162,7 +167,10 @@ class JobRepository:
         return event
 
     async def list_events(self, job_id: str | uuid.UUID, *, after_id: str | None = None, limit: int = 100) -> list[JobEventModel]:
-        query = select(JobEventModel).where(JobEventModel.job_id == _uuid(job_id))
+        parsed_job_id = _uuid(job_id)
+        if await self.get_job(parsed_job_id) is None:
+            return []
+        query = select(JobEventModel).where(JobEventModel.job_id == parsed_job_id)
         if after_id:
             query = query.where(JobEventModel.id != _uuid(after_id))
         result = await self.session.execute(query.order_by(JobEventModel.created_at.asc()).limit(limit))

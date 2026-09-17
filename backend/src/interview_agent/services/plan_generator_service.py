@@ -23,6 +23,10 @@ from interview_agent.infrastructure.db.models import ResumeModel
 from interview_agent.repositories.interview_report_repository import InterviewReportRepository
 from interview_agent.repositories.practice_question_repository import PracticeQuestionRepository
 from interview_agent.repositories.review_site_repository import ReviewSiteRepository
+from interview_agent.core.prompt_policy import (
+    plan_generator_system_prompt,
+    plan_generator_user_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +106,7 @@ class PlanGeneratorService:
             from langchain_core.messages import HumanMessage, SystemMessage
 
             response = await self.llm.ainvoke([
-                SystemMessage(content=(
-                    "你是资深面试辅导教练，擅长根据候选人画像、历史面试表现和错题记录，"
-                    "制定分阶段、可执行、每日可打卡的复习计划。"
-                    "只输出一个 JSON 对象，不要输出任何解释或 markdown。"
-                )),
+                SystemMessage(content=plan_generator_system_prompt()),
                 HumanMessage(content=prompt),
             ])
             raw = response.content if hasattr(response, "content") else str(response)
@@ -216,56 +216,15 @@ class PlanGeneratorService:
         focus_areas: list[str],
         context: dict[str, Any],
     ) -> str:
-        return f"""请为以下候选人生成 {total_days} 天面试复习计划（每日可投入 {hours_per_day} 小时）。
-
-候选人画像：
-- 目标岗位：{target_role or '未指定'}
-- 职级：{seniority or '未指定'}
-- 目标公司：{target_company or '未指定'}
-- 重点方向：{', '.join(focus_areas) if focus_areas else '无'}
-
-简历摘要：
-{context.get('resume_summary') or '（未提供简历）'}
-
-历史面试报告（含薄弱点标签）：
-{json.dumps(context.get('reports') or [], ensure_ascii=False) or '（暂无历史面试）'}
-
-错题本（待攻克题目）：
-{json.dumps(context.get('wrong_questions') or [], ensure_ascii=False) or '（暂无错题记录）'}
-
-输出 JSON 结构：
-{{
-  "phases": [{{"key": "p1", "title": "阶段名", "goal": "阶段目标", "ratio": 0.25}}],
-  "days": [
-    {{
-      "day_index": 1,
-      "phase": "p1",
-      "title": "当天主题",
-      "acceptance": "当天验收标准（可衡量）",
-      "tasks": [
-        {{
-          "title": "任务标题",
-          "kind": "study | practice | simulation | material",
-          "reason": "为什么安排这个任务（结合薄弱点/错题/简历）",
-          "tags": ["标签"],
-          "critical": false,
-          "mode": "interviewer 或 candidate（仅 simulation）",
-          "focus": "模拟面试考察重点（仅 simulation）",
-          "category": "刷题分类，如 internet/civil-service（仅 practice）"
-        }}
-      ]
-    }}
-  ]
-}}
-
-要求：
-1. phases 的 ratio 之和为 1，阶段数 3-5 个；days 必须恰好 {total_days} 天，day_index 从 1 连续编号。
-2. 每天 2-4 个任务，任务总量与每日 {hours_per_day} 小时匹配。
-3. 每个任务必须给 reason；模拟面试任务 kind=simulation 并给 mode 与 focus；
-   刷题任务 kind=practice 并给 category；资料学习 kind=material。
-4. 优先针对薄弱点标签与错题本分类安排练习，后期阶段模拟面试密度要更高。
-5. 最后一天安排速记与状态调整，不安排新内容。
-只输出 JSON 对象。"""
+        return plan_generator_user_prompt(
+            target_role=target_role,
+            seniority=seniority,
+            target_company=target_company,
+            total_days=total_days,
+            hours_per_day=hours_per_day,
+            focus_areas=focus_areas,
+            context=context,
+        )
 
     def _normalize(
         self,

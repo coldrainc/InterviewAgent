@@ -65,7 +65,7 @@ def test_knowledge_base_prefers_persistent_index(tmp_path: Path) -> None:
     assert "Score:" in kb.context_for("RAG", top_k=1)
 
 
-def test_rag_index_includes_multiple_roots(tmp_path: Path) -> None:
+def test_runtime_excludes_private_memory_from_legacy_shared_index(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     memory = tmp_path / "memory"
     docs.mkdir()
@@ -80,7 +80,7 @@ def test_rag_index_includes_multiple_roots(tmp_path: Path) -> None:
     RagIndexer([docs, memory], index_path).build()
     index = PersistentRagIndex(index_path)
 
-    assert index.search("死循环", top_k=1)[0].chunk.source == Path("memory/session.md")
+    assert index.search("死循环", top_k=1) == []
 
 
 def test_rag_index_builds_vectors_and_uses_hybrid_mode(tmp_path: Path) -> None:

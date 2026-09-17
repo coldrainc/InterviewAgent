@@ -20,7 +20,11 @@
 
   <view wx:if="{{error}}" class="error">{{error}}</view>
 
-  <view wx:if="{{currentQuestion}}" class="question-card">
+  <view wx:if="{{!authenticated}}" class="empty">
+    <text>登录后开始刷题，答题记录会同步到你的账号。</text>
+  </view>
+
+  <view wx:if="{{authenticated && currentQuestion}}" class="question-card">
     <view class="question-meta">
       <text>{{currentQuestion.exam_year}}</text>
       <text>{{currentQuestion.exam_name}}</text>
@@ -52,7 +56,7 @@
     </view>
   </view>
 
-  <view wx:else class="empty">
+  <view wx:elif="{{authenticated}}" class="empty">
     <text>暂无题目，可以初始化样题或切换训练类型。</text>
   </view>
 

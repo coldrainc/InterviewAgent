@@ -1,0 +1,70 @@
+<view class="page">
+  <view class="header">
+    <view>
+      <text class="eyebrow">Today</text>
+      <text class="title">今日驾驶舱</text>
+      <text class="summary">执行、验证、同步你的备考任务</text>
+    </view>
+    <button class="icon-button" loading="{{loading}}" bindtap="refresh" aria-label="刷新今日任务">↻</button>
+  </view>
+
+  <view wx:if="{{!authenticated}}" class="empty-state">
+    <text class="empty-title">登录后同步学习计划</text>
+    <text class="muted">任务完成状态、验证结果和多端进度都以服务端为准。</text>
+    <button class="primary" bindtap="openLogin">前往登录</button>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{offline}}" class="notice warning">
+      <text>离线只读</text>
+      <text class="notice-detail">当前展示最近缓存，恢复联网后自动同步。</text>
+    </view>
+    <view wx:if="{{error}}" class="notice error">{{error}}</view>
+
+    <view class="next-card">
+      <text class="section-label">下一最佳行动</text>
+      <text class="next-title">{{dashboard.next_best_action.title || '完成一次轻量模拟面试'}}</text>
+      <text class="muted">{{dashboard.next_best_action.reason || '保持表达与思考手感'}}</text>
+      <button wx:if="{{dashboard.next_best_action.kind === 'interview'}}" class="primary" bindtap="startInterview">开始模拟</button>
+    </view>
+
+    <view wx:if="{{dashboard.risks.length}}" class="risk-list">
+      <view wx:for="{{dashboard.risks}}" wx:key="code" class="risk-item {{item.level}}">{{item.message}}</view>
+    </view>
+
+    <view class="section-heading">
+      <view>
+        <text class="section-label">今日任务</text>
+        <text class="section-title">{{dashboard.today ? dashboard.today.tasks_done : 0}} / {{dashboard.today ? dashboard.today.total_tasks : 0}} 已完成</text>
+      </view>
+    </view>
+
+    <view wx:if="{{dashboard.today && dashboard.today.tasks.length}}" class="task-list">
+      <view wx:for="{{dashboard.today.tasks}}" wx:key="id" class="task-card {{item.status}}" data-id="{{item.id}}" bindtap="openTaskCard" role="button">
+        <view class="task-status">{{item.done ? '✓' : index + 1}}</view>
+        <view class="task-main">
+          <text class="task-title">{{item.title}}</text>
+          <view class="task-meta">
+            <text>{{item.task_type}}</text>
+            <text>{{item.verificationLabel}}</text>
+            <text wx:if="{{item.elapsed_minutes}}">{{item.elapsed_minutes}} 分钟</text>
+          </view>
+          <text wx:if="{{item.verification.reason}}" class="verification-reason">{{item.verification.reason}}</text>
+        </view>
+        <button
+          class="task-action"
+          data-id="{{item.id}}"
+          loading="{{commandTaskId === item.id}}"
+          disabled="{{offline || commandTaskId}}"
+          catchtap="runTask"
+        >{{item.actionLabel}}</button>
+      </view>
+    </view>
+
+    <view wx:else class="empty-state compact">
+      <text class="empty-title">今天还没有计划任务</text>
+      <text class="muted">可以先完成一次模拟面试，系统会根据结果生成后续建议。</text>
+      <button class="primary" bindtap="startInterview">开始模拟面试</button>
+    </view>
+  </block>
+</view>

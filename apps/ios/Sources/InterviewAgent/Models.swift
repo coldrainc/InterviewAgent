@@ -171,6 +171,14 @@ struct PracticeQuestionListResponse: Codable {
     let total: Int
     let limit: Int
     let offset: Int
+    let hasMore: Bool
+    let nextOffset: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case items, total, limit, offset
+        case hasMore = "has_more"
+        case nextOffset = "next_offset"
+    }
 }
 
 struct PracticeAttemptRequest: Codable {
@@ -217,6 +225,7 @@ struct CreateSessionRequest: Codable {
     var interviewGoal: String = "请基于我的简历和 AI 项目经历进行真实面试。"
     var focusAreas: [String] = ["简历项目深挖", "RAG / Agent 生产化", "评测、上线、安全与观测"]
     var resumeID: String?
+    var planTaskID: String?
 
     enum CodingKeys: String, CodingKey {
         case offline
@@ -228,6 +237,7 @@ struct CreateSessionRequest: Codable {
         case interviewGoal = "interview_goal"
         case focusAreas = "focus_areas"
         case resumeID = "resume_id"
+        case planTaskID = "plan_task_id"
     }
 }
 

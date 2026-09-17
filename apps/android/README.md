@@ -9,6 +9,9 @@ Android 端使用 Kotlin + Jetpack Compose。当前目录已经补齐 Gradle 工
 3. 等待 Gradle Sync 完成后运行 `app`。
 4. 模拟器默认 API：`http://10.0.2.2:8020`，配置在 `app/build.gradle.kts` 的 `INTERVIEW_API_BASE_URL`。
 
+Release 构建通过 `INTERVIEW_API_BASE_URL` 指向单服务器部署的公网 HTTPS API 地址；
+提交安装包前必须替换示例域名并验证登录、简历、计划和面试链路。
+
 命令行验证：
 
 ```bash

@@ -1,4 +1,5 @@
 import { fallbackIndustries, fallbackModels } from "../constants/interview";
+import { productErrorMessage } from "./productSafety";
 
 export function formatTime() {
   return new Date().toLocaleTimeString("zh-CN", {
@@ -68,10 +69,8 @@ export function turnsToMessages(turns, mode = "interviewer") {
   return restored;
 }
 
-export function normalizeDesktopError(message = "") {
-  return message
-    .replace(/^Error invoking remote method '[^']+':\s*/u, "")
-    .replace(/^Error:\s*/u, "");
+export function normalizeDesktopError(errorOrMessage = "", fallback) {
+  return productErrorMessage(errorOrMessage, fallback);
 }
 
 export function buildInterviewGoal(profile, seedMessage = "") {

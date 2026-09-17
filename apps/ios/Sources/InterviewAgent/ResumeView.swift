@@ -88,6 +88,11 @@ struct ResumeView: View {
                 .padding(12)
                 .background(BrandPalette.surfaceSoft)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                .onAppear {
+                    if resume.id == viewModel.resumes.dropLast(min(6, viewModel.resumes.count)).last?.id || resume.id == viewModel.resumes.last?.id {
+                        Task { await viewModel.loadResumes(append: true) }
+                    }
+                }
             }
         }
         .cardStyle()

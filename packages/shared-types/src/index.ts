@@ -35,6 +35,21 @@ export type DevLoginRequest = {
   platform?: string;
 };
 
+export type PasswordCredentialPayload = {
+  email: string;
+  password?: string;
+  password_derived?: string;
+  password_scheme?: "client_sha256_v1" | string;
+  tenant_id?: string;
+  platform?: string;
+};
+
+export type RegisterRequest = PasswordCredentialPayload & {
+  display_name?: string;
+};
+
+export type PasswordLoginRequest = PasswordCredentialPayload;
+
 export type ProviderLoginRequest = {
   code: string;
   platform?: string;
@@ -163,4 +178,99 @@ export type StreamEventName = "tool.notice" | "guardrail.notice" | "message.delt
 export type StreamEvent<T = unknown> = {
   event: StreamEventName | string;
   data: T;
+};
+
+export type LearningTaskStatus = "todo" | "in_progress" | "completed" | "blocked" | "skipped" | "expired";
+export type LearningTaskAction = "start" | "complete" | "reopen" | "verify";
+
+export type LearningTaskTarget = {
+  plan_id: string;
+  day_id: string;
+  task_id: string;
+  category?: string;
+  question_id?: string;
+  mode?: string;
+  focus?: string;
+  [key: string]: unknown;
+};
+
+export type LearningTask = {
+  id: string;
+  task_key: string;
+  title: string;
+  task_type: "interview" | "practice" | "review" | "material" | "checkin" | string;
+  status: LearningTaskStatus;
+  version: number;
+  done: boolean;
+  elapsed_minutes: number;
+  verification: Record<string, unknown>;
+  link_payload: LearningTaskTarget;
+  primary_action?: Record<string, unknown> | null;
+  [key: string]: unknown;
+};
+
+export type LearningTodayResponse = {
+  contract_version: "learning.today.v1";
+  today?: { tasks: LearningTask[]; total_tasks: number; tasks_done: number; [key: string]: unknown } | null;
+  next_best_action?: Record<string, unknown> | null;
+  risks: unknown[];
+  [key: string]: unknown;
+};
+
+export type LearningTaskCommandRequest = {
+  action: LearningTaskAction;
+  expected_version?: number;
+  elapsed_minutes?: number;
+  mastery_score?: number;
+  note?: string;
+  evidence?: Record<string, unknown>;
+};
+
+export type LearningCommandResponse = {
+  task: LearningTask;
+  receipt: Record<string, unknown>;
+  idempotent_replay: boolean;
+};
+
+export type LearningSyncEvent = {
+  id: string;
+  task_id: string;
+  action: LearningTaskAction | string;
+  occurred_at: string;
+  [key: string]: unknown;
+};
+
+export type LearningSyncResponse = {
+  schema_version: 1;
+  authority: "server";
+  events: LearningSyncEvent[];
+  next_cursor?: string | null;
+  has_more: boolean;
+  server_time: string;
+  bootstrap?: { today: string } | null;
+};
+
+export type DataDeletionRequest = {
+  id: string;
+  status: "scheduled" | "cancelled" | "executed";
+  reason?: string | null;
+  scope: Record<string, unknown>;
+  requested_at: string;
+  execute_after: string;
+  cancelled_at?: string | null;
+  executed_at?: string | null;
+};
+
+export type PrivacyDeletionResponse = {
+  request: DataDeletionRequest | null;
+  cooling_off_days: number;
+};
+
+export type UserDataExport = {
+  schema_version: number;
+  exported_at: string;
+  tenant_id: string;
+  user_id: string;
+  excluded: string[];
+  data: Record<string, Record<string, unknown[]>>;
 };

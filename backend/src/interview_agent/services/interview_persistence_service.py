@@ -8,6 +8,7 @@ from interview_agent.core.config import InterviewConfig
 from interview_agent.core.state import InterviewState
 from interview_agent.infrastructure.conversation_store import ConversationStore
 from interview_agent.repositories.interview_repository import InterviewRepository
+from interview_agent.infrastructure.owner_scope import owner_namespace
 
 
 class InterviewPersistenceService:
@@ -22,8 +23,9 @@ class InterviewPersistenceService:
     ) -> None:
         self.repository = InterviewRepository(session, tenant_id=tenant_id, user_id=user_id)
         self.export_markdown = export_markdown
-        self.export_root = export_root
-        self.memory_root = memory_root
+        namespace = owner_namespace(tenant_id, user_id)
+        self.export_root = export_root / namespace
+        self.memory_root = memory_root / namespace
 
     async def create_session(
         self,
@@ -33,6 +35,7 @@ class InterviewPersistenceService:
         state: InterviewState,
         resume_id: str | None = None,
         plan_task_id: str | None = None,
+        interviewer_kit_id: str | None = None,
     ) -> None:
         await self.repository.create_session(
             session_id=session_id,
@@ -40,6 +43,7 @@ class InterviewPersistenceService:
             state=state,
             resume_id=resume_id,
             plan_task_id=plan_task_id,
+            interviewer_kit_id=interviewer_kit_id,
         )
         if self.export_markdown:
             self._export(session_id, config, state)
@@ -56,6 +60,7 @@ class InterviewPersistenceService:
         fallback_used: bool,
         guardrails: list[str],
         plan_task_id: str | None = None,
+        interviewer_kit_id: str | None = None,
     ) -> None:
         await self.repository.sync_session_state(
             session_id=session_id,
@@ -64,6 +69,7 @@ class InterviewPersistenceService:
             fallback_used=fallback_used,
             guardrails=guardrails,
             plan_task_id=plan_task_id,
+            interviewer_kit_id=interviewer_kit_id,
         )
         if self.export_markdown:
             store = self._store_for_session(session_id)
@@ -97,8 +103,8 @@ class InterviewPersistenceService:
     async def get_session_record(self, session_id: str) -> dict | None:
         return await self.repository.get_session_record(session_id)
 
-    async def list_sessions(self, limit: int = 50) -> list[dict]:
-        return await self.repository.list_sessions(limit=limit)
+    async def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
+        return await self.repository.list_sessions(limit=limit, offset=offset)
 
     async def delete_session(self, session_id: str) -> bool:
         return await self.repository.delete_session(session_id)

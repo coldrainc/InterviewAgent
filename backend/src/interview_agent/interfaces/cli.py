@@ -470,9 +470,9 @@ def index(
         help="Qdrant collection name.",
     ),
     include_memory: bool = typer.Option(
-        True,
+        False,
         "--include-memory/--no-include-memory",
-        help="Include saved interview conversation memory in the RAG index.",
+        help="Deprecated unsafe option. Private interview memory cannot enter the shared index.",
     ),
 ) -> None:
     """Build a persistent local RAG index for faster, more stable retrieval."""
@@ -482,9 +482,8 @@ def index(
         raise typer.BadParameter(f"知识库目录不存在：{kb_path}")
 
     roots = default_knowledge_roots(kb_path)
-    memory_path = default_memory_path()
-    if include_memory and memory_path.exists():
-        roots.append(memory_path)
+    if include_memory:
+        raise typer.BadParameter("会话记忆属于用户私有数据，不能加入共享 RAG 索引。")
 
     started_at = perf_counter()
     console.print(f"[dim]正在构建 RAG 索引：{', '.join(str(root) for root in roots)}[/dim]")

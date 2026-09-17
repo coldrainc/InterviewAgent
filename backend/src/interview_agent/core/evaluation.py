@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from interview_agent.core.config import InterviewMode
+from interview_agent.core.prompt_policy import evaluation_policy_instruction
 
 # 面试官模式：7 个评分维度（与 InterviewConfig.rubric 的 key 对齐）
 INTERVIEWER_DIMENSIONS: dict[str, str] = {
@@ -290,7 +291,8 @@ def evaluation_prompt_instruction(mode: str | InterviewMode) -> str:
 }}
 评分维度说明：{dim_list}。
 评分要基于面试记录中用户实际提出的问题：追问是否有深度、方向是否覆盖岗位关键能力、问题是否有区分度。
-建议要具体，针对如何追问项目细节、指标、取舍、故障复盘。"""
+建议要具体，针对如何追问项目细节、指标、取舍、故障复盘。
+{evaluation_policy_instruction(candidate_mode=True)}"""
     return f"""面试结束，请基于简历、面试目标和完整面试记录给出最终结构化评估。
 必须只输出一个 JSON 对象（不要输出 JSON 以外的文字、不要用代码块），字段如下：
 {{
@@ -306,4 +308,5 @@ def evaluation_prompt_instruction(mode: str | InterviewMode) -> str:
 }}
 评分维度说明：{dim_list}。
 评分必须基于面试记录中的真实证据，不要臆造候选人没有说过的内容；
-suggestions 给出 3 条最关键的补强建议，要能直接转化为复习任务。"""
+suggestions 给出 3 条最关键的补强建议，要能直接转化为复习任务。
+{evaluation_policy_instruction(candidate_mode=False)}"""

@@ -1,16 +1,24 @@
 const api = require("../../utils/api");
 const { config } = require("../../utils/config");
 const { normalizeError } = require("../../utils/format");
+const { requireLogin } = require("../../utils/auth");
 const {
   getInterviewSetup,
   getIndustryLabel,
   getSetupSummary,
   buildInterviewGoal
 } = require("../../utils/interviewSetup");
+const { consumeTaskTarget } = require("../../utils/learning");
 
 Page({
   data: {
     healthText: "检查中",
+    authenticated: false,
+    workspaceMode: "candidate",
+    kits: [],
+    kitsHasMore: true,
+    kitsLoading: false,
+    kitRole: "AI 应用工程师",
     industries: [],
     selectedIndustryLabel: "互联网行业",
     setup: getInterviewSetup(),
@@ -20,6 +28,7 @@ Page({
     selectedResumeName: "",
     input: "",
     busy: false,
+    taskTarget: null,
     messages: []
   },
 
@@ -30,14 +39,83 @@ Page({
   },
 
   onShow() {
+    api.restoreToken();
+    const authenticated = Boolean(config.apiToken);
+    this.setData({
+      authenticated,
+      sessionId: authenticated ? this.data.sessionId : "",
+      messages: authenticated ? this.data.messages : [],
+      kits: authenticated ? this.data.kits : [],
+      selectedResumeId: authenticated ? this.data.selectedResumeId : "",
+      selectedResumeName: authenticated ? this.data.selectedResumeName : ""
+    });
+    if (!authenticated) return;
     this.loadSetup();
     this.loadIndustries();
     this.loadSelectedResume();
+    const taskTarget = consumeTaskTarget("interview");
+    if (taskTarget) this.setData({ taskTarget });
     this.restoreSessionIfNeeded();
+    this.loadKits();
+  },
+
+  setWorkspaceMode(event) {
+    this.setData({ workspaceMode: event.currentTarget.dataset.mode });
+  },
+
+  onKitRoleInput(event) {
+    this.setData({ kitRole: event.detail.value });
+  },
+
+  async loadKits(append = false) {
+    if (!config.apiToken) return;
+    if (this.data.kitsLoading || (append && !this.data.kitsHasMore)) return;
+    this.setData({ kitsLoading: true });
+    try {
+      const raw = await api.listInterviewKits({ limit: 20, offset: append ? this.data.kits.length : 0 });
+      const kits = raw.map((kit) => ({
+        ...kit,
+        questionCount: Array.isArray(kit.questions) ? kit.questions.length : 0
+      }));
+      this.setData({ kits: append ? mergeById(this.data.kits, kits) : kits, kitsHasMore: raw.length === 20 });
+    } catch (error) {
+      this.appendSystemMessage(`加载面试题单失败：${normalizeError(error)}`);
+    } finally {
+      this.setData({ kitsLoading: false });
+    }
+  },
+
+  onKitsScrollLower() {
+    this.loadKits(true);
+  },
+
+  onReachBottom() {
+    if (this.data.workspaceMode === "interviewer") this.loadKits(true);
+  },
+
+  async createKit() {
+    if (!requireLogin("创建面试题单前需要先登录。") || this.data.busy) return;
+    this.setData({ busy: true });
+    try {
+      await api.createInterviewKit({
+        title: `${this.data.kitRole} 面试题单`,
+        target_role: this.data.kitRole,
+        seniority: "高级",
+        duration_minutes: 45,
+        dimensions: ["技术深度", "系统设计", "表达与协作"]
+      });
+      await this.loadKits();
+      wx.showToast({ title: "题单已生成", icon: "success" });
+    } catch (error) {
+      this.appendSystemMessage(`创建题单失败：${normalizeError(error)}`);
+    } finally {
+      this.setData({ busy: false });
+    }
   },
 
   loadSetup() {
     const setup = getInterviewSetup();
+    const taskTarget = this.data.taskTarget || {};
     const selectedIndustryLabel = getIndustryLabel(this.data.industries, setup.industry);
     this.setData({
       setup,
@@ -112,18 +190,20 @@ Page({
     try {
       const response = await api.createSession({
         offline: true,
-        mode: setup.mode,
+        mode: taskTarget.mode || setup.mode,
         industry: setup.industry,
         target_role: setup.targetRole,
         seniority: setup.seniority,
-        interview_goal: buildInterviewGoal(setup),
+        interview_goal: taskTarget.focus || buildInterviewGoal(setup),
         focus_areas: setup.focusAreas,
-        resume_id: this.data.selectedResumeId || undefined
+        resume_id: this.data.selectedResumeId || undefined,
+        plan_task_id: taskTarget.task_id || undefined
       });
       this.setData({
         sessionId: response.session_id,
         messages: [{ role: "agent", text: response.message }]
       });
+      this.setData({ taskTarget: null });
     } catch (error) {
       this.appendSystemMessage(`创建会话失败：${normalizeError(error)}`);
     } finally {
@@ -159,7 +239,7 @@ Page({
   },
 
   openResumePage() {
-    wx.switchTab({ url: "/pages/resumes/resumes" });
+    wx.navigateTo({ url: "/pages/resumes/resumes" });
   },
 
   openSetupPage() {
@@ -167,7 +247,11 @@ Page({
   },
 
   openHistoryPage() {
-    wx.switchTab({ url: "/pages/history/history" });
+    wx.navigateTo({ url: "/pages/history/history" });
+  },
+
+  openLogin() {
+    wx.switchTab({ url: "/pages/profile/profile" });
   }
 });
 
@@ -184,18 +268,9 @@ function turnsToMessages(turns) {
   return messages;
 }
 
-function ensureLogin(content) {
-  api.restoreToken();
-  if (config.apiToken) return true;
-  wx.showModal({
-    title: "需要登录",
-    content,
-    confirmText: "去登录",
-    success(result) {
-      if (result.confirm) {
-        wx.switchTab({ url: "/pages/profile/profile" });
-      }
-    }
-  });
-  return false;
+function mergeById(current, incoming) {
+  const ids = new Set(current.map((item) => item.id));
+  return current.concat(incoming.filter((item) => !ids.has(item.id)));
 }
+
+const ensureLogin = requireLogin;

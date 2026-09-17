@@ -1,49 +1,47 @@
 <view class="page">
-  <view class="header">
-    <view class="brand-row">
-      <image class="brand-icon" src="/assets/app-icon.png" mode="aspectFill" />
-      <view>
-        <text class="eyebrow">Interview Agent</text>
-        <text class="title">AI 技术面试</text>
-      </view>
-    </view>
-    <text class="status">{{healthText}}</text>
+  <view class="page-head">
+    <text class="eyebrow">INTERVIEW</text>
+    <text class="title">面试训练</text>
+    <text class="summary">在候选人与面试官视角间切换</text>
   </view>
 
-  <view class="workspace-card">
-    <view class="setup-summary" bindtap="openSetupPage">
-      <view>
-        <text class="label">当前配置</text>
-        <text class="summary-text">{{setupSummary}}</text>
-      </view>
-      <text class="link">配置</text>
-    </view>
-
-    <view class="resume-strip" bindtap="openResumePage">
-      <view>
-        <text class="label">当前简历</text>
-        <text class="resume-name">{{selectedResumeName || '未选择简历，点击上传或选择'}}</text>
-      </view>
-      <text class="link">管理</text>
-    </view>
-
-    <view class="actions">
-      <button class="secondary" bindtap="openHistoryPage">历史</button>
-      <button class="primary" loading="{{busy}}" bindtap="startInterview">开始面试</button>
-    </view>
+  <view wx:if="{{!authenticated}}" class="empty-state">
+    <text class="empty-title">登录后开始面试训练</text>
+    <text class="muted">你的简历和面试记录只会用于当前账号的训练。</text>
+    <button class="primary" bindtap="openLogin">前往登录</button>
   </view>
 
-  <scroll-view class="messages" scroll-y>
-    <block wx:for="{{messages}}" wx:key="index">
-      <view class="message {{item.role}}">
-        <text class="role">{{item.role === 'user' ? '我' : item.role === 'agent' ? '面试官' : '系统'}}</text>
-        <text class="bubble">{{item.text}}</text>
+  <block wx:else>
+    <view class="mode-switch">
+      <button class="{{workspaceMode === 'candidate' ? 'active' : ''}}" data-mode="candidate" bindtap="setWorkspaceMode">我是候选人</button>
+      <button class="{{workspaceMode === 'interviewer' ? 'active' : ''}}" data-mode="interviewer" bindtap="setWorkspaceMode">我是面试官</button>
+    </view>
+
+    <block wx:if="{{workspaceMode === 'candidate'}}">
+      <view class="workspace-card">
+        <view class="setup-summary" bindtap="openSetupPage"><view><text class="label">当前配置</text><text class="summary-text">{{setupSummary}}</text></view><text class="link">配置</text></view>
+        <view class="resume-strip" bindtap="openResumePage"><view><text class="label">当前简历</text><text class="resume-name">{{selectedResumeName || '未选择简历'}}</text></view><text class="link">管理</text></view>
+        <view class="actions"><button class="secondary" bindtap="openHistoryPage">历史</button><button class="primary" loading="{{busy}}" bindtap="startInterview">开始面试</button></view>
       </view>
+      <scroll-view class="messages" scroll-y>
+        <view wx:if="{{!messages.length}}" class="empty-state compact"><text class="empty-title">准备好后开始</text><text class="muted">AI 面试官会根据你的回答逐步追问。</text></view>
+        <block wx:for="{{messages}}" wx:key="index"><view class="message {{item.role}}"><text class="role">{{item.role === 'user' ? '我' : item.role === 'agent' ? '面试官' : '系统'}}</text><text class="bubble">{{item.text}}</text></view></block>
+      </scroll-view>
+      <view class="composer"><textarea value="{{input}}" placeholder="输入你的回答" auto-height bindinput="onInput" /><button class="send" disabled="{{!sessionId || busy || !input}}" bindtap="send">发送</button></view>
     </block>
-  </scroll-view>
 
-  <view class="composer">
-    <textarea value="{{input}}" placeholder="输入你的回答" auto-height bindinput="onInput" />
-    <button class="send" disabled="{{!sessionId || busy || !input}}" bindtap="send">发送</button>
-  </view>
+    <block wx:else>
+      <view class="kit-generator">
+        <text class="section-title">生成结构化面试题单</text>
+        <input value="{{kitRole}}" bindinput="onKitRoleInput" placeholder="招聘岗位" />
+        <button class="primary" loading="{{busy}}" bindtap="createKit">生成题单</button>
+      </view>
+      <view class="section-head"><text class="section-title">我的题单</text><text class="muted">{{kits.length}} 份</text></view>
+      <view wx:if="{{!kits.length}}" class="empty-state compact"><text class="empty-title">还没有面试题单</text><text class="muted">题目将覆盖技术深度、系统设计与表达协作。</text></view>
+      <scroll-view class="kit-list" scroll-y lower-threshold="800" bindscrolltolower="onKitsScrollLower">
+        <view wx:for="{{kits}}" wx:key="id" class="kit"><text class="kit-title">{{item.title}}</text><text class="muted">{{item.target_role}} · {{item.duration_minutes}} 分钟 · {{item.questionCount}} 题</text></view>
+        <view wx:if="{{kitsLoading && kits.length}}" class="muted">正在加载更多...</view>
+      </scroll-view>
+    </block>
+  </block>
 </view>

@@ -1,6 +1,7 @@
 package com.interviewagent.data
 
 import android.util.Base64
+import com.interviewagent.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -9,19 +10,35 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 class InterviewApiClient(
     private val baseUrl: String,
-    private var token: String?
+    private var token: String?,
+    private val onTokenChanged: (String?) -> Unit = {}
 ) {
-    fun devLogin(userId: String = "android-dev-user"): AuthTokenResponse {
+    fun register(email: String, password: String, displayName: String): AuthTokenResponse {
         val body = JSONObject()
-            .put("user_id", userId)
-            .put("display_name", "Android 开发用户")
+            .put("email", email.trim())
+            .put("password", password.trim())
+            .put("display_name", displayName.trim())
             .put("platform", "android")
-        val json = JSONObject(request("/auth/dev-login", "POST", body.toString()))
+        return parseAuth(request("/auth/register", "POST", body.toString()))
+    }
+
+    fun login(email: String, password: String): AuthTokenResponse {
+        val body = JSONObject()
+            .put("email", email.trim())
+            .put("password", password.trim())
+            .put("platform", "android")
+        return parseAuth(request("/auth/login", "POST", body.toString()))
+    }
+
+    private fun parseAuth(payload: String): AuthTokenResponse {
+        val json = JSONObject(payload)
         val accessToken = json.getString("access_token")
         token = accessToken
+        onTokenChanged(accessToken)
         return AuthTokenResponse(
             accessToken = accessToken,
             expiresAt = json.optLong("expires_at"),
@@ -36,6 +53,7 @@ class InterviewApiClient(
 
     fun logout() {
         token = null
+        onTokenChanged(null)
     }
 
     fun account(): AccountResponse {
@@ -66,6 +84,123 @@ class InterviewApiClient(
         return JSONObject(payload).optString("status", "unknown")
     }
 
+    fun learningToday(): LearningToday {
+        val json = JSONObject(request("/learning/today"))
+        val today = json.optJSONObject("today") ?: JSONObject()
+        val taskArray = today.optJSONArray("tasks")
+        val tasks = (0 until (taskArray?.length() ?: 0)).map { index ->
+            val item = taskArray?.optJSONObject(index) ?: JSONObject()
+            val target = item.optJSONObject("link_payload") ?: JSONObject()
+            LearningTask(
+                id = item.optString("id"),
+                title = item.optString("title", "学习任务"),
+                taskType = item.optString("task_type", "review"),
+                status = item.optString("status", "todo"),
+                version = item.optInt("version"),
+                done = item.optBoolean("done"),
+                actionLabel = item.optJSONObject("primary_action")?.optString("label", "开始任务") ?: "开始任务",
+                target = parseLearningTarget(target, item.optString("id"))
+            )
+        }
+        val streak = json.optJSONObject("streak")
+        val advice = json.optJSONObject("advice")
+        val next = json.optJSONObject("next_best_action")
+        return LearningToday(
+            tasks = tasks,
+            done = today.optInt("tasks_done"),
+            total = today.optInt("total_tasks", tasks.size),
+            streak = streak?.optInt("current_streak") ?: 0,
+            advice = advice?.optString("text") ?: "",
+            nextActionTitle = next?.optString("title") ?: ""
+        )
+    }
+
+    fun commandLearningTask(task: LearningTask, action: String): LearningTask {
+        val body = JSONObject().put("action", action).put("expected_version", task.version)
+        val payload = request(
+            "/learning/tasks/${task.id}/commands",
+            "POST",
+            body.toString(),
+            mapOf("Idempotency-Key" to "android-${System.currentTimeMillis()}")
+        )
+        val root = JSONObject(payload)
+        val item = root.optJSONObject("task") ?: root
+        val target = item.optJSONObject("link_payload") ?: JSONObject()
+        return LearningTask(
+            id = item.optString("id", task.id),
+            title = item.optString("title", task.title),
+            taskType = item.optString("task_type", task.taskType),
+            status = item.optString("status", task.status),
+            version = item.optInt("version", task.version + 1),
+            done = item.optBoolean("done"),
+            actionLabel = item.optJSONObject("primary_action")?.optString("label", "继续") ?: "继续",
+            target = parseLearningTarget(target, item.optString("id", task.id))
+        )
+    }
+
+    fun listReviewPlans(limit: Int = 20, offset: Int = 0): List<ReviewPlan> {
+        val array = JSONArray(request("/review-site/plans?limit=$limit&offset=$offset"))
+        return (0 until array.length()).map { index -> parseReviewPlan(array.getJSONObject(index)) }
+    }
+
+    fun generateReviewPlan(
+        targetRole: String,
+        totalDays: Int,
+        hoursPerDay: Double,
+        focusAreas: String,
+        resumeId: String?
+    ): String {
+        val body = JSONObject()
+            .put("title", "$targetRole 面试计划")
+            .put("target_role", targetRole)
+            .put("seniority", "高级")
+            .put("total_days", totalDays)
+            .put("hours_per_day", hoursPerDay)
+            .put("focus_areas", JSONArray(focusAreas.split("、", ",").map { it.trim() }.filter { it.isNotBlank() }))
+            .put("use_history", true)
+        if (!resumeId.isNullOrBlank()) body.put("resume_id", resumeId)
+        return JSONObject(request("/review-site/planner/generate", "POST", body.toString())).optString("plan_id")
+    }
+
+    fun checkin(planId: String, elapsedMinutes: Int, note: String): Int {
+        val body = JSONObject().put("elapsed_minutes", elapsedMinutes).put("note", note)
+        val json = JSONObject(request("/review-site/plans/$planId/checkin", "POST", body.toString()))
+        return json.optJSONObject("streak")?.optInt("current_streak") ?: 0
+    }
+
+    fun listInterviewKits(limit: Int = 20, offset: Int = 0): List<InterviewKit> {
+        val array = JSONArray(request("/interviewer-workspace/kits?limit=$limit&offset=$offset"))
+        return (0 until array.length()).map { index -> parseInterviewKit(array.getJSONObject(index)) }
+    }
+
+    fun createInterviewKit(targetRole: String, durationMinutes: Int, dimensions: List<String>): InterviewKit {
+        val body = JSONObject()
+            .put("title", "$targetRole 面试题单")
+            .put("target_role", targetRole)
+            .put("seniority", "高级")
+            .put("duration_minutes", durationMinutes)
+            .put("dimensions", JSONArray(dimensions))
+        return parseInterviewKit(JSONObject(request("/interviewer-workspace/kits", "POST", body.toString())))
+    }
+
+    private fun parseReviewPlan(item: JSONObject) = ReviewPlan(
+        id = item.optString("id"),
+        title = item.optString("title", "复习计划"),
+        status = item.optString("status", "active"),
+        totalDays = item.optInt("total_days"),
+        completedTasks = item.optInt("completed_tasks"),
+        totalTasks = item.optInt("total_tasks")
+    )
+
+    private fun parseInterviewKit(item: JSONObject) = InterviewKit(
+        id = item.optString("id"),
+        title = item.optString("title", "面试题单"),
+        targetRole = item.optString("target_role"),
+        durationMinutes = item.optInt("duration_minutes", 45),
+        questionCount = item.optJSONArray("questions")?.length() ?: item.optInt("question_count"),
+        version = item.optInt("version", 1)
+    )
+
     fun listIndustries(targetRole: String = "AI 应用工程师"): List<IndustryOption> {
         val encoded = URLEncoder.encode(targetRole, StandardCharsets.UTF_8.name())
         val payload = request("/metadata/industries?target_role=$encoded")
@@ -95,15 +230,17 @@ class InterviewApiClient(
         }
     }
 
-    fun listPracticeQuestions(category: String, limit: Int = 50): PracticeQuestionListResponse {
+    fun listPracticeQuestions(category: String, limit: Int = 20, offset: Int = 0): PracticeQuestionListResponse {
         val encoded = URLEncoder.encode(category, StandardCharsets.UTF_8.name())
-        val json = JSONObject(request("/practice/questions?category=$encoded&limit=$limit"))
+        val json = JSONObject(request("/practice/questions?category=$encoded&limit=$limit&offset=$offset"))
         val items = json.optJSONArray("items")
         return PracticeQuestionListResponse(
             items = (0 until (items?.length() ?: 0)).map { index -> parsePracticeQuestion(items?.getJSONObject(index) ?: JSONObject()) },
             total = json.optInt("total"),
             limit = json.optInt("limit"),
-            offset = json.optInt("offset")
+            offset = json.optInt("offset"),
+            hasMore = json.optBoolean("has_more"),
+            nextOffset = if (json.isNull("next_offset")) null else json.optInt("next_offset")
         )
     }
 
@@ -147,11 +284,24 @@ class InterviewApiClient(
         if (!request.resumeId.isNullOrBlank()) {
             body.put("resume_id", request.resumeId)
         }
+        if (!request.planTaskId.isNullOrBlank()) {
+            body.put("plan_task_id", request.planTaskId)
+        }
         return parseChatResponse(request("/sessions", "POST", body.toString()))
     }
 
-    fun listResumes(): List<ResumeRecord> {
-        val array = JSONArray(request("/resumes"))
+    private fun parseLearningTarget(payload: JSONObject, fallbackTaskId: String) = LearningTaskTarget(
+        planId = payload.optString("plan_id"),
+        dayId = payload.optString("day_id"),
+        taskId = payload.optString("task_id", fallbackTaskId),
+        category = payload.optString("category"),
+        questionId = payload.optString("question_id"),
+        mode = payload.optString("mode"),
+        focus = payload.optString("focus")
+    )
+
+    fun listResumes(limit: Int = 20, offset: Int = 0): List<ResumeRecord> {
+        val array = JSONArray(request("/resumes?limit=$limit&offset=$offset"))
         return (0 until array.length()).map { index -> parseResume(array.getJSONObject(index)) }
     }
 
@@ -167,8 +317,8 @@ class InterviewApiClient(
         return JSONObject(request("/resumes/$id", "DELETE")).optBoolean("deleted")
     }
 
-    fun listSessions(limit: Int = 50): List<SessionSummary> {
-        val array = JSONArray(request("/sessions?limit=$limit"))
+    fun listSessions(limit: Int = 20, offset: Int = 0): List<SessionSummary> {
+        val array = JSONArray(request("/sessions?limit=$limit&offset=$offset"))
         return (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
             SessionSummary(
@@ -269,10 +419,21 @@ class InterviewApiClient(
         )
     }
 
-    private fun request(path: String, method: String = "GET", body: String? = null): String {
+    private fun request(
+        path: String,
+        method: String = "GET",
+        body: String? = null,
+        headers: Map<String, String> = emptyMap()
+    ): String {
         val connection = URL("$baseUrl$path").openConnection() as HttpURLConnection
+        val clientRequestId = UUID.randomUUID().toString()
         connection.requestMethod = method
         connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("X-Request-ID", clientRequestId)
+        connection.setRequestProperty("X-Client-Request-Id", clientRequestId)
+        connection.setRequestProperty("X-Client-Platform", "android")
+        connection.setRequestProperty("X-Client-Version", BuildConfig.VERSION_NAME)
+        headers.forEach(connection::setRequestProperty)
         if (!token.isNullOrBlank()) {
             connection.setRequestProperty("Authorization", "Bearer $token")
         }

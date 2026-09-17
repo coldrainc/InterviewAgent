@@ -8,6 +8,8 @@
     "desktop": "electron .",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "test:safety": "node tests/productSafety.test.mjs",
+    "test:ui-contracts": "node tests/uiContracts.test.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "api": "../../interview api",
     "test:python": "cd ../../backend && ../.venv/bin/python -m pytest"

@@ -1,52 +1,68 @@
 const api = require("../../utils/api");
 const { config } = require("../../utils/config");
 const { normalizeError } = require("../../utils/format");
+const { isAuthenticated, requireLogin } = require("../../utils/auth");
+const { consumeTaskTarget } = require("../../utils/learning");
 
 Page({
   data: {
     loading: false,
+    authenticated: false,
     categories: [],
     selectedCategory: "ai_application",
     questions: [],
     currentQuestion: null,
     currentIndex: 0,
+    targetQuestionId: "",
     selectedCategoryLabel: "AI 应用 / 大模型",
     answer: "",
     result: null,
     error: "",
     total: 0,
+    hasMore: true,
     startedAt: 0
   },
 
   onLoad() {
-    api.restoreToken();
-    this.loadPractice();
+    const authenticated = isAuthenticated();
+    this.setData({ authenticated });
+    if (authenticated) this.loadPractice();
   },
 
   onShow() {
-    if (!this.data.questions.length) {
+    const authenticated = isAuthenticated();
+    const target = authenticated ? consumeTaskTarget("practice") : null;
+    if (target) this.setData({
+      selectedCategory: target.category || this.data.selectedCategory,
+      targetQuestionId: target.question_id || ""
+    });
+    this.setData({ authenticated, questions: authenticated ? this.data.questions : [], currentQuestion: authenticated ? this.data.currentQuestion : null });
+    if (authenticated && (target || !this.data.questions.length)) {
       this.loadPractice();
     }
   },
 
-  async loadPractice() {
+  async loadPractice(append = false) {
     if (!ensureLogin("刷题前需要先登录账号。")) return;
+    if (this.data.loading || (append && !this.data.hasMore)) return;
     this.setData({ loading: true, error: "", result: null });
     try {
       const [categories, questions] = await Promise.all([
         api.listPracticeCategories(),
-        api.listPracticeQuestions({ category: this.data.selectedCategory, limit: 50 })
+        api.listPracticeQuestions({ category: this.data.selectedCategory, limit: 20, offset: append ? this.data.questions.length : 0 })
       ]);
       this.setData({
         categories,
-        questions: questions.items || [],
+        questions: append ? mergeById(this.data.questions, questions.items || []) : (questions.items || []),
         selectedCategoryLabel: categoryLabel(categories, this.data.selectedCategory),
         total: questions.total || 0,
-        currentIndex: 0,
+        currentIndex: append ? this.data.currentIndex : Math.max(0, (questions.items || []).findIndex((item) => item.id === this.data.targetQuestionId)),
+        hasMore: Boolean(questions.has_more),
         answer: "",
         startedAt: Date.now()
       });
       this.syncCurrentQuestion();
+      this.setData({ targetQuestionId: "" });
     } catch (error) {
       this.setData({ error: normalizeError(error) });
     } finally {
@@ -94,7 +110,10 @@ Page({
       startedAt: Date.now()
     });
     this.syncCurrentQuestion();
+    if (this.data.currentIndex >= this.data.questions.length - 6) this.loadPractice(true);
   },
+
+  onReachBottom() { this.loadPractice(true); },
 
   async submit() {
     const question = this.data.questions[this.data.currentIndex];
@@ -140,17 +159,10 @@ function categoryLabel(categories, value) {
 }
 
 function ensureLogin(content) {
-  api.restoreToken();
-  if (config.apiToken) return true;
-  wx.showModal({
-    title: "需要登录",
-    content,
-    confirmText: "去登录",
-    success(result) {
-      if (result.confirm) {
-        wx.switchTab({ url: "/pages/profile/profile" });
-      }
-    }
-  });
-  return false;
+  return requireLogin(content);
+}
+
+function mergeById(current, incoming) {
+  const ids = new Set(current.map((item) => item.id));
+  return current.concat(incoming.filter((item) => !ids.has(item.id)));
 }

@@ -119,13 +119,14 @@ class PracticeQuestionRepository:
     async def bulk_upsert(self, questions: list[dict[str, Any]]) -> dict[str, int]:
         created = 0
         updated = 0
+        pending: dict[str, PracticeQuestionModel] = {}
         for payload in questions:
             prompt = str(payload.get("prompt") or "").strip()
             if not prompt:
                 continue
             answer_text = str(payload.get("answer") or "")
             content_hash = question_content_hash(prompt, answer_text)
-            existing = await self._get_by_hash(content_hash)
+            existing = pending.get(content_hash) or await self._get_by_hash(content_hash)
             if existing:
                 _apply_question_payload(existing, payload, content_hash)
                 updated += 1
@@ -138,6 +139,7 @@ class PracticeQuestionRepository:
                 )
                 _apply_question_payload(model, payload, content_hash)
                 self.session.add(model)
+                pending[content_hash] = model
                 created += 1
         await self.session.flush()
         return {"created": created, "updated": updated, "total": created + updated}
@@ -148,7 +150,8 @@ class PracticeQuestionRepository:
         mastery_max: int | None = None,
         category: str | None = None,
         keyword: str | None = None,
-        limit: int = 200,
+        limit: int = 20,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         filters = [
             PracticeWrongBookModel.tenant_id == self.tenant_id,
@@ -180,6 +183,7 @@ class PracticeQuestionRepository:
             stmt.where(*filters)
             .order_by(PracticeWrongBookModel.updated_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         entries = [wrong_entry_to_dict(item) for item in result.scalars().all()]
         if not entries:

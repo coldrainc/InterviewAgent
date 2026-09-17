@@ -321,12 +321,22 @@ def test_api_interview_completion_creates_report_and_report_tasks(tmp_path) -> N
         )
         assert recharge.status_code == 200
 
-        imported = client.post("/review-site/import", headers=headers, json={"plan_only": True})
-        assert imported.status_code == 200
-        plans = client.get("/review-site/plans", headers=headers).json()
-        plan_id = plans[0]["id"]
-        plan = client.get(f"/review-site/plans/{plan_id}", headers=headers).json()
-        task_id = plan["days"][0]["tasks"][0]["id"]
+        created_plan = client.post("/review-site/plans", headers=headers, json={"title": "报告回流测试"})
+        assert created_plan.status_code == 200
+        plan_id = created_plan.json()["id"]
+        created_day = client.post(
+            f"/review-site/plans/{plan_id}/days",
+            headers=headers,
+            json={"day_key": "day-1", "day_label": "Day 1", "phase_key": "foundation", "title": "模拟面试", "sort_order": 1},
+        )
+        assert created_day.status_code == 201
+        created_task = client.post(
+            f"/review-site/days/{created_day.json()['id']}/tasks",
+            headers=headers,
+            json={"task_key": "task-1", "title": "完成测试模拟面试", "simulation": True, "sort_order": 1},
+        )
+        assert created_task.status_code == 201
+        task_id = created_task.json()["id"]
 
         created = client.post(
             "/sessions", headers=headers, json={"offline": True, "plan_task_id": task_id}

@@ -1,0 +1,54 @@
+<view class="page">
+  <view class="page-head">
+    <text class="eyebrow">REVIEW</text>
+    <text class="title">复习计划</text>
+    <text class="summary">生成计划、按日执行、留下学习记录</text>
+  </view>
+
+  <view wx:if="{{!authenticated}}" class="empty">
+    <text class="section-title">登录后制定复习计划</text>
+    <text class="muted">你的计划、打卡和学习进度会安全同步到当前账号。</text>
+    <button class="primary" bindtap="openLogin">前往登录</button>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{activeTask}}" class="active-task">
+      <text class="eyebrow">当前任务</text>
+      <text class="section-title">{{activeTask.title}}</text>
+      <text class="muted">完成内容后可返回今日页更新状态。</text>
+    </view>
+    <view class="generator">
+      <text class="section-title">生成专属计划</text>
+      <input value="{{role}}" data-key="role" bindinput="onInput" placeholder="目标岗位" />
+      <input value="{{focus}}" data-key="focus" bindinput="onInput" placeholder="重点方向，用顿号分隔" />
+      <picker mode="selector" range="{{dayOptions}}" value="1" bindchange="onDaysChange">
+        <view class="picker">周期 <text>{{days}} 天</text></view>
+      </picker>
+      <button class="primary" loading="{{loading}}" bindtap="generatePlan">生成复习计划</button>
+    </view>
+
+    <view wx:if="{{error}}" class="notice error">{{error}}</view>
+    <view wx:if="{{message}}" class="notice success">{{message}}</view>
+
+    <view class="section-head">
+      <text class="section-title">进行中的计划</text>
+      <text class="muted">{{plans.length}} 个</text>
+    </view>
+    <view wx:if="{{!plans.length && !loading}}" class="empty compact">生成后可在这里选择计划并完成每日打卡。</view>
+    <view class="plan-list">
+      <view wx:for="{{plans}}" wx:key="id" class="plan {{selectedPlanId === item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="selectPlan">
+        <view>
+          <text class="plan-title">{{item.title}}</text>
+          <text class="muted">{{item.subtitle || item.status}}</text>
+        </view>
+        <text class="radio">{{selectedPlanId === item.id ? '✓' : ''}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{selectedPlanId}}" class="checkin">
+      <text class="section-title">今日打卡</text>
+      <textarea value="{{note}}" data-key="note" bindinput="onInput" placeholder="记录今天完成了什么" />
+      <button class="primary" loading="{{loading}}" bindtap="checkin">完成 30 分钟打卡</button>
+    </view>
+  </block>
+</view>

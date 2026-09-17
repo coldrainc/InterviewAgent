@@ -1,0 +1,148 @@
+/* Shared operational workspaces: training, review, account and reports. */
+.reports-page,
+.training-page,
+.interviewer-page {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 28px 34px 48px;
+  gap: 16px;
+}
+
+.reports-head h2,
+.training-head h2 {
+  font-size: 22px;
+  font-weight: 740;
+}
+
+.training-tabs {
+  gap: 2px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--line);
+}
+
+.training-tabs button {
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.training-tabs button.active {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: transparent;
+}
+
+.training-filters,
+.training-question-card {
+  border-radius: 8px;
+}
+
+.training-question-card {
+  box-shadow: var(--soft-shadow);
+}
+
+.account-center,
+.settings-center,
+.setup-center,
+.study-center,
+.ops-center {
+  width: min(1180px, calc(100% - 68px));
+  margin: 28px auto 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.account-hero,
+.settings-hero,
+.setup-hero,
+.study-hero,
+.ops-hero {
+  padding: 0 2px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-avatar {
+  border-radius: 8px;
+  background: #2548c9;
+}
+
+.account-block,
+.settings-block,
+.setup-block,
+.study-block,
+.ops-block {
+  border-radius: 8px;
+  background: var(--panel-solid);
+  box-shadow: var(--soft-shadow);
+}
+
+.review-site.v3,
+.planner-page.v3 {
+  --v3-primary: #3157e8;
+  --v3-primary-strong: #2444c7;
+  --v3-primary-soft: #eef2ff;
+  --v3-primary-border: #cdd7ff;
+  --v3-bg: transparent;
+  --v3-field: #ffffff;
+  --v3-surface: #ffffff;
+  --v3-surface-2: #f7f8fa;
+  --v3-border-weak: #eceef2;
+  --v3-border: #e5e8ed;
+  --v3-border-str: #d5dae2;
+  --v3-border-strong: #c3c9d2;
+  --v3-text-0: #171a21;
+  --v3-text-1: #363d48;
+  --v3-text-2: #606977;
+  --v3-text-3: #8b94a3;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.review-site.v3 .v3-progress-card,
+.review-site.v3 .v3-stat,
+.review-site.v3 .v3-task-card,
+.review-site.v3 .v3-day-item,
+.review-site.v3 .v3-qa-card,
+.review-site.v3 .v3-star-card,
+.review-site.v3 .v3-filter-bar,
+.review-site.v3 .v3-empty {
+  border-radius: 8px;
+  box-shadow: var(--soft-shadow);
+}
+
+[data-theme="dark"] .review-site.v3,
+[data-theme="dark"] .planner-page.v3 {
+  --v3-primary: #6683ff;
+  --v3-primary-strong: #9cafef;
+  --v3-primary-soft: rgba(102, 131, 255, 0.14);
+  --v3-primary-border: rgba(102, 131, 255, 0.35);
+  --v3-bg: transparent;
+  --v3-field: #151a22;
+  --v3-surface: #191e27;
+  --v3-surface-2: #202630;
+  --v3-border-weak: #252c36;
+  --v3-border: #2b323e;
+  --v3-border-str: #3a4351;
+  --v3-border-strong: #4c5767;
+  --v3-text-0: #f0f2f6;
+  --v3-text-1: #d1d6df;
+  --v3-text-2: #a0a8b5;
+  --v3-text-3: #737e8c;
+}
+
+@media (max-width: 860px) {
+  .reports-page,
+  .training-page,
+  .interviewer-page { padding: 24px 18px 40px; }
+  .account-center,
+  .settings-center,
+  .setup-center,
+  .study-center,
+  .ops-center { width: calc(100% - 28px); margin: 20px auto 36px; }
+}

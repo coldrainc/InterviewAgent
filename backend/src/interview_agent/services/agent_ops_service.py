@@ -7,7 +7,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from interview_agent.infrastructure.db.models import AgentSpanModel, AgentTraceModel
+from interview_agent.infrastructure.db.models import (
+    AgentSpanModel,
+    AgentTraceModel,
+    InterviewSessionModel,
+    JobModel,
+)
+from interview_agent.infrastructure.telemetry_privacy import sanitize_error_message, sanitize_telemetry
 
 
 def _now() -> datetime:
@@ -29,15 +35,32 @@ class AgentOpsService:
         session_id: str | None = None,
         input_payload: dict | None = None,
     ) -> AgentTraceModel:
+        parsed_job_id = _uuid(job_id) if job_id else None
+        if parsed_job_id is not None:
+            job = await self.session.get(JobModel, parsed_job_id)
+            if job is None or job.tenant_id != self.tenant_id or job.user_id != self.user_id:
+                raise LookupError("job not found")
+        if session_id:
+            try:
+                parsed_session_id = _uuid(session_id)
+            except (TypeError, ValueError) as exc:
+                raise LookupError("interview session not found") from exc
+            interview_session = await self.session.get(InterviewSessionModel, parsed_session_id)
+            if (
+                interview_session is None
+                or interview_session.tenant_id != self.tenant_id
+                or interview_session.user_id != self.user_id
+            ):
+                raise LookupError("interview session not found")
         trace = AgentTraceModel(
             tenant_id=self.tenant_id,
             user_id=self.user_id,
-            job_id=uuid.UUID(job_id) if job_id else None,
+            job_id=parsed_job_id,
             session_id=session_id,
             trace_type=trace_type,
             title=title,
             status="running",
-            input_json=input_payload or {},
+            input_json=sanitize_telemetry(input_payload or {}),
             result_json={},
             metrics_json={},
             created_at=_now(),
@@ -58,8 +81,8 @@ class AgentOpsService:
         if trace is None or trace.tenant_id != self.tenant_id or trace.user_id != self.user_id:
             return None
         trace.status = status
-        trace.result_json = result_payload or trace.result_json
-        trace.metrics_json = metrics or trace.metrics_json
+        trace.result_json = sanitize_telemetry(result_payload) if result_payload is not None else trace.result_json
+        trace.metrics_json = sanitize_telemetry(metrics) if metrics is not None else trace.metrics_json
         trace.finished_at = _now()
         await self.session.flush()
         return trace
@@ -76,16 +99,20 @@ class AgentOpsService:
         metrics: dict | None = None,
         error_message: str | None = None,
     ) -> AgentSpanModel:
+        parsed_trace_id = _uuid(trace_id)
+        trace = await self.session.get(AgentTraceModel, parsed_trace_id)
+        if trace is None or trace.tenant_id != self.tenant_id or trace.user_id != self.user_id:
+            raise LookupError("agent trace not found")
         timestamp = _now()
         span = AgentSpanModel(
-            trace_id=_uuid(trace_id),
+            trace_id=parsed_trace_id,
             name=name,
             span_type=span_type,
             status=status,
-            input_json=input_payload or {},
-            output_json=output_payload or {},
-            metrics_json=metrics or {},
-            error_message=error_message,
+            input_json=sanitize_telemetry(input_payload or {}),
+            output_json=sanitize_telemetry(output_payload or {}),
+            metrics_json=sanitize_telemetry(metrics or {}),
+            error_message=sanitize_error_message(error_message),
             started_at=timestamp,
             finished_at=timestamp if status in {"succeeded", "failed", "skipped"} else None,
         )
@@ -93,12 +120,13 @@ class AgentOpsService:
         await self.session.flush()
         return span
 
-    async def list_traces(self, *, limit: int = 50) -> list[AgentTraceModel]:
+    async def list_traces(self, *, limit: int = 50, offset: int = 0) -> list[AgentTraceModel]:
         result = await self.session.execute(
             select(AgentTraceModel)
             .where(AgentTraceModel.tenant_id == self.tenant_id, AgentTraceModel.user_id == self.user_id)
             .order_by(AgentTraceModel.created_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return list(result.scalars().all())
 

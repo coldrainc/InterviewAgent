@@ -260,9 +260,21 @@ def test_api_checkin_flow_end_to_end(tmp_path) -> None:
     with TestClient(app) as client:
         headers = _register_headers(client, "checkin-e2e@example.com")
 
-        imported = client.post("/review-site/import", headers=headers, json={"plan_only": True})
-        assert imported.status_code == 200
-        plan_id = client.get("/review-site/plans", headers=headers).json()[0]["id"]
+        created_plan = client.post("/review-site/plans", headers=headers, json={"title": "打卡流程测试"})
+        assert created_plan.status_code == 200
+        plan_id = created_plan.json()["id"]
+        created_day = client.post(
+            f"/review-site/plans/{plan_id}/days",
+            headers=headers,
+            json={"day_key": "day-1", "day_label": "Day 1", "phase_key": "foundation", "title": "基础检查", "sort_order": 1},
+        )
+        assert created_day.status_code == 201
+        created_task = client.post(
+            f"/review-site/days/{created_day.json()['id']}/tasks",
+            headers=headers,
+            json={"task_key": "task-1", "title": "完成一项测试复习任务", "sort_order": 1},
+        )
+        assert created_task.status_code == 201
 
         activated = client.patch(f"/review-site/plans/{plan_id}", headers=headers, json={"status": "active"})
         assert activated.status_code == 200

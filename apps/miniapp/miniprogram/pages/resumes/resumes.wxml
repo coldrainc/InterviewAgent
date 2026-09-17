@@ -9,13 +9,18 @@
 
   <view wx:if="{{error}}" class="notice error">{{error}}</view>
 
-  <view wx:if="{{!resumes.length && !loading}}" class="empty">
+  <view wx:if="{{!authenticated}}" class="empty">
+    <text class="empty-title">登录后管理简历</text>
+    <text class="empty-text">简历仅用于当前账号的面试训练和计划生成。</text>
+  </view>
+
+  <view wx:if="{{authenticated && !resumes.length && !loading}}" class="empty">
     <text class="empty-title">还没有历史简历</text>
     <text class="empty-text">支持从微信聊天文件中选择 PDF / Markdown，上传后会保存到后端简历库。</text>
     <button class="primary" bindtap="uploadResume">上传第一份简历</button>
   </view>
 
-  <view class="list">
+  <view wx:if="{{authenticated}}" class="list">
     <block wx:for="{{resumes}}" wx:key="id">
       <view class="resume-card {{item.id === selectedResumeId ? 'active' : ''}}">
         <view bindtap="selectResume" data-id="{{item.id}}">

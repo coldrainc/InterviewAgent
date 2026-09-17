@@ -1,5 +1,6 @@
 import { Bot, Coins, Loader2, MessageSquarePlus, Moon, PencilLine, Send, ShieldCheck, Sparkles, Square, Sun, Undo2, UserRound } from "lucide-react";
 import { quickPrompts } from "../../constants/interview";
+import { redactSensitiveText } from "../../utils/productSafety";
 import { formatCredits } from "../../utils/interview";
 
 export function Topbar({ sessionId, offline, webSearch, completed, status, profile, model, account, screen, theme, onToggleTheme, onOpenAccount, onOpenChat }) {
@@ -11,9 +12,11 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
     setup: "面试配置",
     practice: "刷题训练",
     reports: "面试报告",
+    "interviewer-workspace": "面试官工作台",
     "review-site": "复习站",
     planner: "计划生成器",
-    ops: "任务与评测"
+    ops: "任务与评测",
+    admin: "管理后台"
   };
   const auxiliaryScreen = Boolean(auxiliaryTitles[screen]);
   const title =
@@ -55,7 +58,7 @@ export function Topbar({ sessionId, offline, webSearch, completed, status, profi
         <span className={`status-chip ${status.tone}`}>{status.label}</span>
         {!auxiliaryScreen && (
           <>
-            <span className="session-chip">{sessionId ? `会话 ${sessionId.slice(0, 8)}` : "未开始"}</span>
+            <span className="session-chip">{sessionId ? "面试进行中" : "未开始"}</span>
             <span className="mode-chip">{profile.mode === "candidate" ? "Agent 候选人" : "Agent 面试官"}</span>
             <span className="mode-chip">{webSearch ? `${mode} · 联网` : mode}</span>
             <span className="mode-chip">{model?.display_name || "默认模型"}</span>
@@ -74,11 +77,11 @@ export function EmptyState({ busy, mode, industry, onStart, onQuickPrompt }) {
       <div className="empty-mark">
         <Sparkles size={28} />
       </div>
-      <h3>{isCandidateMode ? "让 Agent 作为候选人回答你的面试题" : "粘贴简历后，开始一场真实项目面试"}</h3>
+      <h3>{isCandidateMode ? "让 AI 候选人回答你的面试题" : "从真实经历出发，开始一场项目面试"}</h3>
       <p>
         {isCandidateMode
-          ? `你作为面试官提问，Agent 会结合简历、${industry?.label || "行业"}要求和 AI 知识库，用候选人口吻给出结构化回答。`
-          : `面试官会结合你的简历、做过的事情、${industry?.label || "行业"}画像、AI 知识库和历史记忆，判断回答质量并决定继续深挖或切换方向。`}
+          ? `你作为面试官提问，AI 候选人会结合简历和${industry?.label || "目标行业"}要求，给出结构化回答。`
+          : `面试官会结合你的简历、项目经历和${industry?.label || "目标行业"}岗位要求，判断回答质量并继续追问。`}
       </p>
       <button className="empty-start" onClick={onStart} disabled={busy}>
         <MessageSquarePlus size={17} />
@@ -110,9 +113,9 @@ export function Message({ message, mode, busy, onEditMessage, onWithdrawMessage 
           <span>{isUser ? userLabel : isSystem ? "系统" : agentLabel}</span>
           <span>{message.time}</span>
           {message.stopped && <strong>已停止</strong>}
-          {message.fallback && <strong>降级回复</strong>}
+          {message.fallback && <strong>备用回复</strong>}
         </div>
-        <div className={`message-bubble ${message.role}`}>{message.text}</div>
+        <div className={`message-bubble ${message.role}`}>{redactSensitiveText(message.text)}</div>
         {isUser && (
           <div className="message-actions">
             <button type="button" title="重新编辑这条消息" disabled={busy} onClick={() => onEditMessage?.(message)}>
@@ -140,8 +143,6 @@ export function UsageMeta({ usage, modelId }) {
           ? `试用消耗，剩余 ${usage.trial_uses_remaining} 次`
           : `扣除 ${formatCredits(usage.cost_credits)} 积分`}
       </span>
-      <span>{modelId || usage.model_id}</span>
-      <span>{usage.total_tokens} tokens</span>
     </div>
   );
 }
@@ -150,7 +151,7 @@ export function Typing() {
   return (
     <div className="typing">
       <Loader2 size={16} className="spin" />
-      面试官正在分析回答、检索知识库并生成追问...
+      正在分析你的回答...
     </div>
   );
 }

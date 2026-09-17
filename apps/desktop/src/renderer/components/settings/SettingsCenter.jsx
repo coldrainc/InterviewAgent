@@ -137,7 +137,7 @@ export function SettingsCenter({ account, profile, settingsState, onModeChange, 
         <div>
           <span className="eyebrow">Settings</span>
           <h3>偏好设置</h3>
-          <p>{account ? account.display_name || account.user_id : "登录后同步到服务端"}</p>
+          <p>{account ? account.display_name || account.email || "我的账户" : "登录后同步设置"}</p>
         </div>
         <button type="button" className="secondary-action inline" onClick={onBack}>返回面试</button>
       </div>

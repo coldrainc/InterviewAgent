@@ -1,4 +1,4 @@
-.PHONY: install up down migrate qdrant embedding-service api desktop mobile-check index index-json run doctor eval-rag test test-e2e-local check
+.PHONY: install up down migrate qdrant embedding-service api desktop mobile-check index index-json run doctor eval-rag test test-contracts test-e2e test-e2e-headed test-e2e-local test-regression check deploy-init deploy deploy-status deploy-backup package-server package-full-source
 
 install:
 	.venv/bin/python -m pip install -e 'backend[dev]'
@@ -27,6 +27,7 @@ desktop:
 
 mobile-check:
 	npm --prefix apps/miniapp run check
+	cd backend && .venv/bin/python -m pytest ../tests/mobile -q
 	test -f apps/ios/InterviewAgent.xcodeproj/project.pbxproj
 	test -f apps/ios/InterviewAgent/Info.plist
 	test -f apps/ios/Sources/InterviewAgent/InterviewAgentApp.swift
@@ -41,10 +42,10 @@ mobile-check:
 	test -f apps/harmony/entry/src/main/ets/pages/Index.ets
 
 index:
-	./interview index --embeddings --embedding-provider service --vector-store qdrant
+	./interview index --embeddings --no-include-memory --embedding-provider service --vector-store qdrant
 
 index-json:
-	./interview index --embeddings --embedding-provider local --vector-store json
+	./interview index --embeddings --no-include-memory --embedding-provider local --vector-store json
 
 run:
 	./interview
@@ -61,8 +62,38 @@ test:
 test-e2e-local:
 	cd backend && ../.venv/bin/python -m pytest tests/test_local_e2e.py -q
 
+test-contracts:
+	npm run test:contracts
+
+test-e2e:
+	npm run test:e2e
+
+test-e2e-headed:
+	npm run test:e2e:headed
+
+test-regression:
+	npm run test:regression
+
 check:
 	.venv/bin/python -m compileall -q backend/src backend/tests
 	$(MAKE) test
 	npm --prefix apps/miniapp run check
 	npm --prefix apps/desktop run build
+
+deploy-init:
+	./deploy/stack.sh init
+
+deploy:
+	./deploy/stack.sh deploy
+
+deploy-status:
+	./deploy/stack.sh status
+
+deploy-backup:
+	./deploy/stack.sh backup
+
+package-server:
+	./scripts/package_server_release.sh
+
+package-full-source:
+	./scripts/package_full_source.sh

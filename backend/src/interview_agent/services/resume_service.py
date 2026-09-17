@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from interview_agent.domain.resume import StoredResume
 from interview_agent.infrastructure.object_storage import ObjectStorage
+from interview_agent.infrastructure.owner_scope import owner_namespace
 from interview_agent.infrastructure.resume_parser import parse_resume_bytes
 from interview_agent.repositories.resume_repository import ResumeRepository
 
@@ -26,6 +27,8 @@ class ResumeService:
         max_upload_bytes: int | None = None,
         store_source_path: bool = False,
     ) -> None:
+        self.tenant_id = tenant_id
+        self.user_id = user_id
         self.repository = ResumeRepository(session, tenant_id=tenant_id, user_id=user_id)
         self.object_storage = object_storage
         self.max_upload_bytes = max_upload_bytes
@@ -54,7 +57,8 @@ class ResumeService:
         content_hash = hashlib.sha256(content).hexdigest()
         parsed = parse_resume_bytes(filename, content)
         suffix = Path(parsed.filename).suffix.lower() or ".bin"
-        object_key = f"resumes/{content_hash}{suffix}"
+        namespace = owner_namespace(self.tenant_id, self.user_id)
+        object_key = f"resumes/{namespace}/{content_hash}{suffix}"
         content_type = _content_type(parsed.filename)
 
         storage_ref = await asyncio.to_thread(
@@ -80,8 +84,8 @@ class ResumeService:
             },
         )
 
-    async def list(self) -> list[StoredResume]:
-        return await self.repository.list_recent()
+    async def list(self, *, limit: int = 100, offset: int = 0) -> list[StoredResume]:
+        return await self.repository.list_recent(limit=limit, offset=offset)
 
     async def get(self, resume_id: str) -> StoredResume | None:
         return await self.repository.get_by_id(resume_id)
@@ -90,7 +94,14 @@ class ResumeService:
         deleted = await self.repository.delete_by_id(resume_id)
         if not deleted:
             return False
-        if deleted.object_bucket and deleted.object_key:
+        if (
+            deleted.object_bucket
+            and deleted.object_key
+            and not await self.repository.object_referenced_by_other_owner(
+                deleted.object_bucket,
+                deleted.object_key,
+            )
+        ):
             await asyncio.to_thread(
                 self.object_storage.delete_object,
                 deleted.object_bucket,

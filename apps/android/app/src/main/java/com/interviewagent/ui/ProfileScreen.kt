@@ -41,9 +41,7 @@ import com.interviewagent.data.ChatMessage
 @Composable
 fun ProfileScreen(
     state: ChatUiState,
-    onDevLogin: () -> Unit,
     onRefreshAccount: () -> Unit,
-    onRecharge: (String) -> Unit,
     onUpdateDefaultMode: (String) -> Unit,
     onLogout: () -> Unit
 ) {
@@ -69,7 +67,7 @@ fun ProfileScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(state.account?.displayName ?: "未登录", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            state.account?.email ?: state.account?.userId ?: "登录后保存简历、会话和用量记录",
+                            state.account?.email ?: "学习进度已安全同步",
                             style = MaterialTheme.typography.bodySmall,
                             color = BrandColors.Muted
                         )
@@ -86,17 +84,6 @@ fun ProfileScreen(
                         MetricBox("剩余试用", state.account?.trialUsesRemaining?.toString() ?: "-", Modifier.weight(1f))
                         MetricBox("积分余额", state.account?.creditBalance ?: "-", Modifier.weight(1f))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        listOf("10", "50", "100").forEach { amount ->
-                            OutlinedButton(
-                                onClick = { onRecharge(amount) },
-                                enabled = state.account != null && !state.busy,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("充 $amount")
-                            }
-                        }
-                    }
                     if (state.accountMessage.isNotBlank()) {
                         Text(
                             state.accountMessage,
@@ -111,11 +98,7 @@ fun ProfileScreen(
         item {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("账号信息", style = MaterialTheme.typography.titleMedium)
-                    InfoRow("租户", state.account?.tenantId ?: "-")
-                    InfoRow("用户", state.account?.userId ?: "-")
-                    InfoRow("平台", state.account?.platform ?: "-")
-                    InfoRow("服务", state.healthText)
+                    Text("训练偏好", style = MaterialTheme.typography.titleMedium)
                     InfoRow("默认模式", if (state.settings?.defaultInterviewMode == "candidate") "Agent 回答我" else "Agent 面试我")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(onClick = { onUpdateDefaultMode("interviewer") }, modifier = Modifier.weight(1f)) {
@@ -132,17 +115,11 @@ fun ProfileScreen(
         item {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = if (state.account == null) onDevLogin else onRefreshAccount,
-                        enabled = !state.busy,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (state.account == null) "开发登录" else "刷新账户")
+                    OutlinedButton(onClick = onRefreshAccount, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("刷新账号信息")
                     }
-                    if (state.account != null) {
-                        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
-                            Text("退出登录")
-                        }
+                    OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
+                        Text("退出登录")
                     }
                 }
             }

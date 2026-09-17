@@ -84,7 +84,7 @@ class SecurityService:
         current = result.scalar_one_or_none()
         if current is None:
             raise ValueError("refresh token not found")
-        if current.revoked or current.expires_at <= utcnow():
+        if current.revoked or as_utc(current.expires_at) <= utcnow():
             await self.revoke_refresh_family(current.family_id)
             raise ValueError("refresh token revoked or expired")
         if current.used_at is not None or current.replaced_by_token_id is not None:
@@ -357,3 +357,8 @@ def clean_severity(value: str) -> str:
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def as_utc(value: datetime) -> datetime:
+    """Normalize SQLite's timezone-naive DateTime values before comparisons."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)

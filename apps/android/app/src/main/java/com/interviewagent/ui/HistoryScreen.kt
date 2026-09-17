@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -23,7 +24,8 @@ fun HistoryScreen(
     state: ChatUiState,
     onRefresh: () -> Unit,
     onRestore: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onLoadMore: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -45,7 +47,9 @@ fun HistoryScreen(
             }
         }
 
-        items(state.sessions) { session ->
+        items(state.sessions.size, key = { state.sessions[it].id }) { index ->
+            val session = state.sessions[index]
+            if (index >= state.sessions.size - 6 && state.sessionsHasMore) LaunchedEffect(state.sessions.size) { onLoadMore() }
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

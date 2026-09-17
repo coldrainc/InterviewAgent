@@ -1,6 +1,7 @@
 import { CheckCircle2, Coins, CreditCard, Database, QrCode, Settings, ShieldCheck, UserRound, X } from "lucide-react";
 import { ModelSelector } from "../common/ModelSelector";
 import { QRCodeImage } from "../common/QRCodeImage";
+import { PrivacyDataPanel } from "../../features/privacy/PrivacyDataPanel";
 import { formatCredits } from "../../utils/interview";
 
 export function AccountEntry({ account, active, onOpen }) {
@@ -10,7 +11,7 @@ export function AccountEntry({ account, active, onOpen }) {
         <UserRound size={17} />
       </span>
       <span className="account-entry-main">
-        <strong>{account ? account.display_name || account.user_id : "登录 / 注册"}</strong>
+        <strong>{account ? account.display_name || account.email || "我的账户" : "登录 / 注册"}</strong>
         <small>
           {account
             ? `${formatCredits(account.credit_balance)} 积分 · ${account.trial_uses_remaining} 次试用`
@@ -33,6 +34,7 @@ export function AccountCenter({
   onLogout,
   onSelectModel,
   paymentState,
+  billingPlans,
   adminState,
   onPaymentStateChange,
   onCreatePayment,
@@ -40,9 +42,17 @@ export function AccountCenter({
   onAdminFieldChange,
   onGrantRole,
   onRevokeRole,
+  onCreateReviewSiteTestData,
+  client,
   onBack
 }) {
-  const rechargeOptions = ["10", "50", "100"];
+  const rechargeOptions = Array.isArray(billingPlans) && billingPlans.length
+    ? billingPlans
+    : [
+        { code: "", name: "10 积分", price_credits: "10", included_credits: "10" },
+        { code: "", name: "50 积分", price_credits: "50", included_credits: "50" },
+        { code: "", name: "100 积分", price_credits: "100", included_credits: "100" }
+      ];
   if (account) {
     return (
       <section className="account-center">
@@ -51,9 +61,9 @@ export function AccountCenter({
             <UserRound size={28} />
           </div>
           <div>
-            <span className="eyebrow">Account</span>
-            <h3>{account.display_name || account.user_id}</h3>
-            <p>{account.email || account.user_id}</p>
+            <span className="eyebrow">个人中心</span>
+            <h3>{account.display_name || "我的账户"}</h3>
+            <p>{account.email || "已登录"}</p>
           </div>
           <div className="account-hero-actions">
             <button type="button" className="secondary-action inline" onClick={onBack}>返回面试</button>
@@ -76,17 +86,23 @@ export function AccountCenter({
                 <b>{formatCredits(account.credit_balance)}</b>
               </div>
             </div>
-            <p className="resume-hint">生产环境充值会由支付平台创建订单，支付成功后通过服务端签名回调入账。</p>
+            <p className="resume-hint">选择充值金额并完成支付，积分会自动到账。</p>
             <div className="payment-panel">
               <div className="payment-options" role="group" aria-label="充值金额">
-                {rechargeOptions.map((amount) => (
+                {rechargeOptions.map((plan) => (
                   <button
-                    key={amount}
+                    key={`${plan.code}-${plan.price_credits}`}
                     type="button"
-                    className={paymentState?.amount === amount ? "active" : ""}
-                    onClick={() => onPaymentStateChange?.((current) => ({ ...current, amount }))}
+                    className={paymentState?.planCode === plan.code ? "active" : ""}
+                    onClick={() => onPaymentStateChange?.((current) => ({
+                      ...current,
+                      planCode: plan.code,
+                      amount: plan.price_credits,
+                      creditedAmount: plan.included_credits
+                    }))}
                   >
-                    {amount} 积分
+                    <strong>{plan.name}</strong>
+                    <small>到账 {plan.included_credits} 积分 · {plan.duration_days || 30} 天</small>
                   </button>
                 ))}
               </div>
@@ -95,7 +111,7 @@ export function AccountCenter({
                   type="button"
                   className="secondary-action inline"
                   disabled={paymentState?.status === "loading"}
-                  onClick={() => onCreatePayment?.("alipay", paymentState?.amount || "10")}
+                  onClick={() => onCreatePayment?.("alipay", paymentState?.amount || rechargeOptions[0].price_credits, paymentState?.planCode || rechargeOptions[0].code)}
                 >
                   <CreditCard size={15} />
                   支付宝
@@ -104,7 +120,7 @@ export function AccountCenter({
                   type="button"
                   className="secondary-action inline"
                   disabled={paymentState?.status === "loading"}
-                  onClick={() => onCreatePayment?.("wechat", paymentState?.amount || "10")}
+                  onClick={() => onCreatePayment?.("wechat", paymentState?.amount || rechargeOptions[0].price_credits, paymentState?.planCode || rechargeOptions[0].code)}
                 >
                   <QrCode size={15} />
                   微信
@@ -125,7 +141,7 @@ export function AccountCenter({
             />
             <div className="billing-note">
               <Coins size={15} />
-              <span>试用额度优先消耗；试用用完后按模型 token 用量扣除积分。</span>
+              <span>优先使用免费次数，之后按所选模型的实际用量扣除积分。</span>
             </div>
           </section>
 
@@ -134,10 +150,9 @@ export function AccountCenter({
               <span>个人信息</span>
             </div>
             <div className="profile-list">
-              <ProfileItem label="租户" value={account.tenant_id} />
-              <ProfileItem label="用户 ID" value={account.user_id} />
-              <ProfileItem label="平台" value={account.platform} />
+              <ProfileItem label="昵称" value={account.display_name || "未设置"} />
               <ProfileItem label="邮箱" value={account.email || "-"} />
+              <ProfileItem label="账户类型" value={account.role === "admin" ? "管理员" : "个人账户"} />
             </div>
           </section>
 
@@ -148,14 +163,16 @@ export function AccountCenter({
             <div className="security-list">
               <div>
                 <ShieldCheck size={16} />
-                <span>登录态使用短期 access token + refresh token rotation，异常复用会自动吊销同族 token。</span>
+                <span>登录信息会被安全保存，异常登录会自动失效。</span>
               </div>
               <div>
                 <Database size={16} />
-                <span>上传文档、题库和候选人输入会经过内容安全与 Prompt Injection 扫描。</span>
+                <span>上传的简历、题库和回答会经过安全检查，降低恶意内容风险。</span>
               </div>
             </div>
           </section>
+
+          <PrivacyDataPanel client={client} accountKey={`${account.tenant_id}:${account.user_id}`} />
 
           {account.role === "admin" && (
             <AdminSecurityPanel
@@ -164,6 +181,7 @@ export function AccountCenter({
               onFieldChange={onAdminFieldChange}
               onGrantRole={onGrantRole}
               onRevokeRole={onRevokeRole}
+              onCreateReviewSiteTestData={onCreateReviewSiteTestData}
             />
           )}
         </div>
@@ -175,13 +193,13 @@ export function AccountCenter({
     <section className="account-center">
       <div className="account-auth-layout">
         <div className="account-auth-copy">
-          <span className="eyebrow">Account</span>
+          <span className="eyebrow">个人中心</span>
           <h3>登录后继续使用 Interview Agent</h3>
           <p>账户用于保存简历、历史会话、试用额度、积分余额和模型用量。</p>
           <div className="auth-benefits">
             <div><CheckCircle2 size={16} />默认领取 2 次试用</div>
             <div><CheckCircle2 size={16} />多端共享简历和历史记录</div>
-            <div><CheckCircle2 size={16} />按模型 token 用量扣除积分</div>
+            <div><CheckCircle2 size={16} />用量透明，完成后展示积分明细</div>
           </div>
         </div>
         <div className="auth-card standalone">
@@ -197,7 +215,7 @@ export function AccountCenter({
   );
 }
 
-function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRevokeRole }) {
+function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRevokeRole, onCreateReviewSiteTestData }) {
   const roles = Array.isArray(state?.roles) ? state.roles : [];
   const events = Array.isArray(state?.events) ? state.events : [];
   return (
@@ -208,15 +226,34 @@ function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRev
           刷新
         </button>
       </div>
+      <div className="admin-test-data-row">
+        <div>
+          <strong>复习站测试数据</strong>
+          <p>创建一份匿名通用计划，仅供非生产环境验证交互。</p>
+        </div>
+        <button
+          type="button"
+          className="secondary-action inline compact"
+          disabled={state?.testDataStatus === "loading"}
+          onClick={onCreateReviewSiteTestData}
+        >
+          {state?.testDataStatus === "loading" ? "创建中" : "创建测试计划"}
+        </button>
+      </div>
+      {state?.testDataMessage && (
+        <p className={`resume-hint ${state.testDataStatus === "error" ? "error" : ""}`}>
+          {state.testDataMessage}
+        </p>
+      )}
       <div className="admin-role-form">
         <input
           value={state?.userId || ""}
-          placeholder="用户 ID，如 email:name@example.com"
+          placeholder="用户邮箱"
           onChange={(event) => onFieldChange?.("userId", event.target.value)}
         />
         <select value={state?.role || "support"} onChange={(event) => onFieldChange?.("role", event.target.value)}>
-          <option value="support">support</option>
-          <option value="admin">admin</option>
+          <option value="support">客服人员</option>
+          <option value="admin">管理员</option>
         </select>
         <button
           type="button"
@@ -234,8 +271,8 @@ function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRev
           {roles.length ? roles.slice(0, 8).map((role) => (
             <div className="admin-row" key={`${role.user_id}-${role.role}`}>
               <span>
-                <b>{role.role}</b>
-                <small>{role.user_id}</small>
+                <b>{roleLabel(role.role)}</b>
+                <small>{formatAccountIdentifier(role.user_id)}</small>
               </span>
               {role.role !== "user" && (
                 <button type="button" className="danger-inline" onClick={() => onRevokeRole?.(role)}>
@@ -250,8 +287,8 @@ function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRev
           {events.length ? events.slice(0, 8).map((event) => (
             <div className="admin-row event" key={event.id}>
               <span>
-                <b>{event.event_type}</b>
-                <small>{event.severity} · {event.ip_address || "-"} · {formatDate(event.created_at)}</small>
+                <b>{securityEventLabel(event.event_type)}</b>
+                <small>{severityLabel(event.severity)} · {formatDate(event.created_at)}</small>
               </span>
             </div>
           )) : <p className="resume-hint">暂无安全事件。</p>}
@@ -259,6 +296,30 @@ function AdminSecurityPanel({ state, onReload, onFieldChange, onGrantRole, onRev
       </div>
     </section>
   );
+}
+
+function formatAccountIdentifier(value) {
+  const text = String(value || "");
+  return text.startsWith("email:") ? text.slice(6) : text || "未知账户";
+}
+
+function roleLabel(value) {
+  return { admin: "管理员", support: "客服人员", user: "普通用户" }[value] || "自定义角色";
+}
+
+function severityLabel(value) {
+  return { critical: "紧急", high: "高风险", medium: "需关注", low: "一般", info: "提示" }[value] || "需关注";
+}
+
+function securityEventLabel(value) {
+  const labels = {
+    login_failed: "登录失败",
+    login_succeeded: "登录成功",
+    token_reuse: "异常登录已拦截",
+    role_granted: "账户权限已更新",
+    role_revoked: "账户权限已撤销"
+  };
+  return labels[value] || "账户安全提醒";
 }
 
 function formatDate(value) {
@@ -287,7 +348,6 @@ function PaymentStatus({ state }) {
       <div className="payment-result">
         <QRCodeImage value={order.code_url} alt="微信支付二维码" />
         <p className="resume-hint active">请使用微信扫码支付，支付成功后会自动刷新积分。</p>
-        <code>{order.external_order_id}</code>
       </div>
     );
   }
@@ -326,7 +386,7 @@ export function AuthDialog({ reason, authState, onAuthChange, onAuthSubmit, onDe
   );
 }
 
-function AuthForm({ authState, onAuthChange, onAuthSubmit, onDevLogin }) {
+export function AuthForm({ authState, onAuthChange, onAuthSubmit }) {
   const update = (key, value) => onAuthChange((current) => ({ ...current, [key]: value }));
   return (
     <>
@@ -361,9 +421,6 @@ function AuthForm({ authState, onAuthChange, onAuthSubmit, onDevLogin }) {
         />
         <button type="submit" disabled={authState.status === "loading"}>
           {authState.status === "loading" ? "处理中..." : authState.mode === "login" ? "登录" : "注册并领取试用"}
-        </button>
-        <button type="button" className="secondary-auth" onClick={onDevLogin}>
-          开发账号试用
         </button>
         {authState.status === "error" && <p>{authState.error}</p>}
       </form>

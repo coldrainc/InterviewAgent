@@ -20,11 +20,14 @@ out/
 release/
 dist-electron/
 apps/desktop/dist/
+tests/artifacts/
+tests/.runtime/
 
 # Native app build output
 .build/
 .gradle/
 **/.gradle/
+**/.hvigor/
 **/build/
 DerivedData/
 
@@ -36,6 +39,8 @@ build/
 
 # Local environment / secrets
 .env
+.env.production
+backups/
 .env.*
 !.env.example
 

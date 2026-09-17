@@ -15,7 +15,11 @@ struct HistoryView: View {
                             .cardStyle()
                     }
                     ForEach(viewModel.sessions) { session in
-                        sessionRow(session)
+                        sessionRow(session).onAppear {
+                            if session.id == viewModel.sessions.dropLast(min(6, viewModel.sessions.count)).last?.id || session.id == viewModel.sessions.last?.id {
+                                Task { await viewModel.loadSessions(append: true) }
+                            }
+                        }
                     }
                 }
                 .padding()

@@ -1,9 +1,11 @@
 {
+  "modelVersion": "6.0.0",
   "name": "interview-agent-harmony",
   "version": "0.1.0",
   "description": "Interview Agent HarmonyOS client",
   "main": "",
   "author": "",
   "license": "MIT",
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {}
 }

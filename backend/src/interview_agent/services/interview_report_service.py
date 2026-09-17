@@ -59,18 +59,19 @@ class InterviewReportService:
     async def get_report(self, session_id: str) -> dict | None:
         return await self.repository.get_report(session_id)
 
-    async def list_reports(self, limit: int = 20) -> dict:
-        reports = await self.repository.list_reports(limit=limit)
-        scores = [r["total_score"] for r in reports if isinstance(r.get("total_score"), int)]
-        recent = scores[:5]
-        trend = {
-            "total_reports": len(reports),
-            "scored_reports": len(scores),
-            "average_score": round(sum(scores) / len(scores), 1) if scores else None,
-            "recent_average": round(sum(recent) / len(recent), 1) if recent else None,
-            "latest_score": scores[0] if scores else None,
+    async def list_reports(self, limit: int = 20, offset: int = 0) -> dict:
+        page = await self.repository.list_reports(limit=limit + 1, offset=offset)
+        has_more = len(page) > limit
+        reports = page[:limit]
+        trend = await self.repository.trend_stats()
+        return {
+            "reports": reports,
+            "trend": trend,
+            "limit": limit,
+            "offset": offset,
+            "has_more": has_more,
+            "next_offset": offset + len(reports) if has_more else None,
         }
-        return {"reports": reports, "trend": trend}
 
     async def add_tasks_from_report(
         self,

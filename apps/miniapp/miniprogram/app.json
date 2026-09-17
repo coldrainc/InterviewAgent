@@ -1,8 +1,10 @@
 {
   "pages": [
+    "pages/today/today",
     "pages/chat/chat",
     "pages/setup/setup",
     "pages/practice/practice",
+    "pages/review/review",
     "pages/resumes/resumes",
     "pages/history/history",
     "pages/profile/profile",
@@ -21,6 +23,10 @@
     "borderStyle": "white",
     "list": [
       {
+        "pagePath": "pages/today/today",
+        "text": "今日"
+      },
+      {
         "pagePath": "pages/chat/chat",
         "text": "面试"
       },
@@ -29,12 +35,8 @@
         "text": "刷题"
       },
       {
-        "pagePath": "pages/resumes/resumes",
-        "text": "简历"
-      },
-      {
-        "pagePath": "pages/history/history",
-        "text": "历史"
+        "pagePath": "pages/review/review",
+        "text": "复习"
       },
       {
         "pagePath": "pages/profile/profile",

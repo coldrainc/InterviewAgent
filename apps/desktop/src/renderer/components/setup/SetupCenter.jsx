@@ -2,6 +2,7 @@ import { Globe2, Loader2, MessageSquarePlus, Moon, RefreshCw, Trash2, Upload } f
 import { interviewModes, llmModes } from "../../constants/interview";
 import { currentIndustry } from "../../utils/interview";
 import { ModelSelector } from "../common/ModelSelector";
+import { InfiniteScrollSentinel } from "../common/InfiniteScrollSentinel";
 
 export function SetupCenter({
   profile,
@@ -14,6 +15,7 @@ export function SetupCenter({
   resumeImport,
   requirementsImport,
   resumeLibrary,
+  resumeLibraryState,
   selectedResumeId,
   busy,
   onNewSession,
@@ -22,6 +24,7 @@ export function SetupCenter({
   onSelectResume,
   onDeleteResume,
   onReloadResumes,
+  onLoadMoreResumes,
   onProfileChange,
   onDefaultModeChange,
   onOfflineChange,
@@ -108,8 +111,10 @@ export function SetupCenter({
             selectedResumeId={selectedResumeId}
             onSelect={onSelectResume}
             onReload={onReloadResumes}
+            onLoadMore={onLoadMoreResumes}
             onDelete={onDeleteResume}
             busy={busy}
+            state={resumeLibraryState}
           />
           <ResumeImportStatus state={resumeImport} />
           <div className="field-grid two">
@@ -189,7 +194,7 @@ function RequirementsImportStatus({ state }) {
   );
 }
 
-function ResumeLibrary({ resumes, selectedResumeId, onSelect, onReload, onDelete, busy }) {
+function ResumeLibrary({ resumes, selectedResumeId, onSelect, onReload, onLoadMore, onDelete, busy, state }) {
   const selectedResume = resumes.find((resume) => resume.id === selectedResumeId);
   const confirmDelete = () => {
     if (!selectedResume) return;
@@ -204,16 +209,28 @@ function ResumeLibrary({ resumes, selectedResumeId, onSelect, onReload, onDelete
           <RefreshCw size={13} />
         </button>
       </div>
-      <select
-        value={selectedResumeId}
-        onChange={(event) => onSelect(event.target.value)}
-        disabled={!resumes.length}
-      >
-        <option value="">{resumes.length ? "请选择简历" : "暂无历史简历"}</option>
+      <div className="resume-library-list" role="listbox" aria-label="历史简历">
+        {!resumes.length && !state?.loading && <p className="resume-hint">暂无历史简历</p>}
         {resumes.map((resume) => (
-          <option key={resume.id} value={resume.id}>{resume.filename}</option>
+          <button
+            key={resume.id}
+            type="button"
+            role="option"
+            aria-selected={resume.id === selectedResumeId}
+            className={resume.id === selectedResumeId ? "selected" : ""}
+            onClick={() => onSelect(resume.id)}
+          >
+            <strong>{resume.filename}</strong>
+            <small>{resume.summary || "已安全保存"}</small>
+          </button>
         ))}
-      </select>
+        <InfiniteScrollSentinel
+          hasMore={Boolean(state?.hasMore)}
+          loading={Boolean(state?.loading)}
+          error={state?.error || ""}
+          onLoadMore={onLoadMore}
+        />
+      </div>
       {selectedResumeId && (
         <div className="resume-library-actions">
           <small>已保存 {resumes.length} 份，当前面试会使用选中的这份简历。</small>

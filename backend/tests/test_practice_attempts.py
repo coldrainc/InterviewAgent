@@ -86,6 +86,20 @@ async def _seed_question(factory, payload: dict) -> str:
         return question["id"]
 
 
+@pytest.mark.asyncio
+async def test_bulk_upsert_deduplicates_same_batch(db_factory) -> None:
+    payload = _choice_question("同批次重复题")
+    async with db_factory() as db:
+        repo = PracticeQuestionRepository(db, tenant_id=TENANT, user_id=USER)
+        result = await repo.bulk_upsert([payload, payload])
+        await db.commit()
+
+        _, total = await repo.list_questions(limit=10)
+
+    assert result == {"created": 1, "updated": 1, "total": 2}
+    assert total == 1
+
+
 # ---- TR-3.1 作答落库 + 错题自动收录 ----
 @pytest.mark.asyncio
 async def test_wrong_choice_attempt_persists_and_auto_collects(db_factory) -> None:

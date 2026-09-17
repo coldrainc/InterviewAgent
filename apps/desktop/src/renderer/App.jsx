@@ -2,32 +2,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PanelLeftOpen } from "lucide-react";
 import "./styles.css";
+import "./styles/foundation.css";
+import "./styles/today.css";
+import "./styles/workspaces.css";
+import "./styles/auth.css";
+import "./styles/admin.css";
 import { getInterviewAgentClient } from "./apiClient";
+import { useAccountController } from "./hooks/useAccountController";
+import { useInterviewSessionController } from "./hooks/useInterviewSessionController";
+import { useSidebarNavigation } from "./hooks/useSidebarNavigation";
+import { useAdminConsole } from "./features/admin/useAdminConsole";
+import { mergeUniqueById } from "./hooks/useInfiniteScroll";
+import { AppScreenRouter } from "./app/AppScreenRouter";
 import { fallbackIndustries, fallbackModels, llmModes } from "./constants/interview";
 import Sidebar from "./components/sidebar/Sidebar";
-import { AccountCenter, AuthDialog } from "./components/account/AccountCenter";
-import { SettingsCenter } from "./components/settings/SettingsCenter";
-import { SetupCenter } from "./components/setup/SetupCenter";
-import { HomePage } from "./components/home/HomePage";
-import { ReportsPage } from "./components/interview/ReportsPage";
-import { TrainingPage } from "./components/training/TrainingPage";
-import { ReviewSitePage } from "./components/study/ReviewSitePage";
-import { PlanGeneratorPage } from "./components/study/PlanGeneratorPage";
-import { OperationsCenter } from "./components/operations/OperationsCenter";
-import { Topbar, EmptyState, Message, Typing, Composer } from "./components/chat/Chat";
+import { SidebarBackdrop } from "./components/sidebar/SidebarBackdrop";
+import { AuthDialog } from "./components/account/AccountCenter";
+import { AuthGate } from "./components/account/AuthGate";
+import { Topbar } from "./components/chat/Chat";
 import {
-  buildFocusAreas,
-  buildInterviewGoal,
-  currentIndustry,
   currentModel,
-  formatTime,
-  normalizeDesktopError,
-  turnsToMessages
+  normalizeDesktopError
 } from "./utils/interview";
 
 const api = getInterviewAgentClient();
-const LAST_SESSION_STORAGE_KEY = "interview-agent-last-session-id";
-const SESSION_MESSAGES_STORAGE_PREFIX = "interview-agent-session-messages:";
 const THEME_STORAGE_KEY = "interview-agent-theme";
 
 function readStoredTheme() {
@@ -42,105 +40,12 @@ try {
   document.documentElement.dataset.theme = readStoredTheme();
 } catch {}
 
-function getLastSessionId() {
-  try {
-    return window.localStorage.getItem(LAST_SESSION_STORAGE_KEY) || "";
-  } catch (_error) {
-    return "";
-  }
-}
-
-function setLastSessionId(value) {
-  try {
-    if (value) {
-      window.localStorage.setItem(LAST_SESSION_STORAGE_KEY, value);
-    } else {
-      window.localStorage.removeItem(LAST_SESSION_STORAGE_KEY);
-    }
-  } catch (_error) {
-    // Ignore storage failures so private browsing modes still work.
-  }
-}
-
-function getCachedSessionMessages(sessionId) {
-  if (!sessionId) return [];
-  try {
-    const raw = window.localStorage.getItem(`${SESSION_MESSAGES_STORAGE_PREFIX}${sessionId}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_error) {
-    return [];
-  }
-}
-
-function setCachedSessionMessages(sessionId, value) {
-  if (!sessionId) return;
-  try {
-    if (Array.isArray(value) && value.length) {
-      window.localStorage.setItem(
-        `${SESSION_MESSAGES_STORAGE_PREFIX}${sessionId}`,
-        JSON.stringify(value.map((message) => ({
-          id: message.id,
-          role: message.role,
-          text: message.text,
-          fallback: Boolean(message.fallback),
-          usage: message.usage || null,
-          modelId: message.modelId || "",
-          time: message.time || "",
-          turnIndex: message.turnIndex || null,
-          stopped: Boolean(message.stopped)
-        })))
-      );
-    } else {
-      window.localStorage.removeItem(`${SESSION_MESSAGES_STORAGE_PREFIX}${sessionId}`);
-    }
-  } catch (_error) {
-    // Ignore storage failures so private browsing modes still work.
-  }
-}
-
-function hasPendingCachedMessage(messages) {
-  return messages.some((message) => (
-    message.role === "agent"
-    && (
-      String(message.text || "").includes("正在分析回答")
-      || String(message.text || "").includes("流式连接中断")
-      || String(message.text || "").includes("正在使用普通请求重试")
-    )
-  ));
-}
-
-function shouldUseCachedMessages(cachedMessages, restoredMessages) {
-  if (!cachedMessages.length) return false;
-  if (hasPendingCachedMessage(cachedMessages)) return false;
-  if (restoredMessages.length > cachedMessages.length) return false;
-  return true;
-}
-
 function App() {
+  const accountIdentityRef = useRef(null);
+  const [authReady, setAuthReady] = useState(false);
   const [screen, setScreen] = useState("home");
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    try {
-      return localStorage.getItem("interview-agent-sidebar-open") !== "0";
-    } catch {
-      return true;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("interview-agent-sidebar-open", sidebarOpen ? "1" : "0");
-    } catch {}
-  }, [sidebarOpen]);
-  useEffect(() => {
-    const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        setSidebarOpen((v) => !v);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  const [navigationTarget, setNavigationTarget] = useState(null);
+  const sidebar = useSidebarNavigation();
   const [theme, setTheme] = useState(readStoredTheme);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -149,45 +54,29 @@ function App() {
     } catch {}
   }, [theme]);
   const [health, setHealth] = useState({ status: "checking" });
-  const [sessionId, setSessionId] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [offline, setOffline] = useState(false);
-  const [webSearch, setWebSearch] = useState(false);
-  const [completed, setCompleted] = useState(false);
   const [resumeImport, setResumeImport] = useState({ status: "idle" });
   const [requirementsImport, setRequirementsImport] = useState({ status: "idle" });
   const [resumeLibrary, setResumeLibrary] = useState([]);
+  const [resumeLibraryState, setResumeLibraryState] = useState({ loading: false, hasMore: true, error: "" });
+  const resumeLibraryRef = useRef([]);
+  const resumeLoadingRef = useRef(false);
   const [selectedResumeId, setSelectedResumeId] = useState("");
-  const [sessionHistory, setSessionHistory] = useState([]);
-  const [historyState, setHistoryState] = useState({ status: "idle" });
-  const [reportScores, setReportScores] = useState({});
   const [opsState, setOpsState] = useState({
     status: "idle",
     jobs: [],
     traces: [],
     evalRuns: [],
     metrics: {},
-    message: ""
+    message: "",
+    pages: { jobs: true, traces: true, evalRuns: true },
+    loadingKinds: []
   });
+  const opsRefs = useRef({ jobs: [], traces: [], evalRuns: [] });
+  const opsLoadingRef = useRef(new Set());
   const [industryOptions, setIndustryOptions] = useState(fallbackIndustries);
   const [modelOptions, setModelOptions] = useState(fallbackModels);
   const [selectedModelId, setSelectedModelId] = useState("deepseek-v4-pro");
   const [selectedLlmMode, setSelectedLlmMode] = useState("standard");
-  const [account, setAccount] = useState(null);
-  const [settingsState, setSettingsState] = useState({ status: "idle", default_interview_mode: "interviewer" });
-  const [paymentState, setPaymentState] = useState({ status: "idle", amount: "10", provider: "alipay" });
-  const [adminState, setAdminState] = useState({
-    status: "idle",
-    roles: [],
-    events: [],
-    userId: "",
-    role: "support",
-    error: ""
-  });
-  const [authState, setAuthState] = useState({ mode: "login", email: "", password: "", displayName: "", status: "idle" });
-  const [authDialog, setAuthDialog] = useState({ open: false, reason: "" });
   const [profile, setProfile] = useState({
     mode: "interviewer",
     industry: "internet",
@@ -200,13 +89,83 @@ function App() {
     interviewerRequirements: "",
     interviewGoal: "请基于我的简历和做过的事情进行 AI 工程面试，重点深挖真实项目、RAG/Agent、评测、上线和安全治理。"
   });
-  const messagesEndRef = useRef(null);
-  const textareaRef = useRef(null);
-  const activeRequestRef = useRef(null);
+  const {
+    account,
+    billingPlans,
+    adminState,
+    authDialog,
+    authState,
+    paymentState,
+    settingsState,
+    changeDefaultMode,
+    createPayment,
+    createReviewSiteTestData,
+    grantAdminRole,
+    loadAccount,
+    loadBillingPlans,
+    loadAdminSecurity,
+    loadUserSettings,
+    logout,
+    requireAccount,
+    revokeAdminRole,
+    setAuthDialog,
+    setAuthState,
+    setPaymentState,
+    submitAuth,
+    updateAdminField,
+    useDevAccount
+  } = useAccountController({
+    api,
+    setProfile,
+    afterAuthenticated: async (authenticatedAccount) => {
+      const authenticatedIdentity = authenticatedAccount
+        ? `${authenticatedAccount.tenant_id}:${authenticatedAccount.user_id}`
+        : "";
+      resetPrivateClientState(authenticatedIdentity);
+      accountIdentityRef.current = authenticatedIdentity;
+      await Promise.all([loadResumeLibrary(), sessionController.loadSessionHistory()]);
+    },
+    afterLogout: () => {
+      resetPrivateClientState("");
+      accountIdentityRef.current = "";
+    }
+  });
+  const sessionController = useInterviewSessionController({
+    api,
+    profile,
+    industryOptions,
+    selectedResumeId,
+    selectedModelId,
+    llmMode: llmModes.find((mode) => mode.value === selectedLlmMode) || llmModes[1],
+    accountKey: account ? `${account.tenant_id}:${account.user_id}` : "",
+    requireAccount,
+    loadAccount
+  });
+  const adminConsole = useAdminConsole(api.admin, account?.role === "admin" || account?.role === "server");
+  const {
+    appendMessage, busy, completed, deleteSession, editMessage, handleKeyDown, handleSubmit,
+    historyState, input, loadReportScores, loadSessionHistory, messages, messagesEndRef,
+    offline, reportScores, restoreLastSession, restoreSession, sessionHistory,
+    sessionId, setInput, setOffline, setWebSearch, startSession: createSession,
+    stopGeneration, textareaRef, webSearch, withdrawMessage
+  } = sessionController;
 
   useEffect(() => {
     bootstrap();
   }, []);
+
+  useEffect(() => {
+    const nextIdentity = account ? `${account.tenant_id}:${account.user_id}` : "";
+    const previousIdentity = accountIdentityRef.current;
+    if (previousIdentity === null) {
+      accountIdentityRef.current = nextIdentity;
+      return;
+    }
+    if (previousIdentity && previousIdentity !== nextIdentity) {
+      resetPrivateClientState(nextIdentity);
+    }
+    accountIdentityRef.current = nextIdentity;
+  }, [account?.tenant_id, account?.user_id]);
 
   useEffect(() => {
     loadIndustryOptions(profile.targetRole);
@@ -225,21 +184,16 @@ function App() {
   }, [screen, account?.role]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, busy]);
-
-  useEffect(() => {
-    if (sessionId && messages.length) {
-      setCachedSessionMessages(sessionId, messages);
+    if (screen === "admin" && (account?.role === "admin" || account?.role === "server")) {
+      adminConsole.load();
     }
-  }, [sessionId, messages]);
+  }, [screen, account?.role, adminConsole.load]);
 
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 168)}px`;
-  }, [input]);
+    if (screen === "admin" && account?.role !== "admin" && account?.role !== "server") {
+      setScreen("home");
+    }
+  }, [screen, account?.role]);
 
   const status = useMemo(() => {
     if (health.status === "ok") {
@@ -251,26 +205,58 @@ function App() {
     }
     if (health.status === "error") {
       return {
-        label: "API 未启动",
+        label: "服务暂不可用",
         tone: "fail",
-        detail: health.error || "请先运行 make api"
+        detail: normalizeDesktopError(health.error, "暂时无法连接服务，请稍后重试。")
       };
     }
     return { label: "检查中", tone: "checking", detail: "正在连接本地服务" };
   }, [health]);
 
+  function resetPrivateClientState(nextIdentity = "") {
+    sessionController.switchAccountScope(nextIdentity);
+    setResumeLibrary([]);
+    resumeLibraryRef.current = [];
+    resumeLoadingRef.current = false;
+    setResumeLibraryState({ loading: false, hasMore: true, error: "" });
+    setSelectedResumeId("");
+    setResumeImport({ status: "idle" });
+    setRequirementsImport({ status: "idle" });
+    setProfile((current) => ({
+      ...current,
+      candidateName: "",
+      resumeSummary: "",
+      resumeText: "",
+      projectExperience: "",
+      interviewerRequirements: ""
+    }));
+    opsRefs.current = { jobs: [], traces: [], evalRuns: [] };
+    opsLoadingRef.current.clear();
+    setOpsState({ status: "idle", jobs: [], traces: [], evalRuns: [], metrics: {}, message: "", pages: { jobs: true, traces: true, evalRuns: true }, loadingKinds: [] });
+    setScreen("home");
+  }
+
   async function bootstrap() {
-    await checkHealth();
-    await loadIndustryOptions();
-    await loadModelOptions();
-    if (api.hasToken?.()) {
-      await loadAccount();
-      await loadUserSettings();
-      await loadResumeLibrary();
-      await loadSessionHistory();
-      await loadReportScores();
-      await restoreLastSession();
-      await loadOperationsCenter();
+    try {
+      await Promise.all([checkHealth(), loadIndustryOptions(), loadModelOptions()]);
+      if (api.hasToken?.()) {
+        const authenticatedAccount = await loadAccount();
+        if (!authenticatedAccount) {
+          resetPrivateClientState("");
+          return;
+        }
+        const authenticatedAccountKey = `${authenticatedAccount.tenant_id}:${authenticatedAccount.user_id}`;
+        resetPrivateClientState(authenticatedAccountKey);
+        accountIdentityRef.current = authenticatedAccountKey;
+        await Promise.all([loadUserSettings(), loadBillingPlans()]);
+        await loadResumeLibrary();
+        await loadSessionHistory();
+        await loadReportScores();
+        await restoreLastSession(authenticatedAccountKey);
+        await loadOperationsCenter();
+      }
+    } finally {
+      setAuthReady(true);
     }
   }
 
@@ -280,7 +266,7 @@ function App() {
       const result = await api.health();
       setHealth({ status: "ok", ...result });
     } catch (error) {
-      setHealth({ status: "error", error: error.message });
+      setHealth({ status: "error", error: normalizeDesktopError(error) });
     }
   }
 
@@ -310,166 +296,32 @@ function App() {
     }
   }
 
-  async function loadAccount() {
+  async function loadResumeLibrary({ append = false } = {}) {
+    if (resumeLoadingRef.current || (append && !resumeLibraryState.hasMore)) return;
+    resumeLoadingRef.current = true;
+    setResumeLibraryState((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const result = await api.getAccount();
-      setAccount(result);
-      applyUserSettings(result.settings);
-    } catch (_error) {
-      setAccount(null);
-    }
-  }
-
-  async function loadUserSettings() {
-    if (!api.getSettings) return;
-    try {
-      const result = await api.getSettings();
-      applyUserSettings(result);
-    } catch (_error) {
-      setSettingsState((current) => ({ ...current, status: "idle" }));
-    }
-  }
-
-  function applyUserSettings(settings) {
-    const mode = settings?.default_interview_mode;
-    if (mode === "interviewer" || mode === "candidate") {
-      setSettingsState((current) => ({ ...current, default_interview_mode: mode, status: "idle" }));
-      setProfile((current) => ({ ...current, mode }));
-    }
-  }
-
-  async function changeDefaultMode(mode) {
-    if (mode !== "interviewer" && mode !== "candidate") return;
-    setProfile((current) => ({ ...current, mode }));
-    setSettingsState((current) => ({ ...current, default_interview_mode: mode, status: "saving", error: "" }));
-    if (!account || !api.updateSettings) {
-      setSettingsState((current) => ({ ...current, status: account ? "idle" : "error", error: account ? "" : "登录后才能同步设置。" }));
-      return;
-    }
-    try {
-      const result = await api.updateSettings({ default_interview_mode: mode });
-      const savedMode = result?.default_interview_mode || mode;
-      setSettingsState({ status: "saved", default_interview_mode: savedMode });
-    } catch (error) {
-      setSettingsState((current) => ({ ...current, status: "error", error: `设置保存失败：${normalizeDesktopError(error.message)}` }));
-    }
-  }
-
-  async function submitAuth(event) {
-    event?.preventDefault();
-    if (authState.status === "loading") return;
-    setAuthState((current) => ({ ...current, status: "loading", error: "" }));
-    try {
-      const payload = {
-        email: authState.email,
-        password: authState.password,
-        display_name: authState.displayName || undefined,
-        platform: "desktop"
-      };
-      if (authState.mode === "register") {
-        await api.register(payload);
-      } else {
-        await api.login(payload);
-      }
-      await loadAccount();
-      await loadUserSettings();
-      await Promise.all([loadResumeLibrary(), loadSessionHistory()]);
-      setAuthState((current) => ({ ...current, password: "", status: "success", error: "" }));
-      setAuthDialog({ open: false, reason: "" });
-    } catch (error) {
-      setAuthState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
-    }
-  }
-
-  async function useDevAccount() {
-    setAuthState((current) => ({ ...current, status: "loading", error: "" }));
-    try {
-      await api.devLogin({
-        user_id: "desktop-dev-user",
-        display_name: "桌面端开发用户",
-        platform: "desktop"
-      });
-      await loadAccount();
-      await loadUserSettings();
-      await Promise.all([loadResumeLibrary(), loadSessionHistory()]);
-      setAuthState((current) => ({ ...current, status: "success", error: "" }));
-      setAuthDialog({ open: false, reason: "" });
-    } catch (error) {
-      setAuthState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
-    }
-  }
-
-  async function logout() {
-    await api.logout();
-    setLastSessionId("");
-    setAccount(null);
-    setSettingsState({ status: "idle", default_interview_mode: "interviewer" });
-    setSessionId("");
-    setMessages([]);
-    setResumeLibrary([]);
-    setSessionHistory([]);
-    setOpsState({ status: "idle", jobs: [], traces: [], evalRuns: [], metrics: {}, message: "" });
-    setAdminState({ status: "idle", roles: [], events: [], userId: "", role: "support", error: "" });
-    setReportScores({});
-    setScreen("home");
-  }
-
-  async function loadAdminSecurity() {
-    if (!api.listSecurityEvents || !api.listRoles) return;
-    setAdminState((current) => ({ ...current, status: "loading", error: "" }));
-    try {
-      const [events, roles] = await Promise.all([api.listSecurityEvents(), api.listRoles()]);
-      setAdminState((current) => ({
-        ...current,
-        status: "ready",
-        events: Array.isArray(events) ? events : [],
-        roles: Array.isArray(roles) ? roles : [],
-        error: ""
-      }));
-    } catch (error) {
-      setAdminState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
-    }
-  }
-
-  function updateAdminField(key, value) {
-    setAdminState((current) => ({ ...current, [key]: value }));
-  }
-
-  async function grantAdminRole() {
-    if (!adminState.userId.trim()) return;
-    setAdminState((current) => ({ ...current, status: "saving", error: "" }));
-    try {
-      await api.grantRole({ user_id: adminState.userId.trim(), role: adminState.role });
-      await loadAdminSecurity();
-    } catch (error) {
-      setAdminState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
-    }
-  }
-
-  async function revokeAdminRole(role) {
-    if (!role?.user_id || !role?.role) return;
-    setAdminState((current) => ({ ...current, status: "saving", error: "" }));
-    try {
-      await api.revokeRole({ user_id: role.user_id, role: role.role });
-      await loadAdminSecurity();
-    } catch (error) {
-      setAdminState((current) => ({ ...current, status: "error", error: normalizeDesktopError(error.message) }));
-    }
-  }
-
-  async function loadResumeLibrary() {
-    try {
-      const resumes = await api.listResumes();
-      setResumeLibrary(Array.isArray(resumes) ? resumes : []);
-      if (!selectedResumeId && Array.isArray(resumes) && resumes.length > 0) {
-        applyResume(resumes[0]);
+      const resumes = await api.listResumes({ limit: 20, offset: append ? resumeLibraryRef.current.length : 0 });
+      const incoming = Array.isArray(resumes) ? resumes : [];
+      const existing = append ? resumeLibraryRef.current : [];
+      const ids = new Set(existing.map((resume) => resume.id));
+      const next = existing.concat(incoming.filter((resume) => !ids.has(resume.id)));
+      resumeLibraryRef.current = next;
+      setResumeLibrary(next);
+      setResumeLibraryState({ loading: false, hasMore: incoming.length === 20, error: "" });
+      if (!selectedResumeId && next.length > 0) {
+        applyResume(next[0]);
       }
     } catch (error) {
-      setResumeLibrary([]);
-      setResumeImport({
-        status: "error",
-        error: `历史简历暂未加载：${normalizeDesktopError(error.message)}`
-      });
+      const message = `历史简历暂未加载：${normalizeDesktopError(error.message)}`;
+      if (!append) {
+        resumeLibraryRef.current = [];
+        setResumeLibrary([]);
+        setResumeImport({ status: "error", error: message });
+      }
+      setResumeLibraryState((current) => ({ ...current, loading: false, error: message }));
+    } finally {
+      resumeLoadingRef.current = false;
     }
   }
 
@@ -516,7 +368,11 @@ function App() {
         setResumeImport({ status: "error", error: "删除简历失败：未找到当前简历。" });
         return;
       }
-      setResumeLibrary((current) => current.filter((resume) => resume.id !== selectedResumeId));
+      setResumeLibrary((current) => {
+        const next = current.filter((resume) => resume.id !== selectedResumeId);
+        resumeLibraryRef.current = next;
+        return next;
+      });
       setSelectedResumeId("");
       setProfile((current) => ({ ...current, resumeSummary: "", resumeText: "" }));
       setResumeImport({ status: "idle" });
@@ -526,53 +382,57 @@ function App() {
     }
   }
 
-  async function loadSessionHistory() {
-    try {
-      const sessions = await api.listSessions();
-      setSessionHistory(Array.isArray(sessions) ? sessions : []);
-      setHistoryState({ status: "idle" });
-    } catch (error) {
-      setSessionHistory([]);
-      setHistoryState({ status: "error", error: `历史会话暂未加载：${normalizeDesktopError(error.message)}` });
-    }
-  }
-
-  async function loadReportScores() {
-    try {
-      const result = await api.study?.listReports?.(50);
-      const reports = Array.isArray(result?.reports) ? result.reports : [];
-      const scoreMap = {};
-      for (const report of reports) {
-        if (report.session_id && typeof report.total_score === "number") {
-          scoreMap[report.session_id] = report.total_score;
-        }
-      }
-      setReportScores(scoreMap);
-    } catch (_error) {
-      setReportScores({});
-    }
-  }
-
-  async function loadOperationsCenter() {
+  async function loadOperationsCenter({ appendKind = "" } = {}) {
     if (!api.listJobs || !api.listAgentTraces || !api.getOpsMetrics) return;
+    if (appendKind) {
+      if (opsLoadingRef.current.has(appendKind) || !opsState.pages?.[appendKind]) return;
+      const loaders = { jobs: api.listJobs, traces: api.listAgentTraces, evalRuns: api.listEvalRuns };
+      const loader = loaders[appendKind];
+      if (!loader) return;
+      opsLoadingRef.current.add(appendKind);
+      setOpsState((current) => ({ ...current, error: "", loadingKinds: [...current.loadingKinds, appendKind] }));
+      try {
+        const incoming = await loader({ limit: 20, offset: opsRefs.current[appendKind].length });
+        const next = mergeUniqueById(opsRefs.current[appendKind], Array.isArray(incoming) ? incoming : []);
+        opsRefs.current[appendKind] = next;
+        setOpsState((current) => ({
+          ...current,
+          [appendKind]: next,
+          pages: { ...current.pages, [appendKind]: incoming.length === 20 }
+        }));
+      } catch (error) {
+        setOpsState((current) => ({ ...current, error: `更多任务数据加载失败：${normalizeDesktopError(error.message)}` }));
+      } finally {
+        opsLoadingRef.current.delete(appendKind);
+        setOpsState((current) => ({ ...current, loadingKinds: current.loadingKinds.filter((kind) => kind !== appendKind) }));
+      }
+      return;
+    }
+    if (opsLoadingRef.current.has("all")) return;
+    opsLoadingRef.current.add("all");
     try {
       setOpsState((current) => ({ ...current, status: "loading", error: "", message: "" }));
       const [jobs, traces, metrics, evalRuns] = await Promise.all([
-        api.listJobs(),
-        api.listAgentTraces(),
+        api.listJobs({ limit: 20, offset: 0 }),
+        api.listAgentTraces({ limit: 20, offset: 0 }),
         api.getOpsMetrics(),
-        api.listEvalRuns ? api.listEvalRuns() : Promise.resolve([])
+        api.listEvalRuns ? api.listEvalRuns({ limit: 20, offset: 0 }) : Promise.resolve([])
       ]);
+      opsRefs.current = { jobs, traces, evalRuns };
       setOpsState({
         status: "idle",
         jobs: Array.isArray(jobs) ? jobs : [],
         traces: Array.isArray(traces) ? traces : [],
         evalRuns: Array.isArray(evalRuns) ? evalRuns : [],
         metrics: metrics || {},
-        message: ""
+        message: "",
+        pages: { jobs: jobs.length === 20, traces: traces.length === 20, evalRuns: evalRuns.length === 20 },
+        loadingKinds: []
       });
     } catch (error) {
       setOpsState((current) => ({ ...current, status: "error", error: `任务数据加载失败：${normalizeDesktopError(error.message)}` }));
+    } finally {
+      opsLoadingRef.current.delete("all");
     }
   }
 
@@ -635,108 +495,6 @@ function App() {
     }
   }
 
-  async function restoreSession(targetSessionId) {
-    if (!targetSessionId || busy) return;
-    if (!requireAccount("恢复历史会话前需要先登录账号。")) return;
-    setBusy(true);
-    try {
-      const detail = await restoreSessionById(targetSessionId);
-      setHistoryState({ status: "success", message: `已恢复会话 ${detail.id.slice(0, 8)}` });
-    } catch (error) {
-      setHistoryState({ status: "error", error: `恢复会话失败：${normalizeDesktopError(error.message)}` });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function restoreLastSession() {
-    const lastSessionId = getLastSessionId();
-    if (!lastSessionId) return;
-    const cachedMessages = getCachedSessionMessages(lastSessionId);
-    if (cachedMessages.length) {
-      setSessionId(lastSessionId);
-      setMessages(cachedMessages);
-    }
-    try {
-      await restoreSessionById(lastSessionId);
-    } catch (_error) {
-      setLastSessionId("");
-    }
-  }
-
-  async function restoreSessionById(targetSessionId) {
-    const detail = await api.getSession(targetSessionId);
-    const restoredMessages = turnsToMessages(detail.turns || [], detail.mode);
-    const cachedMessages = getCachedSessionMessages(detail.id);
-    setSessionId(detail.id);
-    setLastSessionId(detail.id);
-    setCompleted(detail.status === "completed");
-    setMessages(shouldUseCachedMessages(cachedMessages, restoredMessages) ? cachedMessages : restoredMessages);
-    return detail;
-  }
-
-  async function deleteSession(targetSessionId) {
-    if (!targetSessionId || busy) return;
-    if (!requireAccount("管理历史会话前需要先登录账号。")) return;
-    try {
-      const result = await api.deleteSession(targetSessionId);
-      if (result.deleted) {
-        setSessionHistory((current) => current.filter((item) => item.id !== targetSessionId));
-        if (sessionId === targetSessionId) {
-          setLastSessionId("");
-          setCachedSessionMessages(targetSessionId, []);
-          setSessionId("");
-          setMessages([]);
-          setCompleted(false);
-        }
-        setHistoryState({ status: "success", message: "历史会话已删除。" });
-      }
-    } catch (error) {
-      setHistoryState({ status: "error", error: `删除会话失败：${normalizeDesktopError(error.message)}` });
-    }
-  }
-
-  async function createSession(seedMessage = "", extraPayload = {}) {
-    if (busy) return;
-    if (!requireAccount("开始面试前需要先登录账号。登录后会保存会话、简历和用量记录。")) return;
-    setBusy(true);
-    setCompleted(false);
-    setMessages([]);
-    try {
-      const response = await api.createSession({
-        offline,
-        web_search: webSearch,
-        mode: extraPayload.mode || profile.mode,
-        industry: profile.industry,
-        candidate_name: profile.candidateName,
-        target_role: profile.targetRole,
-        seniority: profile.seniority,
-        resume_summary: profile.resumeSummary,
-        resume_text: profile.resumeText,
-        project_experience: profile.projectExperience,
-        interview_goal: buildInterviewGoal(profile, seedMessage),
-        focus_areas: buildFocusAreas(profile, seedMessage, industryOptions),
-        resume_id: selectedResumeId || undefined,
-        model_id: selectedModelId,
-        thinking_enabled: currentLlmMode()?.thinkingEnabled,
-        reasoning_effort: currentLlmMode()?.reasoningEffort,
-        ...extraPayload
-      });
-      setSessionId(response.session_id);
-      setLastSessionId(response.session_id);
-      appendMessage("agent", response.message, response);
-      await loadAccount();
-      loadSessionHistory();
-      if (seedMessage) {
-        appendMessage("system", `启动意图：${seedMessage}`);
-      }
-    } catch (error) {
-      appendMessage("system", `创建会话失败：${error.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function importResume() {
     if (busy || resumeImport.status === "loading") return;
     if (!requireAccount("上传和保存简历前需要先登录账号。")) return;
@@ -750,7 +508,9 @@ function App() {
       applyResume(result);
       setResumeLibrary((current) => {
         const withoutDuplicate = current.filter((resume) => resume.id !== result.id);
-        return [result, ...withoutDuplicate];
+        const next = [result, ...withoutDuplicate];
+        resumeLibraryRef.current = next;
+        return next;
       });
       appendMessage(
         "system",
@@ -797,291 +557,16 @@ function App() {
     }
   }
 
-  async function sendMessage(explicitText, explicitSessionId) {
-    const text = (explicitText ?? input).trim();
-    const activeSessionId = explicitSessionId || sessionId;
-    if (!text || busy) return;
-    if (!requireAccount("发送消息前需要先登录账号。")) return;
-    if (!activeSessionId) {
-      appendMessage("system", "请先点击“新建面试”。");
-      return;
-    }
-
-    setInput("");
-    const userTurnIndex = nextUserTurnIndex(messages);
-    appendMessage("user", text, { turn_index: userTurnIndex });
-    const agentMessageId = appendMessage("agent", "正在分析回答，DeepSeek 思考中...");
-    const controller = new AbortController();
-    activeRequestRef.current = controller;
-    setBusy(true);
-    try {
-      const response = await sendMessageWithStreamFallback(activeSessionId, text, agentMessageId, controller.signal);
-      updateMessage(agentMessageId, {
-        text: response.message || response.data?.message || "",
-        fallback: Boolean(response.fallback_used),
-        usage: response.usage || null,
-        modelId: response.model_id || "",
-        turnIndex: response.turn_index || null
-      });
-      setCompleted(Boolean(response.completed));
-      await refreshSessionMessagesFromServer(activeSessionId);
-      await loadAccount();
-      loadSessionHistory();
-      if (response.completed) {
-        loadReportScores();
-      }
-    } catch (error) {
-      if (isAbortError(error)) {
-        updateMessage(agentMessageId, {
-          text: "已停止生成。你可以重新编辑上一条消息后再发送。",
-          stopped: true
-        });
-        return;
-      }
-      appendMessage("system", `发送失败：${error.message}`);
-    } finally {
-      if (activeRequestRef.current === controller) {
-        activeRequestRef.current = null;
-      }
-      setBusy(false);
-    }
-  }
-
-  async function sendMessageWithStreamFallback(activeSessionId, text, agentMessageId, signal) {
-    if (!api.streamMessage) {
-      return api.sendMessage({
-        sessionId: activeSessionId,
-        message: text,
-        signal
-      });
-    }
-    let streamedText = "";
-    try {
-      return await api.streamMessage(
-        {
-          sessionId: activeSessionId,
-          message: text,
-          signal
-        },
-        (event) => {
-          if (event.event === "tool.notice" && event.data?.message) {
-            if (!streamedText) {
-              updateMessage(agentMessageId, { text: event.data.message });
-            }
-          }
-          if (event.event === "message.delta" && event.data?.text) {
-            streamedText += event.data.text;
-            updateMessage(agentMessageId, { text: streamedText });
-          }
-          if (event.event === "guardrail.notice" && event.data?.message) {
-            appendMessage("system", `Harness 护栏：${event.data.message}`);
-          }
-          if (event.event === "message.done") {
-            updateMessage(agentMessageId, {
-              text: event.data?.message || "",
-              fallback: Boolean(event.data?.fallback_used),
-              usage: event.data?.usage || null,
-              modelId: event.data?.model_id || "",
-              turnIndex: event.data?.turn_index || null
-            });
-          }
-        }
-      );
-    } catch (error) {
-      if (isAbortError(error)) {
-        throw error;
-      }
-      const message = normalizeDesktopError(error.message);
-      if (!message.includes("无法连接 API 服务") && !message.includes("请求处理时间较长")) {
-        throw error;
-      }
-      updateMessage(agentMessageId, { text: "流式连接中断，正在使用普通请求重试..." });
-      try {
-        return await api.sendMessage({
-          sessionId: activeSessionId,
-          message: text,
-          signal
-        });
-      } catch (fallbackError) {
-        const fallbackMessage = normalizeDesktopError(fallbackError.message);
-        if (fallbackMessage.includes("无法连接 API 服务")) {
-          throw new Error("无法连接 API 服务：/api 同源代理不可用或连接被关闭。请检查 Nginx /api 代理、HTTPS 长连接和后端服务状态。");
-        }
-        throw fallbackError;
-      }
-    }
-  }
-
-  async function refreshSessionMessagesFromServer(targetSessionId) {
-    if (!targetSessionId) return;
-    try {
-      const detail = await api.getSession(targetSessionId);
-      const restoredMessages = turnsToMessages(detail.turns || [], detail.mode);
-      setSessionId(detail.id);
-      setLastSessionId(detail.id);
-      setCompleted(detail.status === "completed");
-      setMessages(restoredMessages);
-      setCachedSessionMessages(detail.id, restoredMessages);
-    } catch (_error) {
-      // The optimistic message already rendered; leave it in place if a read-back fails.
-    }
-  }
-
-  async function createPayment(provider, amountCredits = paymentState.amount) {
-    if (!requireAccount("充值积分前需要先登录账号。")) return;
-    setPaymentState({ status: "loading", provider, amount: amountCredits });
-    try {
-      const order = await api.createPaymentOrder({
-        amount_credits: amountCredits,
-        payment_provider: provider,
-        metadata: { source: "web_account_center" }
-      });
-      setPaymentState({ status: "pending", provider, amount: amountCredits, order });
-      if (provider === "alipay" && order.pay_url) {
-        window.open(order.pay_url, "_blank", "noopener,noreferrer");
-      }
-      pollPaymentOrder(order.external_order_id);
-    } catch (error) {
-      setPaymentState({ status: "error", provider, amount: amountCredits, error: normalizeDesktopError(error.message) });
-    }
-  }
-
-  async function pollPaymentOrder(orderId, attempt = 0) {
-    if (!orderId || attempt > 60) return;
-    window.setTimeout(async () => {
-      try {
-        const order = await api.getPaymentOrder(orderId);
-        setPaymentState((current) => ({ ...current, order, status: order.status === "paid" ? "paid" : current.status }));
-        if (order.status === "paid") {
-          await loadAccount();
-          return;
-        }
-        pollPaymentOrder(orderId, attempt + 1);
-      } catch (_error) {
-        pollPaymentOrder(orderId, attempt + 1);
-      }
-    }, 3000);
-  }
-
-  function appendMessage(role, text, response = {}) {
-    const id = crypto.randomUUID();
-    const guardrails =
-      role === "agent" && response.guardrails?.length
-        ? [{ role: "system", text: `Harness 护栏：${response.guardrails.join("；")}` }]
-        : [];
-    setMessages((current) => [
-      ...current,
-      {
-        id,
-        role,
-        text,
-        fallback: Boolean(response.fallback_used),
-        usage: response.usage || null,
-        modelId: response.model_id || "",
-        turnIndex: response.turn_index || response.turnIndex || null,
-        stopped: Boolean(response.stopped),
-        time: formatTime()
-      },
-      ...guardrails.map((item) => ({
-        id: crypto.randomUUID(),
-        time: formatTime(),
-        fallback: false,
-        ...item
-      }))
-    ]);
-    return id;
-  }
-
-  function updateMessage(id, patch) {
-    setMessages((current) =>
-      current.map((message) => (message.id === id ? { ...message, ...patch } : message))
-    );
-  }
-
-  function maxTurnIndexFromMessages(sourceMessages = messages) {
-    return sourceMessages.reduce((max, message) => {
-      const value = Number(message.turnIndex || 0);
-      return Number.isFinite(value) ? Math.max(max, value) : max;
-    }, 0);
-  }
-
-  function nextUserTurnIndex(sourceMessages = messages) {
-    if (profile.mode === "candidate") {
-      return maxTurnIndexFromMessages(sourceMessages) + 1;
-    }
-    const activeQuestion = [...sourceMessages]
-      .reverse()
-      .find((message) => message.role === "agent" && Number(message.turnIndex || 0) > 0);
-    return Number(activeQuestion?.turnIndex || 0) || Math.max(1, maxTurnIndexFromMessages(sourceMessages));
-  }
-
-  function stopGeneration() {
-    activeRequestRef.current?.abort();
-  }
-
-  function isAbortError(error) {
-    return error?.name === "AbortError" || normalizeDesktopError(error?.message || "").includes("请求已停止");
-  }
-
-  async function withdrawMessage(message) {
-    await rewindFromUserMessage(message, { edit: false });
-  }
-
-  async function editMessage(message) {
-    await rewindFromUserMessage(message, { edit: true });
-  }
-
-  async function rewindFromUserMessage(message, { edit }) {
-    if (busy || !message || message.role !== "user") return;
-    const index = messages.findIndex((item) => item.id === message.id);
-    if (index < 0) return;
-    const nextMessages = messages.slice(0, index);
-    setMessages(nextMessages);
-    setCachedSessionMessages(sessionId, nextMessages);
-    setCompleted(false);
-    if (edit) {
-      setInput(message.text || "");
-      window.setTimeout(() => textareaRef.current?.focus(), 0);
-    }
-    if (!sessionId || !message.turnIndex || !api.rewindSession) return;
-    try {
-      await api.rewindSession(sessionId, { turn_index: message.turnIndex });
-      await loadSessionHistory();
-    } catch (error) {
-      appendMessage("system", `会话已在本地回退，但服务端同步失败：${normalizeDesktopError(error.message)}`);
-    }
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    sendMessage();
-  }
-
-  function handleKeyDown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
-    }
-  }
-
-  function requireAccount(reason) {
-    if (account) return true;
-    setAuthDialog({ open: true, reason });
-    return false;
-  }
-
-  function currentLlmMode() {
-    return llmModes.find((mode) => mode.value === selectedLlmMode) || llmModes[1];
-  }
-
   function selectLlmMode(value) {
     const mode = llmModes.find((item) => item.value === value) || llmModes[1];
     setSelectedLlmMode(mode.value);
     setSelectedModelId(mode.modelId);
   }
 
-  function changeScreen(nextScreen) {
+  function changeScreen(nextScreen, target = null) {
+    setNavigationTarget(target ? { ...target, nonce: Date.now() } : null);
     setScreen(nextScreen);
+    sidebar.closeAfterNavigation();
   }
 
   async function openReportSession(sessionId) {
@@ -1090,8 +575,21 @@ function App() {
     setScreen("chat");
   }
 
+  if (!account) {
+    return (
+      <AuthGate
+        authReady={authReady}
+        authState={authState}
+        theme={theme}
+        onAuthChange={setAuthState}
+        onAuthSubmit={submitAuth}
+        onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+      />
+    );
+  }
+
   return (
-    <main className={`app-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
+    <main className={`app-shell ${sidebar.open ? "sidebar-open" : "sidebar-collapsed"}`}>
       <Sidebar
         screen={screen}
         profile={profile}
@@ -1106,19 +604,29 @@ function App() {
         onRestoreSession={restoreSession}
         onDeleteSession={deleteSession}
         onScreenChange={changeScreen}
-        onToggleSidebar={() => setSidebarOpen(false)}
+        onToggleSidebar={sidebar.closeSidebar}
+      />
+      <SidebarBackdrop
+        open={sidebar.compact && sidebar.open}
+        onClose={sidebar.closeSidebar}
       />
       <button
         type="button"
         className="sidebar-fab"
-        onClick={() => setSidebarOpen(true)}
+        onClick={sidebar.openSidebar}
         title="展开菜单 (⌘B / Ctrl+B)"
         aria-label="展开菜单"
+        aria-controls="app-sidebar"
+        aria-expanded={sidebar.open}
       >
         <PanelLeftOpen size={17} />
       </button>
 
-      <section className="workspace">
+      <section
+        className="workspace"
+        inert={sidebar.compact && sidebar.open ? true : undefined}
+        aria-hidden={sidebar.compact && sidebar.open ? "true" : undefined}
+      >
         <Topbar
           sessionId={sessionId}
           offline={offline}
@@ -1135,146 +643,91 @@ function App() {
           onOpenChat={() => setScreen("chat")}
         />
 
-        {screen === "account" ? (
-          <AccountCenter
-            account={account}
-            authState={authState}
-            modelOptions={modelOptions}
-            selectedModelId={selectedModelId}
-            onAuthChange={setAuthState}
-            onAuthSubmit={submitAuth}
-            onDevLogin={useDevAccount}
-            onLogout={logout}
-            onSelectModel={setSelectedModelId}
-            paymentState={paymentState}
-            adminState={adminState}
-            onPaymentStateChange={setPaymentState}
-            onCreatePayment={createPayment}
-            onReloadAdmin={loadAdminSecurity}
-            onAdminFieldChange={updateAdminField}
-            onGrantRole={grantAdminRole}
-            onRevokeRole={revokeAdminRole}
-            onBack={() => setScreen("chat")}
-          />
-        ) : screen === "settings" ? (
-          <SettingsCenter
-            account={account}
-            profile={profile}
-            settingsState={settingsState}
-            onModeChange={changeDefaultMode}
-            onBack={() => setScreen("chat")}
-          />
-        ) : screen === "ops" ? (
-          <OperationsCenter
-            opsState={opsState}
-            onReload={loadOperationsCenter}
-            onRunWorkflow={() => runOperationsJob("workflow")}
-            onRunStudyPlan={() => runOperationsJob("study_plan")}
-            onRunEvaluation={() => runOperationsJob("evaluation")}
-            onRunMultiAgent={() => runOperationsJob("multi_agent")}
-            onCancelJob={cancelOperationsJob}
-            onBack={() => setScreen("chat")}
-          />
-        ) : screen === "setup" ? (
-          <SetupCenter
-            profile={profile}
-            offline={offline}
-            webSearch={webSearch}
-            modelOptions={modelOptions}
-            selectedModelId={selectedModelId}
-            selectedLlmMode={selectedLlmMode}
-            industryOptions={industryOptions}
-            resumeImport={resumeImport}
-            requirementsImport={requirementsImport}
-            resumeLibrary={resumeLibrary}
-            selectedResumeId={selectedResumeId}
-            busy={busy}
-            onNewSession={() => createSession()}
-            onImportResume={importResume}
-            onImportRequirements={importInterviewerRequirements}
-            onSelectResume={selectResume}
-            onDeleteResume={deleteSelectedResume}
-            onReloadResumes={loadResumeLibrary}
-            onProfileChange={setProfile}
-            onDefaultModeChange={changeDefaultMode}
-            onOfflineChange={setOffline}
-            onWebSearchChange={setWebSearch}
-            onSelectModel={setSelectedModelId}
-            onSelectLlmMode={selectLlmMode}
-            onBack={() => setScreen("chat")}
-          />
-        ) : screen === "home" ? (
-          <HomePage
-            account={account}
-            profile={profile}
-            onRequireAuth={() => setAuthDialog({ open: true, reason: "登录后才能同步学习数据。" })}
-            onNavigate={changeScreen}
-            onStartInterview={(seed, extra) => createSession(seed, extra)}
-            onOpenSession={openReportSession}
-          />
-        ) : screen === "reports" ? (
-          <ReportsPage
-            account={account}
-            onRequireAuth={() => setAuthDialog({ open: true, reason: "登录后才能查看面试报告。" })}
-            onOpenSession={openReportSession}
-            onNavigate={changeScreen}
-            onChat={() => setScreen("chat")}
-          />
-        ) : screen === "practice" ? (
-          <TrainingPage
-            account={account}
-            onRequireAuth={() => setAuthDialog({ open: true, reason: "登录后作答才会记录进度与错题。" })}
-          />
-        ) : screen === "review-site" ? (
-          <ReviewSitePage
-            onBack={() => setScreen("home")}
-            onOpenPlanner={() => setScreen("planner")}
-          />
-        ) : screen === "planner" ? (
-          <PlanGeneratorPage
-            onBack={() => setScreen("review-site")}
-            onGenerated={() => setScreen("review-site")}
-          />
-        ) : (
-          <section className="chat-panel">
-            <div className="messages">
-              {messages.length === 0 ? (
-                <EmptyState
-                  busy={busy}
-                  mode={profile.mode}
-                  industry={currentIndustry(industryOptions, profile.industry)}
-                  onStart={() => createSession()}
-                  onQuickPrompt={(prompt) => createSession(prompt)}
-                />
-              ) : (
-                messages.map((message) => (
-                  <Message
-                    key={message.id}
-                    message={message}
-                    mode={profile.mode}
-                    busy={busy}
-                    onEditMessage={editMessage}
-                    onWithdrawMessage={withdrawMessage}
-                  />
-                ))
-              )}
-              {busy && <Typing />}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <Composer
-              value={input}
-              busy={busy}
-              hasSession={Boolean(sessionId)}
-              textareaRef={textareaRef}
-              onChange={setInput}
-              onSubmit={handleSubmit}
-              onKeyDown={handleKeyDown}
-              onStop={stopGeneration}
-              mode={profile.mode}
-            />
-          </section>
-        )}
+        <AppScreenRouter
+          screen={screen}
+          model={{
+            account: {
+              account, authState, modelOptions, selectedModelId, paymentState, adminState, billingPlans, client: api,
+              onAuthChange: setAuthState, onAuthSubmit: submitAuth, onDevLogin: useDevAccount,
+              onLogout: logout, onSelectModel: setSelectedModelId, onPaymentStateChange: setPaymentState,
+              onCreatePayment: createPayment, onReloadAdmin: loadAdminSecurity,
+              onAdminFieldChange: updateAdminField, onGrantRole: grantAdminRole,
+              onRevokeRole: revokeAdminRole, onCreateReviewSiteTestData: createReviewSiteTestData,
+              onBack: () => setScreen("chat")
+            },
+            admin: {
+              account,
+              state: adminConsole.state,
+              actions: adminConsole,
+              onBack: () => setScreen("home")
+            },
+            settings: {
+              account, profile, settingsState, onModeChange: changeDefaultMode,
+              onBack: () => setScreen("chat")
+            },
+            operations: {
+              opsState, onReload: loadOperationsCenter, onCancelJob: cancelOperationsJob,
+              onLoadMore: (kind) => loadOperationsCenter({ appendKind: kind }),
+              onRunWorkflow: () => runOperationsJob("workflow"),
+              onRunStudyPlan: () => runOperationsJob("study_plan"),
+              onRunEvaluation: () => runOperationsJob("evaluation"),
+              onRunMultiAgent: () => runOperationsJob("multi_agent"),
+              onBack: () => setScreen("chat")
+            },
+            setup: {
+              profile, offline, webSearch, modelOptions, selectedModelId, selectedLlmMode,
+              industryOptions, resumeImport, requirementsImport, resumeLibrary, resumeLibraryState, selectedResumeId, busy,
+              onNewSession: () => createSession(), onImportResume: importResume,
+              onImportRequirements: importInterviewerRequirements, onSelectResume: selectResume,
+              onDeleteResume: deleteSelectedResume, onReloadResumes: loadResumeLibrary,
+              onLoadMoreResumes: () => loadResumeLibrary({ append: true }),
+              onProfileChange: setProfile, onDefaultModeChange: changeDefaultMode,
+              onOfflineChange: setOffline, onWebSearchChange: setWebSearch,
+              onSelectModel: setSelectedModelId, onSelectLlmMode: selectLlmMode,
+              onBack: () => setScreen("chat")
+            },
+            home: {
+              account, profile, onNavigate: changeScreen, onOpenSession: openReportSession,
+              onRequireAuth: () => setAuthDialog({ open: true, reason: "登录后才能同步学习数据。" }),
+              onStartInterview: async (seed, extra) => {
+                await createSession(seed, extra);
+                setScreen("chat");
+              }
+            },
+            reports: {
+              account, onOpenSession: openReportSession, onNavigate: changeScreen,
+              onRequireAuth: () => setAuthDialog({ open: true, reason: "登录后才能查看面试报告。" }),
+              onChat: () => setScreen("chat")
+            },
+            interviewer: {
+              account, profile,
+              onRequireAuth: () => setAuthDialog({ open: true, reason: "登录后才能保存面试题纲与评价证据。" }),
+              onStartInterview: (seed, extra) => createSession(seed, extra)
+            },
+            training: {
+              account,
+              navigationTarget,
+              onRequireAuth: () => setAuthDialog({ open: true, reason: "登录后作答才会记录进度与错题。" })
+            },
+            review: {
+              navigationTarget,
+              onBack: () => setScreen("home"),
+              onNavigate: changeScreen,
+              onOpenPlanner: () => setScreen("planner"),
+              onStartInterview: async (seed, extra) => {
+                await createSession(seed, extra);
+                setScreen("chat");
+              }
+            },
+            planner: { onBack: () => setScreen("review-site"), onGenerated: () => setScreen("review-site") },
+            chat: {
+              busy, industryOptions, input, messages, messagesEndRef, profile, sessionId, textareaRef,
+              onEditMessage: editMessage, onInputChange: setInput, onKeyDown: handleKeyDown,
+              onQuickPrompt: (prompt) => createSession(prompt), onStart: () => createSession(),
+              onStop: stopGeneration, onSubmit: handleSubmit, onWithdrawMessage: withdrawMessage
+            }
+          }}
+        />
 
         {authDialog.open && (
           <AuthDialog

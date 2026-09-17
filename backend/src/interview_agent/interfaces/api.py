@@ -17,7 +17,6 @@ from uuid import uuid4
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -32,23 +31,17 @@ from interview_agent.interfaces.cli import (
     load_vector_store_for_run,
 )
 from interview_agent.core.config import CandidateProfile, InterviewConfig, InterviewMode, InterviewStage
-from interview_agent.core.industry import Industry, industry_options
+from interview_agent.core.industry import Industry
+from interview_agent.core.prompt_policy import dashboard_advice_system_prompt
 from interview_agent.domain.billing import DEFAULT_CHAT_MODEL, micros_to_credits
-from interview_agent.domain.civil_service import (
-    CIVIL_SERVICE_SEED_QUESTIONS,
-    DEFAULT_PRACTICE_QUESTIONS,
-    PRACTICE_CATEGORIES,
-    PRACTICE_LEARNING_PLAN,
-)
 from interview_agent.infrastructure.auth_providers import AuthProviderError, exchange_wechat_code
-from interview_agent.infrastructure.content_security import scan_prompt_injection, scan_upload_content
+from interview_agent.infrastructure.content_security import scan_upload_content
 from interview_agent.infrastructure.codex_config import load_codex_model_config
 from interview_agent.infrastructure.db.session import (
     configure_database_for_tests,
     init_database,
     session_scope,
 )
-from interview_agent.infrastructure.db.models import EvalRunModel
 from interview_agent.infrastructure.model_runtime import (
     is_openai_compatible_provider,
     is_supported_native_provider,
@@ -64,14 +57,16 @@ from interview_agent.infrastructure.payments import (
     verify_wechat_notify,
 )
 from interview_agent.infrastructure.resume_parser import ResumeParseError, parse_resume_base64
-from interview_agent.domain.resume import stored_resume_to_payload
+from interview_agent.domain.resume import StoredResume, stored_resume_to_payload
 from interview_agent.infrastructure.security import (
     RequestContext,
+    clean_request_id,
     issue_client_token,
     rate_limiter,
     request_context,
     validate_production_security,
 )
+from interview_agent.services.client_request_log_service import record_client_request_safely
 from interview_agent.infrastructure.settings import load_settings
 from interview_agent.infrastructure.web_search import WebSearchClient
 from interview_agent.interfaces.error_codes import (
@@ -88,11 +83,8 @@ from interview_agent.services.billing_service import (
 )
 from interview_agent.services.interview_persistence_service import InterviewPersistenceService
 from interview_agent.services.interview_report_service import InterviewReportService
-from interview_agent.services.practice_attempt_service import PracticeAttemptService
 from interview_agent.services.plan_generator_service import PlanGeneratorService
 from interview_agent.services.resume_service import ResumeService
-from interview_agent.services.review_checkin_service import ReviewCheckinService
-from interview_agent.services.study_dashboard_service import StudyDashboardService
 from interview_agent.services.subjective_grader import LlmSubjectiveGrader
 from interview_agent.services.security_service import (
     SecurityService,
@@ -100,587 +92,59 @@ from interview_agent.services.security_service import (
     role_assignment_to_dict,
     security_event_to_dict,
 )
-from interview_agent.repositories.civil_service_repository import CivilServiceQuestionRepository
-from interview_agent.repositories.job_repository import JobRepository, event_to_dict, job_to_dict
-from interview_agent.repositories.practice_question_repository import PracticeQuestionRepository
-from interview_agent.domain.practice_grading import is_choice_question
 from interview_agent.repositories.review_site_repository import ReviewSiteRepository
-from interview_agent.services.agent_ops_service import AgentOpsService, trace_to_dict
-from interview_agent.services.achievement_service import AchievementService, safe_evaluate
-from interview_agent.services.review_site_import_service import ReviewSiteImportService
-from interview_agent.services.workflow_runner import TERMINAL_JOB_STATUSES, create_and_start_job
-
-
-class SessionRequest(BaseModel):
-    offline: bool = False
-    web_search: bool = False
-    mode: str | None = None
-    industry: str | None = None
-    candidate_name: str | None = None
-    target_role: str | None = None
-    seniority: str | None = None
-    resume_summary: str | None = None
-    resume_text: str | None = None
-    project_experience: str | None = None
-    interview_goal: str | None = None
-    focus_areas: list[str] | None = None
-    resume_id: str | None = None
-    plan_task_id: str | None = None
-    model_id: str | None = None
-    thinking_enabled: bool | None = None
-    reasoning_effort: str | None = Field(default=None, pattern="^(low|medium|high|max)$")
-
-
-class MessageRequest(BaseModel):
-    message: str
-
-
-class SessionRewindRequest(BaseModel):
-    turn_index: int = Field(..., ge=1)
-
-
-class DevLoginRequest(BaseModel):
-    user_id: str = "dev-user"
-    tenant_id: str | None = None
-    display_name: str = "本地开发用户"
-    platform: str = "dev"
-
-
-class ProviderLoginRequest(BaseModel):
-    code: str
-    platform: str | None = None
-    tenant_id: str | None = None
-    display_name: str | None = None
-
-
-class PhoneLoginRequest(BaseModel):
-    phone: str
-    verification_code: str
-    tenant_id: str | None = None
-    platform: str = "mobile"
-
-
-class AuthTokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str = ""
-    token_type: str = "bearer"
-    expires_at: int
-    refresh_expires_at: int = 0
-    tenant_id: str
-    user_id: str
-    platform: str
-    role: str = "user"
-    display_name: str = ""
-    trial_uses_remaining: int = 0
-    credit_balance: str = "0"
-
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str = Field(min_length=32, max_length=512)
-    tenant_id: str | None = Field(default=None, max_length=64)
-
-
-class LogoutRequest(BaseModel):
-    refresh_token: str | None = Field(default=None, max_length=512)
-    revoke_all: bool = False
-
-
-class RoleGrantRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=128)
-    role: str = Field(pattern="^(user|support|admin)$")
-    metadata: dict = Field(default_factory=dict)
-
-
-class RoleRevokeRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=128)
-    role: str = Field(pattern="^(support|admin)$")
-
-
-class RegisterRequest(BaseModel):
-    email: str
-    password: str = Field(min_length=8, max_length=128)
-    display_name: str = ""
-    tenant_id: str | None = None
-    platform: str = "web"
-
-
-class PasswordLoginRequest(BaseModel):
-    email: str
-    password: str
-    tenant_id: str | None = None
-    platform: str = "web"
-
-
-class MeResponse(BaseModel):
-    tenant_id: str
-    user_id: str
-    platform: str
-    role: str = "user"
-    authenticated: bool
-    trial_uses_remaining: int = 0
-    credit_balance: str = "0"
-    credit_balance_micros: int = 0
-
-
-class UserSettingsResponse(BaseModel):
-    default_interview_mode: str = "interviewer"
-
-
-class UpdateUserSettingsRequest(BaseModel):
-    default_interview_mode: str | None = Field(default=None, pattern="^(interviewer|candidate)$")
-
-
-class JobCreateRequest(BaseModel):
-    job_type: str = Field(default="workflow", pattern="^(workflow|evaluation|multi_agent)$")
-    title: str | None = Field(default=None, max_length=255)
-    input: dict = Field(default_factory=dict)
-
-
-class WorkflowRunRequest(BaseModel):
-    workflow_type: str = Field(default="workflow", pattern="^(workflow|multi_agent)$")
-    title: str | None = Field(default=None, max_length=255)
-    input: dict = Field(default_factory=dict)
-
-
-class EvalRunCreateRequest(BaseModel):
-    name: str | None = Field(default=None, max_length=255)
-    cases: list[dict] = Field(default_factory=list)
-    metadata: dict = Field(default_factory=dict)
-
-
-class AccountResponse(BaseModel):
-    tenant_id: str
-    user_id: str
-    display_name: str
-    email: str | None = None
-    platform: str
-    role: str = "user"
-    trial_uses_remaining: int
-    credit_balance: str
-    credit_balance_micros: int
-    settings: UserSettingsResponse = Field(default_factory=UserSettingsResponse)
-
-
-class RechargeRequest(BaseModel):
-    amount_credits: Decimal = Field(gt=0)
-    payment_provider: str = "mock"
-    external_order_id: str | None = None
-    target_user_id: str | None = None
-    metadata: dict = Field(default_factory=dict)
-
-
-class PaymentWebhookPayload(BaseModel):
-    tenant_id: str = "default"
-    user_id: str
-    amount_credits: Decimal = Field(gt=0)
-    payment_provider: str = Field(min_length=1, max_length=64)
-    external_order_id: str = Field(min_length=1, max_length=128)
-    status: str = "paid"
-    currency: str = "CREDIT"
-    metadata: dict = Field(default_factory=dict)
-
-
-class CreatePaymentOrderRequest(BaseModel):
-    amount_credits: Decimal = Field(gt=0)
-    payment_provider: str = Field(min_length=1, max_length=64)
-    external_order_id: str | None = Field(default=None, max_length=128)
-    metadata: dict = Field(default_factory=dict)
-
-
-class PaymentOrderResponse(BaseModel):
-    tenant_id: str
-    user_id: str
-    amount_credits: str
-    amount_micros: int
-    payment_provider: str
-    external_order_id: str
-    status: str
-    created: bool
-    pay_url: str | None = None
-    code_url: str | None = None
-    metadata: dict = Field(default_factory=dict)
-
-
-class PaymentWebhookResponse(BaseModel):
-    accepted: bool
-    applied: bool
-    status: str
-    external_order_id: str
-    account: AccountResponse | None = None
-
-
-class ModelOptionResponse(BaseModel):
-    id: str
-    provider: str
-    display_name: str
-    category: str = "通用模型"
-    runtime_supported: bool = False
-    runtime_integration: str = ""
-    input_credits_per_1m: str
-    output_credits_per_1m: str
-    input_usd_per_1m: str
-    output_usd_per_1m: str
-    context_window: int | None = None
-    notes: str = ""
-
-
-class UsageResponse(BaseModel):
-    model_id: str
-    provider: str
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    cost_credits: str
-    cost_credits_micros: int
-    trial_used: bool
-    trial_uses_remaining: int
-    credit_balance: str
-    credit_balance_micros: int
-
-
-class ResumeParseRequest(BaseModel):
-    filename: str
-    content_base64: str
-
-
-class ResumeParseResponse(BaseModel):
-    filename: str
-    file_type: str
-    text: str
-    summary: str
-    truncated: bool = False
-
-
-class ResumeImportRequest(BaseModel):
-    filename: str
-    content_base64: str
-    source_path: str | None = None
-
-
-class ResumeRecordResponse(BaseModel):
-    id: str
-    filename: str
-    file_type: str
-    summary: str
-    text: str
-    truncated: bool = False
-    created_at: str
-    updated_at: str
-    source_path: str | None = None
-
-
-class ChatResponse(BaseModel):
-    session_id: str
-    message: str
-    completed: bool
-    fallback_used: bool = False
-    guardrails: list[str] = []
-    model_id: str = ""
-    usage: UsageResponse | None = None
-    turn_index: int | None = None
-    orchestration: dict | None = None
-
-
-class SessionSummaryResponse(BaseModel):
-    id: str
-    resume_id: str | None = None
-    mode: str
-    industry: str
-    candidate_name: str
-    target_role: str
-    seniority: str
-    status: str
-    plan_task_id: str | None = None
-    created_at: str
-    updated_at: str
-
-
-class SessionDetailResponse(SessionSummaryResponse):
-    config: dict
-    state: dict
-    turns: list[dict]
-
-
-class DeleteResponse(BaseModel):
-    deleted: bool
-
-
-class IndustryOptionResponse(BaseModel):
-    value: str
-    label: str
-    description: str
-    scenario_keywords: list[str]
-    interview_focus: list[str]
-    production_signals: list[str]
-    risk_controls: list[str]
-    follow_up_angles: list[str]
-    answer_expectations: list[str]
-    recommended_focus_areas: list[str]
-
-
-class CivilServiceQuestionImportRequest(BaseModel):
-    questions: list[dict]
-
-
-class CivilServiceQuestionListResponse(BaseModel):
-    items: list[dict]
-    total: int
-    limit: int
-    offset: int
-
-
-class PracticeAttemptRequest(BaseModel):
-    question_id: str = Field(min_length=1, max_length=128)
-    answer: str = Field(default="", max_length=8000)
-    elapsed_seconds: int | None = Field(default=None, ge=0, le=24 * 60 * 60)
-
-
-class PracticeAttemptResponse(BaseModel):
-    question_id: str
-    correct: bool | None
-    score: int
-    feedback: str
-    reference_answer: str
-    explanation: str
-    suggestions: list[str]
-    elapsed_seconds: int | None = None
-
-
-class ImportResultResponse(BaseModel):
-    created: int
-    updated: int
-    total: int
-
-
-class ReviewPlanListItem(BaseModel):
-    id: str
-    plan_key: str = ""
-    title: str = ""
-    subtitle: str = ""
-    status: str = "draft"
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class ReviewPhaseResponse(BaseModel):
-    id: str
-    phase_key: str = ""
-    title: str = ""
-    range_label: str = ""
-    goal: str = ""
-    sort_order: int = 0
-
-
-class ReviewTaskResponse(BaseModel):
-    id: str
-    task_key: str = ""
-    title: str = ""
-    tags: list = []
-    critical: bool = False
-    simulation: bool = False
-    docs: list = []
-    reason: str | None = None
-    source: str = "plan"
-    link_type: str = "none"
-    link_payload: dict = {}
-    sort_order: int = 0
-
-
-class ReviewDayResponse(BaseModel):
-    id: str
-    day_key: str = ""
-    day_label: str = ""
-    phase_key: str = ""
-    title: str = ""
-    acceptance: str | None = None
-    scheduled_date: str | None = None
-    sort_order: int = 0
-    tasks: list[ReviewTaskResponse] = []
-
-
-class ReviewProgressResponse(BaseModel):
-    id: str
-    plan_id: str
-    day_id: str
-    task_id: str
-    done: bool = False
-    note: str | None = None
-    elapsed_minutes: int | None = None
-    mastery_score: int | None = None
-    done_at: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class ReviewPlanResponse(BaseModel):
-    id: str
-    plan_key: str = ""
-    title: str = ""
-    subtitle: str = ""
-    description: str = ""
-    status: str = "draft"
-    source_root: str = ""
-    source_documents: list = []
-    commercial_positioning: list = []
-    phases: list[ReviewPhaseResponse] = []
-    days: list[ReviewDayResponse] = []
-    progresses: list[ReviewProgressResponse] = []
-    intro_scripts: list = []
-    star_cards: list = []
-    a4_memory: list = []
-    metadata: dict = {}
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class ReviewPlanCreateRequest(BaseModel):
-    title: str = Field(default="", max_length=255)
-    plan_key: str | None = Field(default=None, max_length=128)
-    template: str | None = Field(default=None, max_length=128)
-
-
-class ReviewProgressUpdateRequest(BaseModel):
-    done: bool | None = None
-    note: str | None = Field(default=None, max_length=4000)
-    elapsed_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
-    mastery_score: int | None = Field(default=None, ge=0, le=5)
-
-
-class ReviewCheckinRequest(BaseModel):
-    elapsed_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
-    note: str | None = Field(default=None, max_length=2000)
-
-
-class IntroScriptResponse(BaseModel):
-    id: str
-    script_key: str = ""
-    label: str = ""
-    duration_seconds: int = 0
-    scenario: str = ""
-    text: str = ""
-    sort_order: int = 0
-
-
-class StarCardResponse(BaseModel):
-    id: str
-    card_key: str = ""
-    title: str = ""
-    tag: str = ""
-    background: str = ""
-    challenge: str = ""
-    solution: str = ""
-    result: str = ""
-    sort_order: int = 0
-
-
-class A4MemoryResponse(BaseModel):
-    id: str
-    content: str = ""
-    side: str = "ALL"
-    sort_order: int = 0
-
-
-class PracticeQuestionResponse(BaseModel):
-    id: str
-    practice_category: str = "internet"
-    source: str = "manual"
-    source_url: str | None = None
-    subject: str | None = None
-    question_type: str | None = None
-    prompt: str = ""
-    choices: list = []
-    answer: str | None = None
-    answer_detail: str | None = None
-    difficulty: str = "medium"
-    tags: list = []
-    content_hash: str = ""
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class PracticeQuestionListResponse(BaseModel):
-    items: list[PracticeQuestionResponse]
-    total: int
-    limit: int
-    offset: int
-
-
-class ReviewSiteImportRequest(BaseModel):
-    plan_only: bool = False
-    questions_only: bool = False
-
-
-class PlanGenerateRequest(BaseModel):
-    title: str | None = Field(default=None, max_length=255)
-    target_role: str = Field(default="", max_length=255)
-    seniority: str = Field(default="", max_length=128)
-    target_company: str | None = Field(default=None, max_length=255)
-    total_days: int = Field(default=14, ge=3, le=90)
-    hours_per_day: float = Field(default=3.0, ge=0.5, le=12.0)
-    focus_areas: list[str] | None = Field(default=None)
-    template: str | None = Field(default=None, max_length=128)
-    resume_id: str | None = Field(default=None, max_length=64)
-    use_history: bool = Field(default=True)
-
-
-class PlanGenerateResponse(BaseModel):
-    plan_id: str
-    estimated_daily_hours: float
-    breakdown_phases: list[dict] = []
-    generated_by: str = "rule"
-
-
-class ReviewDayUpsertRequest(BaseModel):
-    day_key: str | None = Field(default=None, max_length=64)
-    day_label: str | None = Field(default=None, max_length=64)
-    phase_key: str | None = Field(default=None, max_length=64)
-    title: str | None = Field(default=None, max_length=255)
-    acceptance: str | None = Field(default=None, max_length=2000)
-    scheduled_date: str | None = Field(default=None, max_length=32)
-    sort_order: int | None = Field(default=None, ge=0)
-
-
-class ReviewTaskUpsertRequest(BaseModel):
-    task_key: str | None = Field(default=None, max_length=64)
-    title: str | None = Field(default=None, max_length=255)
-    tags: list[str] | None = None
-    critical: bool | None = None
-    simulation: bool | None = None
-    docs: list | None = None
-    reason: str | None = Field(default=None, max_length=500)
-    link_type: str | None = Field(default=None, max_length=32)
-    link_payload: dict | None = None
-    sort_order: int | None = Field(default=None, ge=0)
-
-
-class MaterialItemRequest(BaseModel):
-    label: str | None = Field(default=None, max_length=255)
-    script_key: str | None = Field(default=None, max_length=64)
-    duration_seconds: int | None = Field(default=None, ge=0)
-    scenario: str | None = Field(default=None, max_length=255)
-    text: str | None = None
-    card_key: str | None = Field(default=None, max_length=64)
-    title: str | None = Field(default=None, max_length=255)
-    tag: str | None = Field(default=None, max_length=64)
-    background: str | None = None
-    challenge: str | None = None
-    solution: str | None = None
-    result: str | None = None
-    content: str | None = None
-    side: str | None = Field(default=None, max_length=16)
-    sort_order: int | None = Field(default=None, ge=0)
-
-
-class PracticeQuestionMarkRequest(BaseModel):
-    mark_type: str | None = Field(default=None, max_length=32)
-    mastery_level: int | None = Field(default=None, ge=0, le=5)
-    note: str | None = Field(default=None, max_length=4000)
-
-
-class PracticeQuestionAttemptRequest(BaseModel):
-    answer: str = Field(default="", max_length=8000)
-    elapsed_seconds: int | None = Field(default=None, ge=0, le=24 * 60 * 60)
-
+from interview_agent.services.achievement_service import safe_evaluate
+from interview_agent.services.admin_test_data_service import AdminTestDataService
+from interview_agent.admin import create_admin_router
+from interview_agent.admin.service import AdminConsoleService
+from interview_agent.learning.routes import create_learning_router
+from interview_agent.interviewer.routes import router as interviewer_router
+from interview_agent.interviewer.service import InterviewerWorkspaceService
+from interview_agent.training.routes import router as training_router
+from interview_agent.privacy.routes import create_privacy_router
+from interview_agent.privacy.worker import run_deletion_worker
+from interview_agent.interfaces.routes.catalog import create_catalog_router
+from interview_agent.interfaces.routes.operations import create_operations_router
+from interview_agent.interfaces.routes.review_plans import create_review_plans_router
+from interview_agent.interfaces.routes.review_progress import create_review_progress_router
+from interview_agent.interfaces.routes.review_materials import create_review_materials_router
+from interview_agent.interfaces.routes.review_practice import create_review_practice_router
+from interview_agent.interfaces.routes.study_dashboard import create_study_dashboard_router
+from interview_agent.interfaces.schemas import (
+    AccountResponse,
+    AuthTokenResponse,
+    ChatResponse,
+    CreatePaymentOrderRequest,
+    DeleteResponse,
+    DevLoginRequest,
+    LogoutRequest,
+    MeResponse,
+    MessageRequest,
+    PasswordLoginRequest,
+    PaymentOrderResponse,
+    PaymentWebhookPayload,
+    PaymentWebhookResponse,
+    PhoneLoginRequest,
+    PlanGenerateRequest,
+    PlanGenerateResponse,
+    ProviderLoginRequest,
+    RechargeRequest,
+    RefreshTokenRequest,
+    RegisterRequest,
+    ResumeImportRequest,
+    ResumeParseRequest,
+    ResumeParseResponse,
+    ResumeRecordResponse,
+    RoleGrantRequest,
+    RoleRevokeRequest,
+    SessionDetailResponse,
+    SessionRequest,
+    SessionRewindRequest,
+    SessionSummaryResponse,
+    UpdateUserSettingsRequest,
+    UsageResponse,
+    UserSettingsResponse,
+)
 
 @dataclass
 class ApiSession:
@@ -693,6 +157,7 @@ class ApiSession:
     web_search_enabled: bool = False
     resume_id: str | None = None
     plan_task_id: str | None = None
+    interviewer_kit_id: str | None = None
 
 
 sessions: dict[str, ApiSession] = {}
@@ -700,7 +165,14 @@ logger = logging.getLogger("interview_agent.api")
 
 
 def _request_id(request: Request) -> str:
-    return request.headers.get("X-Request-ID") or str(uuid4())
+    existing = getattr(request.state, "request_id", None)
+    if existing:
+        return existing
+    request_id = clean_request_id(
+        request.headers.get("X-Client-Request-Id") or request.headers.get("X-Request-ID")
+    ) or str(uuid4())
+    request.state.request_id = request_id
+    return request_id
 
 
 def _api_success(data, *, request_id: str) -> dict:
@@ -718,6 +190,7 @@ def _api_error(
     message: str,
     request_id: str,
     error: ApiErrorCode | str | None = None,
+    details: dict | list | None = None,
 ) -> dict:
     code = error or error_code_for_status(status_code)
     code_value = code.value if isinstance(code, ApiErrorCode) else str(code)
@@ -727,6 +200,7 @@ def _api_error(
         "message": message,
         "data": None,
         "request_id": request_id,
+        "details": details,
     }
 
 
@@ -810,21 +284,50 @@ def create_app(
     object_storage: ObjectStorage | None = None,
     initialize_database: bool = True,
     database_engine: AsyncEngine | None = None,
+    start_background_workers: bool | None = None,
 ) -> FastAPI:
     settings = load_settings()
     validate_production_security(settings)
     storage = object_storage or create_object_storage(settings)
     if database_engine is not None:
         configure_database_for_tests(database_engine)
+    workers_enabled = database_engine is None if start_background_workers is None else start_background_workers
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if initialize_database:
             await init_database()
         await asyncio.to_thread(storage.ensure_ready)
-        yield
+        deletion_worker = asyncio.create_task(run_deletion_worker(storage)) if workers_enabled else None
+        try:
+            yield
+        finally:
+            if deletion_worker is not None:
+                deletion_worker.cancel()
+                try:
+                    await deletion_worker
+                except asyncio.CancelledError:
+                    pass
 
     app = FastAPI(title="Interview Agent API", lifespan=lifespan)
+    app.include_router(create_learning_router())
+    app.include_router(interviewer_router)
+    app.include_router(training_router)
+    app.include_router(create_privacy_router(object_storage=storage))
+    app.include_router(create_catalog_router(settings=settings))
+    app.include_router(create_operations_router())
+    app.include_router(create_review_plans_router())
+    app.include_router(create_review_progress_router())
+    app.include_router(create_review_materials_router())
+    app.include_router(create_review_practice_router(
+        build_subjective_grader=_build_subjective_grader,
+        billing_service_factory=_billing_service,
+    ))
+    app.include_router(create_study_dashboard_router(
+        build_advice_provider=_build_dashboard_advice_provider,
+        billing_service_factory=_billing_service,
+    ))
+    app.include_router(create_admin_router())
     allowed_origins = [item.strip() for item in settings.allowed_origins.split(",") if item.strip()]
 
     @app.middleware("http")
@@ -843,6 +346,13 @@ def create_app(
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Cache-Control"] = "no-store"
         _log_access(request, response.status_code, duration_ms, request_id)
+        await record_client_request_safely(
+            request=request,
+            settings=settings,
+            request_id=request_id,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+        )
         return response
 
     @app.exception_handler(HTTPException)
@@ -856,6 +366,7 @@ def create_app(
                 message=_public_error_message(exc.status_code, exc.detail),
                 request_id=request_id,
                 error=error_code_for_detail(exc.status_code, exc.detail),
+                details=exc.detail if isinstance(exc.detail, (dict, list)) else None,
             ),
         )
 
@@ -904,6 +415,9 @@ def create_app(
                 "Content-Type",
                 "X-API-Key",
                 "X-Request-ID",
+                "X-Client-Platform",
+                "X-Client-Version",
+                "X-Client-Request-Id",
                 "X-Payment-Signature",
             ],
         )
@@ -955,7 +469,7 @@ def create_app(
                 account = await _billing_service(db).register_with_password(
                     tenant_id=tenant_id,
                     email=request.email,
-                    password=request.password,
+                    password=_password_secret(request),
                     display_name=request.display_name,
                     platform=request.platform,
                 )
@@ -977,14 +491,16 @@ def create_app(
         async with session_scope() as db:
             security = SecurityService(db, tenant_id=tenant_id)
             ip_address = _client_ip(http_request)
+            failed_user_id = f"email:{request.email.lower().strip()}"
             failed_count = await security.recent_event_count(
                 event_type="login_failed",
                 ip_address=ip_address,
+                user_id=failed_user_id,
                 minutes=60,
             )
             if failed_count >= settings.auth_max_failed_attempts_per_hour:
                 await security.record_event(
-                    user_id=f"email:{request.email.lower().strip()}",
+                    user_id=failed_user_id,
                     event_type="login_blocked",
                     severity="critical",
                     ip_address=ip_address,
@@ -995,16 +511,33 @@ def create_app(
                 blocked_by_ip = True
                 account = None
             else:
-                account = await _billing_service(db).authenticate_password(
+                billing = _billing_service(db)
+                account = await billing.authenticate_password(
                     tenant_id=tenant_id,
                     email=request.email,
-                    password=request.password,
+                    password=_password_secret(request),
                 )
+                derived_secret = _derived_password_secret(request)
+                raw_secret = (request.password or "").strip()
+                if account is None and raw_secret:
+                    legacy_account = await billing.authenticate_password(
+                        tenant_id=tenant_id,
+                        email=request.email,
+                        password=raw_secret,
+                    )
+                    if legacy_account is not None:
+                        if derived_secret:
+                            await billing.replace_password(
+                                tenant_id=tenant_id,
+                                email=request.email,
+                                password=derived_secret,
+                            )
+                        account = legacy_account
             if blocked_by_ip:
                 pass
             elif account is None:
                 await security.record_event(
-                    user_id=f"email:{request.email.lower().strip()}",
+                    user_id=failed_user_id,
                     event_type="login_failed",
                     severity="warning",
                     ip_address=ip_address,
@@ -1014,7 +547,7 @@ def create_app(
                 new_failed_count = failed_count + 1
                 if new_failed_count >= settings.auth_alert_failed_attempts_per_hour:
                     await security.record_event(
-                        user_id=f"email:{request.email.lower().strip()}",
+                        user_id=failed_user_id,
                         event_type="abnormal_login_alert",
                         severity="critical",
                         ip_address=ip_address,
@@ -1314,15 +847,29 @@ def create_app(
             validate_recharge_amount(request.amount_credits, settings.max_recharge_credits)
             async with session_scope() as db:
                 billing = _billing_service(db)
+                plan = None
+                if request.plan_code:
+                    try:
+                        plan = await AdminConsoleService(
+                            db,
+                            tenant_id=context.tenant_id,
+                            actor_id="system",
+                        ).get_enabled_plan(request.plan_code)
+                    except LookupError as exc:
+                        raise HTTPException(status_code=400, detail=str(exc)) from exc
+                    if Decimal(plan["price_credits"]) != request.amount_credits:
+                        raise HTTPException(status_code=400, detail="套餐价格已变化，请刷新后重试。")
                 order = await billing.create_payment_order(
                     tenant_id=context.tenant_id,
                     user_id=context.user_id,
                     amount_credits=request.amount_credits,
+                    credited_amount=plan["included_credits"] if plan else request.amount_credits,
                     payment_provider=provider,
                     external_order_id=request.external_order_id,
                     metadata={
                         "source": "client_order",
                         "platform": context.platform,
+                        "plan_code": request.plan_code,
                         **request.metadata,
                     },
                 )
@@ -1511,411 +1058,6 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return JSONResponse({"code": "SUCCESS", "message": "成功"})
 
-    @app.get("/metadata/models", response_model=list[ModelOptionResponse])
-    async def models() -> list[ModelOptionResponse]:
-        codex_model_config = load_codex_model_config(__import__("pathlib").Path.cwd())
-        responses: list[ModelOptionResponse] = []
-        for item in list_model_catalog():
-            runtime = resolve_model_runtime(item.id, codex_config=codex_model_config)
-            runtime_supported = (
-                is_openai_compatible_provider(runtime.provider)
-                or is_supported_native_provider(runtime.provider)
-            )
-            responses.append(
-                ModelOptionResponse(
-                    id=item.id,
-                    provider=item.provider,
-                    display_name=item.display_name,
-                    category=item.category,
-                    runtime_supported=runtime_supported,
-                    runtime_integration=runtime.integration,
-                    input_credits_per_1m=str(item.input_credits_per_1m),
-                    output_credits_per_1m=str(item.output_credits_per_1m),
-                    input_usd_per_1m=str(item.input_usd_per_1m),
-                    output_usd_per_1m=str(item.output_usd_per_1m),
-                    context_window=item.context_window,
-                    notes=item.notes,
-                )
-            )
-        return responses
-
-    @app.get("/metadata/industries", response_model=list[IndustryOptionResponse])
-    async def industries(
-        target_role: str = Query(default="AI 应用工程师", min_length=1, max_length=80),
-    ) -> list[IndustryOptionResponse]:
-        return [IndustryOptionResponse(**item) for item in industry_options(target_role.strip())]
-
-    async def _practice_learning_plan(
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        return PRACTICE_LEARNING_PLAN
-
-    @app.get("/practice/learning-plan")
-    async def practice_learning_plan(
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        return await _practice_learning_plan(context)
-
-    @app.get("/civil-service/learning-plan")
-    async def civil_service_learning_plan(
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        return await _practice_learning_plan(context)
-
-    @app.get("/practice/categories")
-    async def practice_categories(
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        return PRACTICE_CATEGORIES
-
-    async def _list_practice_questions(
-        category: str | None = None,
-        year: int | None = Query(default=None, ge=1990, le=2100),
-        subject: str | None = Query(default=None, max_length=64),
-        question_type: str | None = Query(default=None, max_length=64),
-        limit: int = Query(default=30, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
-        context: RequestContext = Depends(request_context),
-    ) -> CivilServiceQuestionListResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            items, total = await CivilServiceQuestionRepository(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).list_questions(
-                category=category,
-                year=year,
-                subject=subject,
-                question_type=question_type,
-                limit=limit,
-                offset=offset,
-            )
-        return CivilServiceQuestionListResponse(items=items, total=total, limit=limit, offset=offset)
-
-    @app.get("/practice/questions", response_model=CivilServiceQuestionListResponse)
-    async def list_practice_questions(
-        category: str | None = Query(default=None, max_length=64),
-        year: int | None = Query(default=None, ge=1990, le=2100),
-        subject: str | None = Query(default=None, max_length=64),
-        question_type: str | None = Query(default=None, max_length=64),
-        limit: int = Query(default=30, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
-        context: RequestContext = Depends(request_context),
-    ) -> CivilServiceQuestionListResponse:
-        return await _list_practice_questions(category, year, subject, question_type, limit, offset, context)
-
-    @app.get("/civil-service/questions", response_model=CivilServiceQuestionListResponse)
-    async def list_civil_service_questions(
-        year: int | None = Query(default=None, ge=1990, le=2100),
-        subject: str | None = Query(default=None, max_length=64),
-        question_type: str | None = Query(default=None, max_length=64),
-        limit: int = Query(default=30, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
-        context: RequestContext = Depends(request_context),
-    ) -> CivilServiceQuestionListResponse:
-        return await _list_practice_questions("civil_service", year, subject, question_type, limit, offset, context)
-
-    @app.post("/practice/attempt", response_model=PracticeAttemptResponse)
-    async def submit_practice_attempt(
-        request: PracticeAttemptRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> PracticeAttemptResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            question = await CivilServiceQuestionRepository(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).get_question(request.question_id)
-        if question is None:
-            raise HTTPException(status_code=404, detail="题目不存在。")
-        result = _grade_practice_attempt(question, request.answer)
-        return PracticeAttemptResponse(
-            question_id=request.question_id,
-            elapsed_seconds=request.elapsed_seconds,
-            **result,
-        )
-
-    async def _import_practice_questions(
-        request: CivilServiceQuestionImportRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ImportResultResponse:
-        _require_authenticated(context)
-        if len(request.questions) > 500:
-            raise HTTPException(status_code=413, detail="单次最多导入 500 道题。")
-        suspicious_questions = []
-        for index, question in enumerate(request.questions):
-            prompt_text = str(question.get("prompt") or question.get("question") or "")
-            scan = scan_prompt_injection(
-                prompt_text,
-                block_score=settings.prompt_injection_block_score,
-                enabled=settings.prompt_injection_block_enabled,
-            )
-            if scan.blocked:
-                suspicious_questions.append({"index": index, "score": scan.score})
-        if suspicious_questions:
-            async with session_scope() as db:
-                await SecurityService(db, tenant_id=context.tenant_id).record_event(
-                    user_id=context.user_id,
-                    event_type="question_bank_prompt_injection_blocked",
-                    severity="critical",
-                    request_id=context.request_id,
-                    metadata={"questions": suspicious_questions[:20]},
-                )
-            raise HTTPException(status_code=400, detail="题库包含疑似 Prompt Injection 内容，已拒绝导入。")
-        async with session_scope() as db:
-            try:
-                result = await CivilServiceQuestionRepository(
-                    db,
-                    tenant_id=context.tenant_id,
-                    user_id=context.user_id,
-                ).upsert_many(request.questions)
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return ImportResultResponse(**result)
-
-    @app.post("/practice/questions/import", response_model=ImportResultResponse)
-    async def import_practice_questions(
-        request: CivilServiceQuestionImportRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ImportResultResponse:
-        return await _import_practice_questions(request, context)
-
-    @app.post("/civil-service/questions/import", response_model=ImportResultResponse)
-    async def import_civil_service_questions(
-        request: CivilServiceQuestionImportRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ImportResultResponse:
-        for question in request.questions:
-            question.setdefault("practice_category", "civil_service")
-        return await _import_practice_questions(request, context)
-
-    async def _seed_practice_questions(
-        questions: list[dict] | None = None,
-        context: RequestContext = Depends(request_context),
-    ) -> ImportResultResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            result = await CivilServiceQuestionRepository(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).upsert_many(questions or DEFAULT_PRACTICE_QUESTIONS)
-        return ImportResultResponse(**result)
-
-    @app.post("/practice/questions/seed", response_model=ImportResultResponse)
-    async def seed_practice_questions(
-        context: RequestContext = Depends(request_context),
-    ) -> ImportResultResponse:
-        return await _seed_practice_questions(DEFAULT_PRACTICE_QUESTIONS, context)
-
-    @app.post("/civil-service/questions/seed", response_model=ImportResultResponse)
-    async def seed_civil_service_questions(
-        context: RequestContext = Depends(request_context),
-    ) -> ImportResultResponse:
-        return await _seed_practice_questions(CIVIL_SERVICE_SEED_QUESTIONS, context)
-
-    @app.post("/jobs")
-    async def create_job(
-        request: JobCreateRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        return await create_and_start_job(
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            job_type=request.job_type,
-            title=request.title or _default_job_title(request.job_type),
-            input_payload=request.input,
-        )
-
-    @app.get("/jobs")
-    async def list_jobs(
-        status: str | None = Query(default=None, max_length=32),
-        limit: int = Query(default=50, ge=1, le=100),
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            jobs = await JobRepository(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).list_jobs(status=status, limit=limit)
-        return [job_to_dict(job) for job in jobs]
-
-    @app.get("/jobs/{job_id}")
-    async def get_job(
-        job_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            job = await JobRepository(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).get_job(job_id, with_children=True)
-        if not job:
-            raise HTTPException(status_code=404, detail="job not found")
-        return job_to_dict(job, include_children=True)
-
-    @app.post("/jobs/{job_id}/cancel")
-    async def cancel_job(
-        job_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = JobRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            job = await repo.get_job(job_id)
-            if not job:
-                raise HTTPException(status_code=404, detail="job not found")
-            if job.status not in TERMINAL_JOB_STATUSES:
-                job = await repo.set_job_status(job.id, "canceled")
-        return job_to_dict(job) if job else {"id": job_id, "status": "canceled"}
-
-    @app.get("/jobs/{job_id}/events/stream")
-    async def stream_job_events(
-        job_id: str,
-        http_request: Request,
-        context: RequestContext = Depends(request_context),
-    ) -> StreamingResponse:
-        _require_authenticated(context)
-
-        async def event_stream():
-            seen: set[str] = set()
-            for _ in range(600):
-                async with session_scope() as db:
-                    repo = JobRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-                    job = await repo.get_job(job_id)
-                    if not job:
-                        yield _sse("job.error", {"message": "job not found"})
-                        return
-                    events = await repo.list_events(job_id, limit=100)
-                    terminal = job.status in TERMINAL_JOB_STATUSES
-                for event in events:
-                    event_id = str(event.id)
-                    if event_id in seen:
-                        continue
-                    seen.add(event_id)
-                    yield _sse("job.event", event_to_dict(event))
-                if terminal:
-                    yield _sse("job.done", {"job_id": job_id, "status": job.status})
-                    return
-                if await http_request.is_disconnected():
-                    return
-                await asyncio.sleep(1)
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache, no-transform",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-
-    @app.post("/workflows/run")
-    async def run_workflow(
-        request: WorkflowRunRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        job_type = "multi_agent" if request.workflow_type == "multi_agent" else "workflow"
-        return await create_and_start_job(
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            job_type=job_type,
-            title=request.title or _default_job_title(job_type),
-            input_payload=request.input,
-        )
-
-    @app.post("/eval-runs")
-    async def create_eval_run(
-        request: EvalRunCreateRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        return await create_and_start_job(
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            job_type="evaluation",
-            title=request.name or "AI 工程能力质量评估",
-            input_payload={"cases": request.cases, "metadata": request.metadata, **request.metadata},
-        )
-
-    @app.get("/eval-runs")
-    async def list_eval_runs(
-        limit: int = Query(default=50, ge=1, le=100),
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            result = await db.execute(
-                select(EvalRunModel)
-                .where(EvalRunModel.tenant_id == context.tenant_id, EvalRunModel.user_id == context.user_id)
-                .order_by(EvalRunModel.created_at.desc())
-                .limit(limit)
-            )
-            runs = result.scalars().all()
-        return [_eval_run_to_dict(run) for run in runs]
-
-    @app.get("/ops/traces")
-    async def list_agent_traces(
-        limit: int = Query(default=50, ge=1, le=100),
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            traces = await AgentOpsService(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).list_traces(limit=limit)
-        return [trace_to_dict(trace) for trace in traces]
-
-    @app.get("/ops/traces/{trace_id}")
-    async def get_agent_trace(
-        trace_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            trace = await AgentOpsService(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).get_trace(trace_id)
-        if not trace:
-            raise HTTPException(status_code=404, detail="trace not found")
-        return trace_to_dict(trace, include_spans=True)
-
-    @app.get("/ops/metrics")
-    async def ops_metrics(
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            job_counts = await JobRepository(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).count_jobs_by_status()
-            trace_metrics = await AgentOpsService(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-            ).metrics_summary()
-        return {
-            "job_counts": job_counts,
-            **trace_metrics,
-        }
-
     @app.post("/resume/parse", response_model=ResumeParseResponse)
     async def parse_resume(
         request: ResumeParseRequest,
@@ -1978,6 +1120,8 @@ def create_app(
 
     @app.get("/resumes", response_model=list[ResumeRecordResponse])
     async def list_resumes(
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
         context: RequestContext = Depends(request_context),
     ) -> list[ResumeRecordResponse]:
         _require_authenticated(context)
@@ -1987,7 +1131,7 @@ def create_app(
                 storage,
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
-            ).list()
+            ).list(limit=limit, offset=offset)
         return [ResumeRecordResponse(**stored_resume_to_payload(item)) for item in resumes]
 
     @app.get("/resumes/{resume_id}", response_model=ResumeRecordResponse)
@@ -2029,11 +1173,24 @@ def create_app(
     ) -> ChatResponse:
         _require_authenticated(context)
         _check_session_request(request, settings.max_message_chars)
-        await _ensure_resume_access(request.resume_id, storage, context)
-        config = apply_session_request(load_config(None), request)
-        model_id = _resolve_model_id(request.model_id)
+        stored_resume = await _load_owned_resume(request.resume_id, storage, context)
+        config = apply_session_request(load_config(None), request, stored_resume=stored_resume)
         async with session_scope() as db:
+            if request.interviewer_kit_id:
+                try:
+                    await InterviewerWorkspaceService(
+                        db,
+                        tenant_id=context.tenant_id,
+                        user_id=context.user_id,
+                    ).require_owned_kit(request.interviewer_kit_id)
+                except LookupError as exc:
+                    raise HTTPException(status_code=404, detail="interviewer kit not found") from exc
             try:
+                model_id = await _billing_service(db).resolve_model_id(
+                    tenant_id=context.tenant_id,
+                    requested=request.model_id,
+                    fallback=_resolve_model_id(None),
+                )
                 await _billing_service(db).ensure_can_use(
                     tenant_id=context.tenant_id,
                     user_id=context.user_id,
@@ -2041,6 +1198,8 @@ def create_app(
                 )
             except InsufficientCreditsError as exc:
                 raise HTTPException(status_code=402, detail=str(exc)) from exc
+            except BillingError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         harness = _create_harness(
             config,
             offline=request.offline,
@@ -2073,6 +1232,7 @@ def create_app(
             web_search_enabled=request.web_search,
             resume_id=request.resume_id,
             plan_task_id=request.plan_task_id,
+            interviewer_kit_id=request.interviewer_kit_id,
         )
         await _persist_interview_result(
             session_id,
@@ -2083,12 +1243,14 @@ def create_app(
             context.tenant_id,
             context.user_id,
             plan_task_id=request.plan_task_id,
+            interviewer_kit_id=request.interviewer_kit_id,
         )
         return _response(session_id, result, model_id=model_id, usage=usage)
 
     @app.get("/sessions", response_model=list[SessionSummaryResponse])
     async def list_sessions(
-        limit: int = Query(default=50, ge=1, le=200),
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
         context: RequestContext = Depends(request_context),
     ) -> list[SessionSummaryResponse]:
         _require_authenticated(context)
@@ -2097,7 +1259,7 @@ def create_app(
                 db,
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
-            ).list_sessions(limit=limit)
+            ).list_sessions(limit=limit, offset=offset)
         return [SessionSummaryResponse(**record) for record in records]
 
     @app.get("/sessions/{session_id}", response_model=SessionDetailResponse)
@@ -2192,6 +1354,8 @@ def create_app(
                 )
         except InsufficientCreditsError as exc:
             raise HTTPException(status_code=402, detail=str(exc)) from exc
+        except BillingError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         result = session.loop.step(request.message)
         usage = await _record_usage(
             session_id=session_id,
@@ -2211,6 +1375,7 @@ def create_app(
             context.tenant_id,
             context.user_id,
             plan_task_id=session.plan_task_id,
+            interviewer_kit_id=session.interviewer_kit_id,
         )
         return _response(session_id, result, model_id=session.model_id, usage=usage)
 
@@ -2236,6 +1401,8 @@ def create_app(
                 )
         except InsufficientCreditsError as exc:
             raise HTTPException(status_code=402, detail=str(exc)) from exc
+        except BillingError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         async def event_stream():
             logger.info(
@@ -2377,6 +1544,7 @@ def create_app(
                 context.tenant_id,
                 context.user_id,
                 plan_task_id=session.plan_task_id,
+                interviewer_kit_id=session.interviewer_kit_id,
             )
             logger.info(
                 "stream_persist_done request_id=%s session_id=%s model_id=%s duration_ms=%s",
@@ -2442,6 +1610,7 @@ def create_app(
     @app.get("/interview-reports")
     async def list_interview_reports(
         limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
         context: RequestContext = Depends(request_context),
     ) -> dict:
         _require_authenticated(context)
@@ -2449,7 +1618,7 @@ def create_app(
             service = InterviewReportService(
                 db, tenant_id=context.tenant_id, user_id=context.user_id
             )
-            return await service.list_reports(limit=limit)
+            return await service.list_reports(limit=limit, offset=offset)
 
     @app.get("/interview-reports/{session_id}")
     async def get_interview_report(
@@ -2490,645 +1659,22 @@ def create_app(
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"code": 0, "message": "ok", "data": result}
 
-    @app.get("/review-site/plans", response_model=list[ReviewPlanListItem])
-    async def list_review_plans(
-        include_archived: bool = Query(default=False),
-        context: RequestContext = Depends(request_context),
-    ) -> list[ReviewPlanListItem]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            plans = await repo.list_plans(include_archived=include_archived)
-        return [
-            ReviewPlanListItem(
-                id=str(p.id),
-                plan_key=p.plan_key,
-                title=p.title,
-                subtitle=p.subtitle,
-                status=p.status,
-                created_at=p.created_at.isoformat() if p.created_at else None,
-                updated_at=p.updated_at.isoformat() if p.updated_at else None,
-            )
-            for p in plans
-        ]
-
-    @app.post("/review-site/plans", response_model=ReviewPlanResponse)
-    async def create_review_plan(
-        request: ReviewPlanCreateRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewPlanResponse:
-        _require_authenticated(context)
-        template = (request.template or "").strip()
-        use_default = template == "cyh-14-day-interview-review" or template == ""
-        plan_key = (request.plan_key or "").strip() or (
-            "cyh-14-day-interview-review" if use_default else f"plan-{int(time.time())}"
-        )
-        title = (request.title or "").strip() or ("陈雨寒面试复习站" if use_default else "面试复习计划")
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            existing = await repo.get_plan_by_key(plan_key) if plan_key else None
-            if existing:
-                plan = existing
-            elif use_default:
-                plan = await repo.seed_plan_from_default()
-                if request.title:
-                    plan = await repo.update_plan(plan.id, {"title": request.title})
-            else:
-                plan = await repo.create_plan(
-                    plan_data={
-                        "plan_key": plan_key,
-                        "title": title,
-                        "status": "draft",
-                    },
-                    phases=[],
-                    days=[],
-                    tasks_per_day={},
-                    intro_scripts=[],
-                    star_cards=[],
-                    a4_memory=[],
-                )
-            full_plan = await repo.get_plan(plan.id)
-        return _review_plan_to_response(full_plan) if full_plan else ReviewPlanResponse(id=str(plan.id))
-
-    @app.get("/review-site/plans/{plan_id}", response_model=ReviewPlanResponse)
-    async def get_review_plan(
-        plan_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewPlanResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            plan = await repo.get_plan(plan_id)
-        if not plan:
-            raise HTTPException(status_code=404, detail="plan not found")
-        return _review_plan_to_response(plan)
-
-    @app.patch("/review-site/plans/{plan_id}", response_model=ReviewPlanResponse)
-    async def update_review_plan(
-        plan_id: str,
-        payload: dict,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewPlanResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            updated = await repo.update_plan(plan_id, payload)
-            if not updated:
-                raise HTTPException(status_code=404, detail="plan not found")
-            plan = await repo.get_plan(plan_id)
-        return _review_plan_to_response(plan) if plan else ReviewPlanResponse(id=str(updated.id))
-
-    @app.post("/review-site/plans/{plan_id}/archive", response_model=ReviewPlanResponse)
-    async def archive_review_plan(
-        plan_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewPlanResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            archived = await repo.archive_plan(plan_id)
-            if not archived:
-                raise HTTPException(status_code=404, detail="plan not found")
-            plan = await repo.get_plan(plan_id)
-        return _review_plan_to_response(plan) if plan else ReviewPlanResponse(id=str(archived.id), status="archived")
-
-    def _task_to_response(task) -> ReviewTaskResponse:
-        return ReviewTaskResponse(
-            id=str(task.id),
-            task_key=task.task_key,
-            title=task.title,
-            tags=list(task.tags_json or []),
-            critical=bool(task.critical),
-            simulation=bool(task.simulation),
-            docs=list(task.docs_json or []),
-            reason=task.reason,
-            source=task.source or "plan",
-            link_type=task.link_type or "none",
-            link_payload=dict(task.link_payload_json or {}),
-            sort_order=task.sort_order,
-        )
-
-    def _day_to_response(day) -> ReviewDayResponse:
-        return ReviewDayResponse(
-            id=str(day.id),
-            day_key=day.day_key,
-            day_label=day.day_label,
-            phase_key=day.phase_key,
-            title=day.title,
-            acceptance=day.acceptance,
-            scheduled_date=day.scheduled_date.isoformat() if day.scheduled_date else None,
-            sort_order=day.sort_order,
-            tasks=[],
-        )
-
-    @app.post("/review-site/plans/{plan_id}/days", response_model=ReviewDayResponse, status_code=201)
-    async def create_review_day(
-        plan_id: str,
-        request: ReviewDayUpsertRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewDayResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                day = await repo.create_day(plan_id, request.model_dump(exclude_none=True))
-            except ValueError:
-                raise HTTPException(status_code=404, detail="plan not found") from None
-            if day is None:
-                raise HTTPException(status_code=404, detail="plan not found")
-            return _day_to_response(day)
-
-    @app.patch("/review-site/days/{day_id}", response_model=ReviewDayResponse)
-    async def update_review_day(
-        day_id: str,
-        request: ReviewDayUpsertRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewDayResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                day = await repo.update_day(day_id, request.model_dump(exclude_none=True))
-            except ValueError:
-                day = None
-            if day is None:
-                raise HTTPException(status_code=404, detail="day not found")
-            return _day_to_response(day)
-
-    @app.delete("/review-site/days/{day_id}")
-    async def delete_review_day(
-        day_id: str,
+    @app.post("/admin/test-data/review-site")
+    async def create_review_site_test_data(
         context: RequestContext = Depends(request_context),
     ) -> dict:
         _require_authenticated(context)
+        if context.role not in {"admin", "server"}:
+            raise HTTPException(status_code=403, detail="只有管理员可以创建测试数据。")
+        if settings.is_production:
+            raise HTTPException(status_code=403, detail="生产环境禁止创建测试数据。")
         async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                deleted = await repo.delete_day(day_id)
-            except ValueError:
-                deleted = False
-            if not deleted:
-                raise HTTPException(status_code=404, detail="day not found")
-        return {"deleted": True}
-
-    @app.post("/review-site/days/{day_id}/tasks", response_model=ReviewTaskResponse, status_code=201)
-    async def create_review_task(
-        day_id: str,
-        request: ReviewTaskUpsertRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewTaskResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                task = await repo.create_task(day_id, request.model_dump(exclude_none=True))
-            except ValueError:
-                task = None
-            if task is None:
-                raise HTTPException(status_code=404, detail="day not found")
-            return _task_to_response(task)
-
-    @app.patch("/review-site/tasks/{task_id}", response_model=ReviewTaskResponse)
-    async def update_review_task(
-        task_id: str,
-        request: ReviewTaskUpsertRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewTaskResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                task = await repo.update_task(task_id, request.model_dump(exclude_none=True))
-            except ValueError:
-                task = None
-            if task is None:
-                raise HTTPException(status_code=404, detail="task not found")
-            return _task_to_response(task)
-
-    @app.delete("/review-site/tasks/{task_id}")
-    async def delete_review_task(
-        task_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                deleted = await repo.delete_task(task_id)
-            except ValueError:
-                deleted = False
-            if not deleted:
-                raise HTTPException(status_code=404, detail="task not found")
-        return {"deleted": True}
-
-    @app.post("/review-site/plans/{plan_id}/materials/{kind}", status_code=201)
-    async def create_material_item(
-        plan_id: str,
-        kind: str,
-        request: MaterialItemRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        if kind not in ("intro_scripts", "star_cards", "a4_memory"):
-            raise HTTPException(status_code=400, detail="kind must be intro_scripts, star_cards or a4_memory")
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                item = await repo.upsert_material_item(plan_id, kind, request.model_dump(exclude_none=True))
-            except ValueError:
-                raise HTTPException(status_code=404, detail="plan not found") from None
-            if item is None:
-                raise HTTPException(status_code=404, detail="plan not found")
-            await db.refresh(item)
-            return _material_item_to_dict(kind, item)
-
-    @app.patch("/review-site/materials/{kind}/{item_id}")
-    async def update_material_item(
-        kind: str,
-        item_id: str,
-        request: MaterialItemRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        if kind not in ("intro_scripts", "star_cards", "a4_memory"):
-            raise HTTPException(status_code=400, detail="kind must be intro_scripts, star_cards or a4_memory")
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                existing = await repo.get_material_item(kind, item_id)
-            except ValueError:
-                existing = None
-            if existing is None:
-                raise HTTPException(status_code=404, detail="material not found")
-            item = await repo.upsert_material_item(
-                str(existing.plan_id), kind, request.model_dump(exclude_none=True), item_id=item_id
-            )
-            await db.refresh(item)
-            return _material_item_to_dict(kind, item)
-
-    @app.delete("/review-site/materials/{kind}/{item_id}")
-    async def delete_material_item(
-        kind: str,
-        item_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        if kind not in ("intro_scripts", "star_cards", "a4_memory"):
-            raise HTTPException(status_code=400, detail="kind must be intro_scripts, star_cards or a4_memory")
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                deleted = await repo.delete_material_item(kind, item_id)
-            except ValueError:
-                deleted = False
-        if not deleted:
-            raise HTTPException(status_code=404, detail="material not found")
-        return {"deleted": True}
-
-    @app.patch("/review-site/progress/task/{task_id}", response_model=ReviewProgressResponse)
-    async def update_review_progress(
-        task_id: str,
-        request: ReviewProgressUpdateRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> ReviewProgressResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                progress = await repo.update_progress(task_id, {
-                    "done": request.done,
-                    "note": request.note,
-                    "elapsed_minutes": request.elapsed_minutes,
-                    "mastery_score": request.mastery_score,
-                })
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            try:
-                await ReviewCheckinService(
-                    db, tenant_id=context.tenant_id, user_id=context.user_id
-                ).sync_day_checkin(progress.plan_id, progress.day_id)
-            except Exception:  # noqa: BLE001 - 打卡聚合失败不阻断进度更新
-                logger.exception("sync checkin after progress update failed")
-            await safe_evaluate(db, tenant_id=context.tenant_id, user_id=context.user_id)
-        return _progress_to_response(progress)
-
-    @app.get("/review-site/plans/{plan_id}/today")
-    async def get_review_plan_today(
-        plan_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            service = ReviewCheckinService(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                return await service.get_today(plan_id)
-            except LookupError as exc:
-                raise HTTPException(status_code=404, detail="plan not found") from exc
-
-    @app.post("/review-site/plans/{plan_id}/checkin")
-    async def create_review_checkin(
-        plan_id: str,
-        request: ReviewCheckinRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            service = ReviewCheckinService(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                result = await service.checkin(
-                    plan_id,
-                    elapsed_minutes=request.elapsed_minutes,
-                    note=request.note,
-                )
-            except LookupError as exc:
-                raise HTTPException(status_code=404, detail="plan not found") from exc
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            await safe_evaluate(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            return result
-
-    @app.get("/review-site/checkins")
-    async def list_review_checkins(
-        plan_id: str | None = Query(default=None, max_length=64),
-        date_from: str | None = Query(default=None, max_length=10),
-        date_to: str | None = Query(default=None, max_length=10),
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        from datetime import date as _date
-
-        def _parse(value: str | None):
-            if not value:
-                return None
-            try:
-                return _date.fromisoformat(value[:10])
-            except ValueError:
-                raise HTTPException(status_code=400, detail="日期格式应为 YYYY-MM-DD。") from None
-
-        async with session_scope() as db:
-            service = ReviewCheckinService(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            return await service.list_checkins(
-                plan_id=plan_id,
-                date_from=_parse(date_from),
-                date_to=_parse(date_to),
-            )
-
-    @app.get("/study/dashboard")
-    async def get_study_dashboard(
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            advice_provider = None
-            model_id = ""
-            try:
-                advice_provider, model_id = await _build_dashboard_advice_provider(db, context)
-            except InsufficientCreditsError:
-                advice_provider = None
-            service = StudyDashboardService(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-                advice_provider=advice_provider,
-            )
-            dashboard = await service.build_dashboard()
-            if advice_provider is not None and dashboard.get("advice", {}).get("source") == "llm":
-                try:
-                    await _billing_service(db).record_generation_usage(
-                        tenant_id=context.tenant_id,
-                        user_id=context.user_id,
-                        session_id=None,
-                        event_type="dashboard_advice",
-                        model_id=model_id,
-                        prompt_text="study-dashboard-advice",
-                        response_text=str(dashboard["advice"].get("text") or "")[:500],
-                    )
-                except InsufficientCreditsError:
-                    pass
-            return dashboard
-
-    @app.get("/study/achievements")
-    async def get_study_achievements(
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            service = AchievementService(
-                db, tenant_id=context.tenant_id, user_id=context.user_id
-            )
-            return await service.list_achievements()
-
-    @app.get("/review-site/plans/{plan_id}/intro-scripts", response_model=list[IntroScriptResponse])
-    async def list_intro_scripts(
-        plan_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> list[IntroScriptResponse]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            items = await repo.list_intro_scripts(plan_id)
-        return [
-            IntroScriptResponse(
-                id=str(m.id),
-                script_key=m.script_key,
-                label=m.label,
-                duration_seconds=m.duration_seconds,
-                scenario=m.scenario,
-                text=m.text,
-                sort_order=m.sort_order,
-            )
-            for m in items
-        ]
-
-    @app.get("/review-site/plans/{plan_id}/star-cards", response_model=list[StarCardResponse])
-    async def list_star_cards(
-        plan_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> list[StarCardResponse]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            items = await repo.list_star_cards(plan_id)
-        return [
-            StarCardResponse(
-                id=str(m.id),
-                card_key=m.card_key,
-                title=m.title,
-                tag=m.tag,
-                background=m.background,
-                challenge=m.challenge,
-                solution=m.solution,
-                result=m.result,
-                sort_order=m.sort_order,
-            )
-            for m in items
-        ]
-
-    @app.get("/review-site/plans/{plan_id}/a4-memory", response_model=list[A4MemoryResponse])
-    async def list_a4_memory(
-        plan_id: str,
-        context: RequestContext = Depends(request_context),
-    ) -> list[A4MemoryResponse]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            items = await repo.list_a4_memory(plan_id)
-        return [
-            A4MemoryResponse(
-                id=str(m.id),
-                content=m.content,
-                side=m.side,
-                sort_order=m.sort_order,
-            )
-            for m in items
-        ]
-
-    @app.get("/review-site/practice-questions", response_model=PracticeQuestionListResponse)
-    async def list_practice_questions_v2(
-        category: str | None = Query(default=None, max_length=64),
-        subject: str | None = Query(default=None, max_length=64),
-        question_type: str | None = Query(default=None, max_length=64),
-        difficulty: str | None = Query(default=None, max_length=32),
-        keyword: str | None = Query(default=None, max_length=128),
-        limit: int = Query(default=30, ge=1, le=200),
-        offset: int = Query(default=0, ge=0),
-        context: RequestContext = Depends(request_context),
-    ) -> PracticeQuestionListResponse:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            items, total = await repo.list_questions(
-                category=category,
-                subject=subject,
-                question_type=question_type,
-                difficulty=difficulty,
-                keyword=keyword,
-                limit=limit,
-                offset=offset,
-            )
-        return PracticeQuestionListResponse(
-            items=[PracticeQuestionResponse(**item) for item in items],
-            total=total,
-            limit=limit,
-            offset=offset,
-        )
-
-    @app.post("/review-site/practice-questions/{question_id}/mark")
-    async def mark_practice_question(
-        question_id: str,
-        request: PracticeQuestionMarkRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            try:
-                entry = await repo.update_wrong_entry(question_id, {
-                    "mark_type": request.mark_type,
-                    "mastery_level": request.mastery_level,
-                    "note": request.note,
-                })
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return entry
-
-    @app.post("/review-site/practice-questions/{question_id}/attempt")
-    async def submit_practice_question_attempt(
-        question_id: str,
-        request: PracticeQuestionAttemptRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            question = await repo.get_question(question_id)
-            if question is None:
-                raise HTTPException(status_code=404, detail="题目不存在。")
-            subjective_grader = None
-            model_id = ""
-            if request.answer.strip() and not is_choice_question(question):
-                subjective_grader, model_id = _build_subjective_grader()
-                if subjective_grader is not None:
-                    try:
-                        await _billing_service(db).ensure_can_use(
-                            tenant_id=context.tenant_id,
-                            user_id=context.user_id,
-                            model_id=model_id,
-                        )
-                    except InsufficientCreditsError as exc:
-                        raise HTTPException(status_code=402, detail=str(exc)) from exc
-            service = PracticeAttemptService(
-                db,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-                subjective_grader=subjective_grader,
-            )
-            try:
-                result = await service.submit_attempt(
-                    question_id=question_id,
-                    answer=request.answer,
-                    elapsed_seconds=request.elapsed_seconds,
-                )
-            except LookupError as exc:
-                raise HTTPException(status_code=404, detail="题目不存在。") from exc
-            if subjective_grader is not None and result.get("graded_by") == "llm":
-                try:
-                    await _billing_service(db).record_generation_usage(
-                        tenant_id=context.tenant_id,
-                        user_id=context.user_id,
-                        session_id=None,
-                        event_type="practice_grade",
-                        model_id=model_id,
-                        prompt_text=request.answer[:4000],
-                        response_text=str(result.get("feedback") or "")[:2000],
-                    )
-                except InsufficientCreditsError:
-                    pass  # 评分已完成，扣费失败不阻断结果返回
-            await safe_evaluate(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            return result
-
-    @app.get("/review-site/practice-questions/{question_id}/attempts")
-    async def list_practice_question_attempts(
-        question_id: str,
-        limit: int = Query(default=20, ge=1, le=100),
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            return await repo.list_attempts(question_id=question_id, limit=limit)
-
-    @app.get("/review-site/wrong-book")
-    async def list_wrong_book(
-        mark_type: str | None = Query(default=None, max_length=32),
-        mastery_max: int | None = Query(default=None, ge=0, le=5),
-        category: str | None = Query(default=None, max_length=64),
-        keyword: str | None = Query(default=None, max_length=128),
-        context: RequestContext = Depends(request_context),
-    ) -> list[dict]:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            repo = PracticeQuestionRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            return await repo.list_wrong_book(
-                mark_type=mark_type,
-                mastery_max=mastery_max,
-                category=category,
-                keyword=keyword,
-            )
-
-    @app.post("/review-site/import")
-    async def run_review_site_import(
-        request: ReviewSiteImportRequest,
-        context: RequestContext = Depends(request_context),
-    ) -> dict:
-        _require_authenticated(context)
-        async with session_scope() as db:
-            service = ReviewSiteImportService(
+            service = AdminTestDataService(
                 db,
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
             )
-            return await service.run_import(plan_only=request.plan_only, questions_only=request.questions_only)
+            return await service.ensure_review_site_fixture()
 
     @app.post("/review-site/planner/generate", response_model=PlanGenerateResponse)
     async def generate_review_plan(
@@ -3140,17 +1686,15 @@ def create_app(
         hours_per_day = request.hours_per_day
 
         # 优先 LLM 个性化生成（结合简历/历史报告/错题本）；离线、余额不足或失败时自动降级规则模板
-        template = (request.template or "").strip()
-        if template != "cyh-14-day-interview-review":
-            async with session_scope() as db:
-                llm_plan = await _try_generate_llm_plan(db, request, context)
-            if llm_plan is not None:
-                return PlanGenerateResponse(
-                    plan_id=llm_plan["plan_id"],
-                    estimated_daily_hours=round(hours_per_day, 1),
-                    breakdown_phases=llm_plan["breakdown"],
-                    generated_by="llm",
-                )
+        async with session_scope() as db:
+            llm_plan = await _try_generate_llm_plan(db, request, context)
+        if llm_plan is not None:
+            return PlanGenerateResponse(
+                plan_id=llm_plan["plan_id"],
+                estimated_daily_hours=round(hours_per_day, 1),
+                breakdown_phases=llm_plan["breakdown"],
+                generated_by="llm",
+            )
 
         phases_def = [
             ("p1", "基础储备", 0.22, "简历与自我介绍背诵、素材与题库第一轮通读。"),
@@ -3201,12 +1745,11 @@ def create_app(
                     phase_key=phase_key,
                     day_offset=day_offset,
                     phase_days=phase_days,
+                    target_role=request.target_role,
                     focus_areas=request.focus_areas,
                 )
             cursor += phase_days
 
-        template = (request.template or "").strip()
-        use_default = template == "cyh-14-day-interview-review"
         plan_key = f"generated-{total_days}d-{int(time.time())}"
         title = (request.target_role or "面试") + f" {total_days} 天复习计划"
         if request.seniority:
@@ -3232,20 +1775,15 @@ def create_app(
         }
         async with session_scope() as db:
             repo = ReviewSiteRepository(db, tenant_id=context.tenant_id, user_id=context.user_id)
-            if use_default:
-                plan = await repo.seed_plan_from_default()
-                if request.title:
-                    await repo.update_plan(plan.id, {"title": request.title})
-            else:
-                plan = await repo.create_plan(
-                    plan_data=plan_data,
-                    phases=phases_data,
-                    days=days_data,
-                    tasks_per_day=tasks_per_day,
-                    intro_scripts=[],
-                    star_cards=[],
-                    a4_memory=[],
-                )
+            plan = await repo.create_plan(
+                plan_data=plan_data,
+                phases=phases_data,
+                days=days_data,
+                tasks_per_day=tasks_per_day,
+                intro_scripts=[],
+                star_cards=[],
+                a4_memory=[],
+            )
         return PlanGenerateResponse(
             plan_id=str(plan.id),
             estimated_daily_hours=round(hours_per_day, 1),
@@ -3253,6 +1791,28 @@ def create_app(
         )
 
     return app
+
+
+def _password_secret(request: RegisterRequest | PasswordLoginRequest) -> str:
+    derived_secret = _derived_password_secret(request)
+    if derived_secret:
+        return derived_secret
+    return (getattr(request, "password", "") or "").strip()
+
+
+def _derived_password_secret(request: RegisterRequest | PasswordLoginRequest) -> str:
+    scheme = (getattr(request, "password_scheme", "") or "").strip()
+    derived = (getattr(request, "password_derived", "") or "").strip()
+    if scheme == "client_sha256_v1" and re.fullmatch(r"[a-f0-9]{64}", derived):
+        return f"{scheme}${derived}"
+    email = (getattr(request, "email", "") or "").strip().lower()
+    password = (getattr(request, "password", "") or "").strip()
+    if email and password:
+        digest = hashlib.sha256(
+            f"interview-agent:password:v1:{email}\0{password}".encode("utf-8")
+        ).hexdigest()
+        return f"client_sha256_v1${digest}"
+    return ""
 
 
 async def _issue_auth_response(
@@ -3301,7 +1861,14 @@ async def _issue_auth_response(
     )
 
 
-def apply_session_request(config: InterviewConfig, request: SessionRequest) -> InterviewConfig:
+def apply_session_request(
+    config: InterviewConfig,
+    request: SessionRequest,
+    *,
+    stored_resume=None,
+) -> InterviewConfig:
+    resume_summary = stored_resume.summary if stored_resume is not None else _clean(request.resume_summary)
+    resume_text = stored_resume.text if stored_resume is not None else _clean(request.resume_text)
     candidate = config.candidate.model_copy(
         update={
             key: value
@@ -3309,8 +1876,8 @@ def apply_session_request(config: InterviewConfig, request: SessionRequest) -> I
                 "name": _clean(request.candidate_name),
                 "target_role": _clean(request.target_role),
                 "seniority": _clean(request.seniority),
-                "resume_summary": _clean(request.resume_summary),
-                "resume_text": _clean(request.resume_text),
+                "resume_summary": resume_summary,
+                "resume_text": resume_text,
                 "project_experience": _clean(request.project_experience),
                 "interview_goal": _clean(request.interview_goal),
             }.items()
@@ -3415,13 +1982,13 @@ def _recharge_target_user_id(context: RequestContext, target_user_id: str | None
     return cleaned
 
 
-async def _ensure_resume_access(
+async def _load_owned_resume(
     resume_id: str | None,
     storage: ObjectStorage,
     context: RequestContext,
-) -> None:
+) -> StoredResume | None:
     if not resume_id:
-        return
+        return None
     try:
         async with session_scope() as db:
             stored = await ResumeService(
@@ -3434,6 +2001,7 @@ async def _ensure_resume_access(
         raise HTTPException(status_code=400, detail="简历 ID 无效。") from exc
     if stored is None:
         raise HTTPException(status_code=404, detail="resume not found")
+    return stored
 
 
 def _verify_payment_signature(body: bytes, signature: str | None, secret: str) -> None:
@@ -3488,6 +2056,7 @@ async def _persist_interview_result(
     tenant_id: str,
     user_id: str,
     plan_task_id: str | None = None,
+    interviewer_kit_id: str | None = None,
 ) -> None:
     guardrails = [finding.message for finding in result.guardrail_findings or []]
     try:
@@ -3500,6 +2069,7 @@ async def _persist_interview_result(
                     state=result.state,
                     resume_id=resume_id,
                     plan_task_id=plan_task_id,
+                    interviewer_kit_id=interviewer_kit_id,
                 )
             await service.persist_turn(
                 session_id=session_id,
@@ -3511,6 +2081,7 @@ async def _persist_interview_result(
                 fallback_used=result.fallback_used,
                 guardrails=guardrails,
                 plan_task_id=plan_task_id,
+                interviewer_kit_id=interviewer_kit_id,
             )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"面试记录持久化失败：{exc}") from exc
@@ -3574,6 +2145,7 @@ async def _get_or_restore_session(session_id: str, tenant_id: str, user_id: str)
         model_id=model_id,
         resume_id=record.get("resume_id"),
         plan_task_id=record.get("plan_task_id"),
+        interviewer_kit_id=record.get("interviewer_kit_id"),
     )
     sessions[session_id] = restored
     return restored
@@ -3895,13 +2467,8 @@ async def _build_dashboard_advice_provider(db, context) -> tuple:
 
         from langchain_core.messages import HumanMessage, SystemMessage
 
-        system = (
-            "你是备考教练。根据用户今日学习数据，给一句具体、有鼓励性的中文建议（不超过 40 字），"
-            "并给一个 2-8 字的推荐动作。只输出 JSON 对象，不要代码块："
-            '{"advice": "一句话建议", "action": "推荐动作"}'
-        )
         response = llm.invoke([
-            SystemMessage(content=system),
+            SystemMessage(content=dashboard_advice_system_prompt()),
             HumanMessage(content=_compact_dashboard_snapshot(snapshot)),
         ])
         raw = getattr(response, "content", response)
@@ -3993,98 +2560,6 @@ def _settings_response(settings: dict | None) -> UserSettingsResponse:
     return UserSettingsResponse(default_interview_mode=mode)
 
 
-def _grade_practice_attempt(question: dict, user_answer: str) -> dict:
-    answer = (user_answer or "").strip()
-    reference_answer = str(question.get("answer") or "").strip()
-    explanation = str(question.get("explanation") or "").strip()
-    choices = question.get("choices") if isinstance(question.get("choices"), list) else []
-    if not answer:
-        return {
-            "correct": False if reference_answer else None,
-            "score": 0,
-            "feedback": "还没有作答，先写出你的判断或答题思路。",
-            "reference_answer": reference_answer or "开放题",
-            "explanation": explanation or "暂无解析。",
-            "suggestions": ["先给结论", "补充关键依据", "对照解析复盘遗漏点"],
-        }
-
-    if choices and reference_answer:
-        normalized_answer = _normalize_choice_answer(answer)
-        normalized_reference = _normalize_choice_answer(reference_answer)
-        correct = normalized_answer == normalized_reference
-        return {
-            "correct": correct,
-            "score": 100 if correct else 0,
-            "feedback": "回答正确。" if correct else "答案不一致，建议回看题干限定条件和选项差异。",
-            "reference_answer": reference_answer,
-            "explanation": explanation or "暂无解析。",
-            "suggestions": ["定位题干关键词", "排除绝对化或偷换概念选项", "复做同题型 2-3 道巩固方法"],
-        }
-
-    reference_text = " ".join(part for part in [reference_answer, explanation] if part)
-    overlap = _keyword_overlap(answer, reference_text)
-    score = min(100, max(20, int(overlap * 100))) if reference_text else 60
-    if score >= 75:
-        feedback = "要点覆盖较充分，可以继续优化表达结构和案例证据。"
-    elif score >= 45:
-        feedback = "覆盖了部分要点，但还需要补足关键步骤、指标或依据。"
-    else:
-        feedback = "回答和参考要点重合较少，建议先按结论、依据、步骤、风险重新组织。"
-    return {
-        "correct": None,
-        "score": score,
-        "feedback": feedback,
-        "reference_answer": reference_answer or "开放题",
-        "explanation": explanation or "暂无解析。",
-        "suggestions": ["先讲结论，再讲依据", "补充具体步骤或项目例子", "复盘遗漏关键词并重答一次"],
-    }
-
-
-def _normalize_choice_answer(value: str) -> str:
-    cleaned = value.strip().upper()
-    match = re.search(r"[A-D]", cleaned)
-    return match.group(0) if match else cleaned
-
-
-def _keyword_overlap(answer: str, reference: str) -> float:
-    answer_terms = _practice_terms(answer)
-    reference_terms = _practice_terms(reference)
-    if not reference_terms:
-        return 0.6
-    return len(answer_terms & reference_terms) / len(reference_terms)
-
-
-def _practice_terms(text: str) -> set[str]:
-    lowered = text.lower()
-    ascii_terms = set(re.findall(r"[a-z0-9_+#.-]{2,}", lowered))
-    chinese_terms = set(re.findall(r"[\u4e00-\u9fff]{2,6}", lowered))
-    stopwords = {"需要", "可以", "进行", "说明", "回答", "问题", "建议", "重点", "通过", "结合"}
-    return {term for term in ascii_terms | chinese_terms if term not in stopwords}
-
-
-def _default_job_title(job_type: str) -> str:
-    return {
-        "workflow": "复杂任务编排演示",
-        "evaluation": "AI 工程能力质量评估",
-        "multi_agent": "多 Agent 协作演示",
-    }.get(job_type, "后台任务")
-
-
-def _eval_run_to_dict(run: EvalRunModel) -> dict:
-    return {
-        "id": str(run.id),
-        "tenant_id": run.tenant_id,
-        "user_id": run.user_id,
-        "dataset_id": str(run.dataset_id) if run.dataset_id else None,
-        "job_id": str(run.job_id) if run.job_id else None,
-        "name": run.name,
-        "status": run.status,
-        "metrics": run.metrics_json,
-        "created_at": run.created_at.isoformat(),
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
-    }
-
-
 def _payment_order_response(order) -> PaymentOrderResponse:
     metadata = order.metadata or {}
     return PaymentOrderResponse(
@@ -4092,6 +2567,8 @@ def _payment_order_response(order) -> PaymentOrderResponse:
         user_id=order.user_id,
         amount_credits=str(micros_to_credits(order.amount_micros)),
         amount_micros=order.amount_micros,
+        credited_amount=str(micros_to_credits(order.credited_amount_micros)),
+        credited_amount_micros=order.credited_amount_micros,
         payment_provider=order.payment_provider,
         external_order_id=order.external_order_id,
         status=order.status,
@@ -4163,157 +2640,6 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-def _review_plan_to_response(plan) -> ReviewPlanResponse:
-    phases = [
-        ReviewPhaseResponse(
-            id=str(p.id),
-            phase_key=p.phase_key,
-            title=p.title,
-            range_label=p.range_label,
-            goal=p.goal,
-            sort_order=p.sort_order,
-        )
-        for p in sorted(plan.phases, key=lambda x: x.sort_order)
-    ]
-    progresses = [
-        _progress_to_response(pr)
-        for pr in (plan.progress_records or [])
-    ]
-    day_models = sorted(plan.days, key=lambda d: d.sort_order)
-    days: list[ReviewDayResponse] = []
-    for d in day_models:
-        tasks = [
-            ReviewTaskResponse(
-                id=str(t.id),
-                task_key=t.task_key,
-                title=t.title,
-                tags=list(t.tags_json or []),
-                critical=bool(t.critical),
-                simulation=bool(t.simulation),
-                docs=list(t.docs_json or []),
-                reason=t.reason,
-                source=t.source or "plan",
-                link_type=t.link_type or "none",
-                link_payload=dict(t.link_payload_json or {}),
-                sort_order=t.sort_order,
-            )
-            for t in sorted(d.tasks or [], key=lambda x: x.sort_order)
-        ]
-        days.append(ReviewDayResponse(
-            id=str(d.id),
-            day_key=d.day_key,
-            day_label=d.day_label,
-            phase_key=d.phase_key,
-            title=d.title,
-            acceptance=d.acceptance,
-            scheduled_date=d.scheduled_date.isoformat() if d.scheduled_date else None,
-            sort_order=d.sort_order,
-            tasks=tasks,
-        ))
-    intro_scripts = [
-        {
-            "id": str(m.id),
-            "script_key": m.script_key,
-            "label": m.label,
-            "duration_seconds": m.duration_seconds,
-            "scenario": m.scenario,
-            "text": m.text,
-            "sort_order": m.sort_order,
-        }
-        for m in sorted(plan.intro_scripts or [], key=lambda x: x.sort_order)
-    ]
-    star_cards = [
-        {
-            "id": str(m.id),
-            "card_key": m.card_key,
-            "title": m.title,
-            "tag": m.tag,
-            "background": m.background,
-            "challenge": m.challenge,
-            "solution": m.solution,
-            "result": m.result,
-            "sort_order": m.sort_order,
-        }
-        for m in sorted(plan.star_cards or [], key=lambda x: x.sort_order)
-    ]
-    a4_memory = [
-        {
-            "id": str(m.id),
-            "content": m.content,
-            "side": m.side,
-            "sort_order": m.sort_order,
-        }
-        for m in sorted(plan.a4_memory or [], key=lambda x: x.sort_order)
-    ]
-    return ReviewPlanResponse(
-        id=str(plan.id),
-        plan_key=plan.plan_key,
-        title=plan.title,
-        subtitle=plan.subtitle,
-        description=plan.description,
-        status=plan.status,
-        source_root=plan.source_root or "",
-        source_documents=list(plan.source_documents_json or []),
-        commercial_positioning=list(plan.commercial_positioning_json or []),
-        phases=phases,
-        days=days,
-        progresses=progresses,
-        intro_scripts=intro_scripts,
-        star_cards=star_cards,
-        a4_memory=a4_memory,
-        metadata=dict(plan.metadata_json or {}),
-        created_at=plan.created_at.isoformat() if plan.created_at else None,
-        updated_at=plan.updated_at.isoformat() if plan.updated_at else None,
-    )
-
-
-def _progress_to_response(progress) -> ReviewProgressResponse:
-    return ReviewProgressResponse(
-        id=str(progress.id),
-        plan_id=str(progress.plan_id),
-        day_id=str(progress.day_id),
-        task_id=str(progress.task_id),
-        done=bool(progress.done),
-        note=progress.note,
-        elapsed_minutes=progress.elapsed_minutes,
-        mastery_score=progress.mastery_score,
-        done_at=progress.done_at.isoformat() if progress.done_at else None,
-        created_at=progress.created_at.isoformat() if progress.created_at else None,
-        updated_at=progress.updated_at.isoformat() if progress.updated_at else None,
-    )
-
-
-def _material_item_to_dict(kind: str, item) -> dict:
-    if kind == "intro_scripts":
-        return {
-            "id": str(item.id),
-            "script_key": item.script_key,
-            "label": item.label,
-            "duration_seconds": item.duration_seconds,
-            "scenario": item.scenario,
-            "text": item.text,
-            "sort_order": item.sort_order,
-        }
-    if kind == "star_cards":
-        return {
-            "id": str(item.id),
-            "card_key": item.card_key,
-            "title": item.title,
-            "tag": item.tag,
-            "background": item.background,
-            "challenge": item.challenge,
-            "solution": item.solution,
-            "result": item.result,
-            "sort_order": item.sort_order,
-        }
-    return {
-        "id": str(item.id),
-        "content": item.content,
-        "side": item.side,
-        "sort_order": item.sort_order,
-    }
-
-
 def _generate_plan_description(request: PlanGenerateRequest) -> str:
     parts = [f"目标岗位：{request.target_role or '通用面试'}"]
     if request.seniority:
@@ -4333,6 +2659,17 @@ def _generate_day_title(
     focus_areas: list[str] | None,
 ) -> str:
     role_tag = target_role.strip() if target_role else ""
+    if _is_agent_plan(target_role, focus_areas):
+        if phase_key == "p1":
+            base = ["Agent 岗位定位与项目主线", "大模型基础与上下文工程", "ReAct 循环、工具调用与 MCP"]
+        elif phase_key == "p2":
+            base = ["RAG、Memory 与知识系统", "Coding Agent：Claude Code / Codex 架构", "Agent 安全、沙箱与权限"]
+        elif phase_key == "p3":
+            base = ["Agent 评测、观测与线上质量", "生产项目接入与商业化交付", "Agent 系统设计全链路模拟"]
+        else:
+            base = ["多轮面试高频追问", "最终 A4 速记与全真模拟", "终面表达与状态管理"]
+        pick_idx = min(len(base) - 1, (day_in_phase - 1) * len(base) // max(1, phase_total_days))
+        return base[pick_idx]
     if phase_key == "p1":
         base = ["简历与自我介绍背诵", "基础素材通读", "简历项目与材料整理"]
     elif phase_key == "p2":
@@ -4343,7 +2680,7 @@ def _generate_day_title(
         base = ["A4 速记单整理", "定制公司面复盘", "状态调整与错题回顾"]
     pick_idx = min(len(base) - 1, (day_in_phase - 1) * len(base) // max(1, phase_total_days))
     title = base[pick_idx]
-    if role_tag and "AI" in role_tag or (focus_areas and any("AI" in f for f in focus_areas)):
+    if (role_tag and "AI" in role_tag) or (focus_areas and any("AI" in f for f in focus_areas)):
         pass
     return title
 
@@ -4354,10 +2691,18 @@ def _generate_day_tasks(
     phase_key: str,
     day_offset: int,
     phase_days: int,
+    target_role: str | None,
     focus_areas: list[str] | None,
 ) -> list[dict]:
     tasks: list[dict] = []
     focus = set(f.lower() for f in (focus_areas or []))
+    if _is_agent_plan(target_role, focus_areas):
+        return _generate_agent_day_tasks(
+            day_key=day_key,
+            phase_key=phase_key,
+            day_offset=day_offset,
+            phase_days=phase_days,
+        )
     if phase_key == "p1":
         tasks.append({"id": f"{day_key}-resume", "title": "简历内容通读并标记数据口径", "tags": ["简历"], "critical": True})
         tasks.append({"id": f"{day_key}-intro", "title": "自我介绍框架梳理，录音 1 遍", "tags": ["开场"], "critical": day_offset == 0})
@@ -4379,6 +2724,128 @@ def _generate_day_tasks(
         tasks.append({"id": f"{day_key}-only-wrong", "title": "只刷错题本，不刷新题", "tags": ["错题"], "critical": True})
         tasks.append({"id": f"{day_key}-rest", "title": "早睡 + 状态管理，比刷题更重要", "tags": ["心理"]})
     return tasks
+
+
+def _is_agent_plan(target_role: str | None, focus_areas: list[str] | None) -> bool:
+    text = " ".join([target_role or "", *(focus_areas or [])]).lower()
+    return any(key in text for key in ("agent", "ai agent", "coding agent", "大模型", "llm", "ai native", "rag"))
+
+
+def _generate_agent_day_tasks(
+    *,
+    day_key: str,
+    phase_key: str,
+    day_offset: int,
+    phase_days: int,
+) -> list[dict]:
+    topics_by_phase = {
+        "p1": [
+            (
+                "Agent 开发岗位画像、自我介绍与项目证据链",
+                "准备 HR 面和技术一面的开场，讲清为什么你能交付 Agent 生产系统。",
+                "用 90 秒讲清岗位定位、三条项目证据和一个生产指标。",
+            ),
+            (
+                "大模型基础：Token、Transformer、上下文窗口与结构化输出",
+                "补齐 Agent 开发必须解释的大模型底层概念，避免只停留在 API 调用。",
+                "能解释 token 成本、上下文污染、结构化输出失败和降级策略。",
+            ),
+            (
+                "ReAct 循环、Tool Calling、MCP 与 Agent Runtime",
+                "掌握 Agent 从思考到行动的核心控制流和工具协议。",
+                "能画出 Reason-Act-Observe 循环、工具 schema、权限校验和 observation 回填。",
+            ),
+        ],
+        "p2": [
+            (
+                "RAG 深挖：切分、召回、重排、引用与权限前置过滤",
+                "RAG 是 Agent 获取私有事实的核心能力，面试会频繁追问质量和权限。",
+                "能设计企业知识库或代码库 RAG，并说明召回、groundedness 和引用指标。",
+            ),
+            (
+                "Memory 与上下文工程：短期记忆、任务轨迹、长期记忆",
+                "多轮 Agent 能否稳定依赖上下文分层、摘要和记忆治理。",
+                "能说明记忆写入条件、TTL、租户隔离、敏感信息处理和恢复流程。",
+            ),
+            (
+                "Coding Agent 源码学习：Claude Code、Codex CLI、patch 与沙箱",
+                "Agent 开发岗位很容易追问真实工具链和源码阅读能力。",
+                "能讲清 Coding Agent 从 CLI 输入到读取项目、调用工具、生成 patch、运行测试的链路。",
+            ),
+            (
+                "Agent 安全：Prompt Injection、权限、沙箱、审批与审计",
+                "生产 Agent 最大风险来自不可信内容和工具副作用。",
+                "能设计工具风险分级、审批、脱敏、审计回放和红队评测样本。",
+            ),
+        ],
+        "p3": [
+            (
+                "Agent 评测体系：离线回放、LLM-as-Judge、人工抽检与质量门禁",
+                "多轮面试会要求你证明 Agent 真的有效，而不是只展示 demo。",
+                "能给出 eval case 结构、评分 rubric、上线门禁和线上失败回流机制。",
+            ),
+            (
+                "生产接入：模型网关、任务队列、成本预算、灰度、SLA 与 OnCall",
+                "商业化交付必须解释稳定性、成本、安全和可运维性。",
+                "能讲清从 MVP 到灰度上线的架构、指标、告警和回滚路径。",
+            ),
+            (
+                "系统设计模拟：从 0 到 1 设计企业 Agent 平台",
+                "训练二面/三面的完整架构表达和取舍能力。",
+                "能在 20 分钟内完成模块图、数据流、权限流、失败流和指标流说明。",
+            ),
+            (
+                "项目深挖模拟：把个人经历改造成 Agent 岗 STAR 案例",
+                "把你的真实经历转成面试官能验证的技术证据。",
+                "能回答本人职责、关键决策、失败处理、量化结果和复盘。",
+            ),
+        ],
+        "p4": [
+            (
+                "Agent 高频追问清单：工具、RAG、Memory、安全、评测、上线",
+                "最后阶段集中压缩所有高频题，准备交叉面和主管面。",
+                "能连续回答 20 个追问，并把每题压缩到 60-90 秒。",
+            ),
+            (
+                "最终 A4 速记：架构图、指标表、风险表和源码阅读路径",
+                "把复习内容压成临场可用的提纲。",
+                "能凭一页纸复述 Agent 架构、生产指标、风险和项目证据。",
+            ),
+            (
+                "全真多轮模拟：HR 面、技术面、系统设计面与终面表达",
+                "模拟多轮面试节奏，减少临场卡顿。",
+                "能完成开场、项目深挖、系统设计、反问和收尾表达。",
+            ),
+        ],
+    }
+    topics = topics_by_phase.get(phase_key) or topics_by_phase["p1"]
+    topic, reason, acceptance = topics[min(day_offset, len(topics) - 1)]
+    return [
+        {
+            "id": f"{day_key}-study",
+            "title": f"复习精讲：{topic}",
+            "tags": ["Agent", "复习精讲", phase_key],
+            "critical": True,
+            "reason": reason,
+        },
+        {
+            "id": f"{day_key}-architecture",
+            "title": f"架构拆解：{topic} 的生产落地链路",
+            "tags": ["系统设计", "生产化", "Agent"],
+            "critical": phase_key in {"p2", "p3"},
+            "reason": f"{topic} 需要能落到真实生产项目接入，而不是只会讲概念。",
+        },
+        {
+            "id": f"{day_key}-interview",
+            "title": f"面试追问：{topic}",
+            "tags": ["多轮面试", "追问", "Agent"],
+            "simulation": phase_key in {"p3", "p4"},
+            "critical": phase_key in {"p3", "p4"},
+            "reason": acceptance,
+            "link_type": "interview" if phase_key in {"p3", "p4"} else "none",
+            "link_payload": {"mode": "interviewer", "focus": topic} if phase_key in {"p3", "p4"} else {},
+        },
+    ]
 
 
 app = create_app()

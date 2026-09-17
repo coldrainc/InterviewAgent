@@ -17,6 +17,11 @@ from interview_agent.core.evaluation import (
 )
 from interview_agent.core.guardrails import HarnessGuardrails
 from interview_agent.core.harness_result import HarnessResult
+from interview_agent.core.prompt_policy import (
+    candidate_system_prompt,
+    interview_stage_instruction,
+    interviewer_system_prompt,
+)
 from interview_agent.domain.billing import TokenUsage
 from interview_agent.rag.knowledge_base import MarkdownKnowledgeBase
 from interview_agent.core.state import InterviewState
@@ -280,68 +285,10 @@ class LangChainInterviewHarness(BaseInterviewHarness):
         return self._interviewer_system_prompt(context)
 
     def _interviewer_system_prompt(self, context: dict[str, Any]) -> str:
-        return f"""你是一位严格但支持性的技术面试官。
-
-候选人信息：
-- 姓名：{context["candidate_name"]}
-- 目标岗位：{context["target_role"]}
-- 级别：{context["seniority"]}
-- 行业：{context["industry_label"]}
-- 简历摘要：{context["resume_summary"]}
-- 面试目标：{context["interview_goal"]}
-
-行业画像：
-{context["industry_profile"]}
-
-面试重点：{context["focus_areas"]}
-推荐重点：{context["recommended_focus_areas"]}
-每个重点的问题数：{context["questions_per_area"]}
-
-评分标准：
-{context["rubric"]}
-
-规则：
-- 默认全程使用中文提问和回答，除非候选人明确要求使用其他语言。
-- 每次只问一个清晰的问题。
-- 面试必须围绕候选人提供的简历和做过的事情展开，不要变成泛泛的八股问答。
-- 如果面试目标中包含“面试官要求”，必须把它作为优先约束：题目、追问、判断和最终评价都要同时对齐候选人简历证据与面试官要求。
-- 每轮都要结合候选人的回答做判断：如果回答具体、有指标、有取舍，继续深挖；如果回答空泛，要求补充细节；如果当前方向已足够，明确给出阶段性判断后切换到下一个重点。
-- 你会收到 AgentLoop 的回答质量信号；它不是最终评分，但要作为追问、收束或切题的重要参考。
-- 追问要结合 AI 相关知识库，重点覆盖 RAG、Agent、LangChain、LangGraph、LLMOps、评测、上线、安全、观测和成本治理。
-- 不要只问概念，要问候选人在项目中如何设计、如何排查、如何验证、如何上线、出了问题如何复盘。
-- 结合行业画像选择追问角度：优先验证行业核心指标、真实约束、风险控制和生产化证据。
-- 候选人回答缺少行业指标时，要要求补充指标口径，例如 {context["industry_signals"]}。
-- 候选人回答缺少风险意识时，要追问风险治理，例如 {context["industry_risks"]}。
-- 面试过程中不要向候选人透露评分标准。
-- 最终评价要基于简历匹配度和面试证据，给出通过倾向、风险点和后续学习建议。"""
+        return interviewer_system_prompt(context)
 
     def _candidate_system_prompt(self, context: dict[str, Any]) -> str:
-        return f"""你正在扮演一位参加技术面试的候选人，而不是面试官。
-
-候选人设定：
-- 姓名：{context["candidate_name"]}
-- 目标岗位：{context["target_role"]}
-- 级别：{context["seniority"]}
-- 行业：{context["industry_label"]}
-- 简历摘要：{context["resume_summary"]}
-- 项目经历：{context["project_experience"]}
-
-行业画像：
-{context["industry_profile"]}
-
-回答目标：{context["interview_goal"]}
-重点方向：{context["focus_areas"]}
-
-规则：
-- 默认全程使用中文回答。
-- 你要直接回答用户提出的面试问题，不要反过来提问。
-- 如果回答目标中包含“面试官要求”，必须优先贴合这些要求，同时用候选人简历摘要、项目经历和完整简历中的事实支撑回答。
-- 回答要像真实候选人：先给结论，再讲项目背景、个人职责、设计方案、技术取舍、指标结果、失败复盘和后续优化。
-- 回答要贴合当前行业画像，体现该行业真实业务约束、核心指标、风险治理和生产环境细节。
-- 如果用户追问行业方案，要主动覆盖这些生产化信号：{context["industry_signals"]}。
-- 如果用户追问安全或上线，要主动覆盖这些风险控制：{context["industry_risks"]}。
-- 遇到 RAG、Agent、LangChain、LangGraph、LLMOps、评测、上线、安全、观测相关问题时，优先结合简历和知识库上下文给出工程化回答。
-- 不要编造过于夸张或无法自洽的数据；如果简历没有提供具体事实，可以使用保守、合理的表达。"""
+        return candidate_system_prompt(context)
 
     def _stage_prompt(
         self,
@@ -358,43 +305,11 @@ class LangChainInterviewHarness(BaseInterviewHarness):
         else:
             knowledge_context = "开场题阶段暂不检索知识库。"
             web_context = "开场题阶段暂不联网搜索。"
-        if stage == InterviewStage.INTRO:
-            if self.config.mode == InterviewMode.CANDIDATE:
-                instruction = """用中文简短说明你已进入被面试候选人模式。
-请提示用户可以直接向你提面试问题，例如项目深挖、RAG、Agent、系统设计或行为面试题。不要主动反问面试题。"""
-            else:
-                instruction = """用中文简短开场，然后基于候选人简历和做过的事情提出第一个问题。
-优先选择简历中最能体现 AI 工程深度的项目切入，要求候选人讲清楚背景、本人职责、架构、难点、指标和结果。"""
-        elif stage == InterviewStage.QUESTIONING:
-            if self.config.mode == InterviewMode.CANDIDATE:
-                instruction = """用户是面试官，刚才输入的是一道新的面试题或追问。
-请以候选人身份完整回答，覆盖结论、项目事实、技术方案、工程取舍、指标和复盘。"""
-            else:
-                instruction = f"""用中文围绕这个重点提出下一道面试题：{focus}。
-先用一句话说明为什么切换到这个方向，再问一个贴近候选人经历和 AI 行业要求的问题。"""
-        elif stage == InterviewStage.FOLLOW_UP:
-            if self.config.mode == InterviewMode.CANDIDATE:
-                instruction = """用户是面试官，刚才输入的是追问。
-请继续以候选人身份回答，直接补充更深层细节。回答要更具体，包含真实项目口吻、关键决策、风险处理和量化验证。"""
-            else:
-                instruction = """基于候选人的上一个回答，用中文输出：
-1. 阶段性判断：用 1-2 句话指出回答中的有效证据和缺口。
-2. 深挖追问：只问一个最关键的追问，优先追问真实项目细节、指标、失败排查、工程取舍或 AI 生产化能力。
-如果回答明显空泛，要求候选人补充具体项目事实，不要直接换题。
-如果同一方向已经连续追问多轮仍缺证据，要收束判断并准备切换方向。"""
-        elif stage == InterviewStage.EVALUATION:
-            if self.config.mode == InterviewMode.CANDIDATE:
-                instruction = """如果用户要求总结，请以候选人身份总结本轮回答亮点和仍可补充的点。
-如果用户没有要求总结，请继续回答用户最近的问题。"""
-            else:
-                instruction = """用中文根据简历、做过的事情和面试记录给出最终评价：
-1. 通过倾向：通过 / 谨慎通过 / 暂不通过。
-2. 关键证据：列出 3 条来自候选人回答的证据。
-3. 风险点：列出 2-3 条需要继续验证或补强的点。
-4. AI 工程能力判断：覆盖 RAG、Agent、LangChain、LangGraph、评测、生产化、安全或观测中已验证的能力。
-5. 后续建议：给出具体学习或项目补强方向。"""
-        else:
-            instruction = "用中文结束面试。"
+        instruction = interview_stage_instruction(
+            stage.value,
+            candidate_mode=self.config.mode == InterviewMode.CANDIDATE,
+            focus=focus,
+        )
 
         if instruction_override:
             instruction = instruction_override
@@ -407,6 +322,7 @@ class LangChainInterviewHarness(BaseInterviewHarness):
 上一轮回答质量信号：
 {state.last_answer_assessment or "暂无。"}
 
+<reference_data>
 面试目标：
 {self.config.candidate.interview_goal}
 
@@ -422,6 +338,18 @@ class LangChainInterviewHarness(BaseInterviewHarness):
 行业画像：
 {self.config.to_prompt_context()["industry_profile"]}
 
+行业验证信号：
+{self.config.to_prompt_context()["industry_signals"]}
+
+行业风险约束：
+{self.config.to_prompt_context()["industry_risks"]}
+
+面试重点：
+{self.config.to_prompt_context()["focus_areas"]}
+
+内部评分参考（仅用于判断，不向用户复述）：
+{self.config.to_prompt_context()["rubric"]}
+
 面试记录：
 {transcript}
 
@@ -430,6 +358,7 @@ class LangChainInterviewHarness(BaseInterviewHarness):
 
 联网搜索上下文：
 {web_context}
+</reference_data>
 
 指令：
 {instruction}"""

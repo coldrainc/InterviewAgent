@@ -1,4 +1,7 @@
 import { Activity, Bot, ClipboardCheck, GitBranch, RefreshCw, Square, Zap } from "lucide-react";
+import { LearningReliabilityPanel } from "../../features/operations/LearningReliabilityPanel";
+import { redactSensitiveText } from "../../utils/productSafety";
+import { InfiniteScrollSentinel } from "../common/InfiniteScrollSentinel";
 
 const statusLabels = {
   pending: "等待中",
@@ -22,18 +25,20 @@ export function OperationsCenter({
   onRunEvaluation,
   onRunMultiAgent,
   onCancelJob,
+  onLoadMore,
   onBack
 }) {
   const jobs = opsState.jobs || [];
   const traces = opsState.traces || [];
+  const evalRuns = opsState.evalRuns || [];
   const metrics = opsState.metrics || {};
   return (
     <section className="ops-center">
       <div className="ops-hero">
         <div>
-          <span className="eyebrow">AI Operations</span>
+          <span className="eyebrow">训练中心</span>
           <h3>训练与评估工作台</h3>
-          <p>把面试复盘、刷题计划、多 Agent 审核、质量评估和运行观测放到同一个工作台里。</p>
+          <p>集中完成面试复盘、刷题计划、协作审核与训练质量检查。</p>
         </div>
         <div className="setup-hero-actions">
           <button type="button" className="secondary-action inline" onClick={onBack}>返回工作台</button>
@@ -69,10 +74,12 @@ export function OperationsCenter({
         <MetricCard icon={<Activity size={17} />} label="任务总数" value={sumCounts(metrics.job_counts)} />
         <MetricCard icon={<Zap size={17} />} label="运行中" value={metrics.job_counts?.running || 0} />
         <MetricCard icon={<ClipboardCheck size={17} />} label="已完成" value={metrics.job_counts?.succeeded || 0} />
-        <MetricCard icon={<Bot size={17} />} label="Trace" value={sumCounts(metrics.trace_counts)} />
+        <MetricCard icon={<Bot size={17} />} label="处理记录" value={traces.length} />
       </div>
 
       <div className="ops-grid">
+        <LearningReliabilityPanel metrics={metrics.learning} />
+
         <section className="ops-block wide">
           <div className="panel-heading">
             <span><GitBranch size={15} /> 后台任务</span>
@@ -84,20 +91,32 @@ export function OperationsCenter({
             )) : (
               <p className="resume-hint">暂无任务。可以先生成一次面试复盘或刷题计划。</p>
             )}
+            <InfiniteScrollSentinel
+              hasMore={Boolean(opsState.pages?.jobs)}
+              loading={opsState.loadingKinds?.includes("jobs")}
+              error=""
+              onLoadMore={() => onLoadMore?.("jobs")}
+            />
           </div>
         </section>
 
         <section className="ops-block">
           <div className="panel-heading">
-            <span><Activity size={15} /> AgentOps Trace</span>
+            <span><Activity size={15} /> 最近处理记录</span>
             <small>{traces.length} 条</small>
           </div>
           <div className="ops-list compact">
-            {traces.length ? traces.slice(0, 8).map((trace) => (
+            {traces.length ? traces.map((trace) => (
               <TraceRow key={trace.id} trace={trace} />
             )) : (
-              <p className="resume-hint">Trace 会在工作流、评测、多 Agent 执行时自动产生。</p>
+              <p className="resume-hint">完成复盘、评估或协作审核后，这里会显示处理结果。</p>
             )}
+            <InfiniteScrollSentinel
+              hasMore={Boolean(opsState.pages?.traces)}
+              loading={opsState.loadingKinds?.includes("traces")}
+              error=""
+              onLoadMore={() => onLoadMore?.("traces")}
+            />
           </div>
         </section>
 
@@ -106,13 +125,22 @@ export function OperationsCenter({
             <span><ClipboardCheck size={15} /> 质量评估</span>
           </div>
           <p className="resume-hint">
-            质量评估会从最近会话和题库中生成用例，记录得分、通过率、风险项和 AgentOps Trace。
+            质量评估会结合最近会话和题库检查回答质量，给出得分、风险项和改进建议。
           </p>
           <div className="ops-capability-list">
             <span>RAG 评测</span>
             <span>Agent 评测</span>
             <span>回归基线</span>
             <span>风险复核</span>
+          </div>
+          <div className="ops-list compact">
+            {evalRuns.map((run) => <EvalRunRow key={run.id} run={run} />)}
+            <InfiniteScrollSentinel
+              hasMore={Boolean(opsState.pages?.evalRuns)}
+              loading={opsState.loadingKinds?.includes("evalRuns")}
+              error=""
+              onLoadMore={() => onLoadMore?.("evalRuns")}
+            />
           </div>
         </section>
       </div>
@@ -137,7 +165,7 @@ function JobRow({ job, onCancel }) {
       <div>
         <strong>{job.title}</strong>
         <span>{jobTypeLabels[job.job_type] || job.job_type} · {formatDate(job.updated_at)}</span>
-        {job.result?.summary && <p>{job.result.summary}</p>}
+        {job.result?.summary && <p>{redactSensitiveText(job.result.summary)}</p>}
         {Number.isFinite(job.result?.readiness_score) && (
           <p>准备度 {job.result.readiness_score} 分</p>
         )}
@@ -146,15 +174,15 @@ function JobRow({ job, onCancel }) {
         )}
         {Array.isArray(job.result?.next_actions) && job.result.next_actions.length > 0 && (
           <ul className="ops-next-actions">
-            {job.result.next_actions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+            {job.result.next_actions.slice(0, 3).map((item) => <li key={item}>{redactSensitiveText(item)}</li>)}
           </ul>
         )}
         {Array.isArray(job.result?.recommendations) && job.result.recommendations.length > 0 && (
           <ul className="ops-next-actions">
-            {job.result.recommendations.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+            {job.result.recommendations.slice(0, 3).map((item) => <li key={item}>{redactSensitiveText(item)}</li>)}
           </ul>
         )}
-        {job.error_message && <p className="error-text">{job.error_message}</p>}
+        {job.error_message && <p className="error-text">任务未能完成，请稍后重试。</p>}
       </div>
       <div className="ops-row-actions">
         <span className={`status-pill ${job.status}`}>{statusLabels[job.status] || job.status}</span>
@@ -172,10 +200,22 @@ function TraceRow({ trace }) {
   return (
     <article className="ops-row compact">
       <div>
-        <strong>{trace.title}</strong>
-        <span>{trace.trace_type} · {formatDate(trace.created_at)}</span>
+        <strong>{redactSensitiveText(trace.title)}</strong>
+        <span>{formatDate(trace.created_at)}</span>
       </div>
       <span className={`status-pill ${trace.status}`}>{statusLabels[trace.status] || trace.status}</span>
+    </article>
+  );
+}
+
+function EvalRunRow({ run }) {
+  return (
+    <article className="ops-row compact">
+      <div>
+        <strong>{redactSensitiveText(run.name || "质量评估")}</strong>
+        <span>{formatDate(run.created_at)}</span>
+      </div>
+      <span className={`status-pill ${run.status}`}>{statusLabels[run.status] || run.status}</span>
     </article>
   );
 }

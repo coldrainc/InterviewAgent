@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,7 +83,7 @@ class InterviewReportRepository:
             return None
         return _report_to_dict(model)
 
-    async def list_reports(self, limit: int = 50) -> list[dict]:
+    async def list_reports(self, limit: int = 50, offset: int = 0) -> list[dict]:
         result = await self.session.execute(
             select(InterviewReportModel)
             .options(selectinload(InterviewReportModel.session))
@@ -93,8 +93,37 @@ class InterviewReportRepository:
             )
             .order_by(InterviewReportModel.created_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return [_report_to_dict(model) for model in result.scalars().all()]
+
+    async def trend_stats(self) -> dict:
+        filters = (
+            InterviewReportModel.tenant_id == self.tenant_id,
+            InterviewReportModel.user_id == self.user_id,
+        )
+        totals = await self.session.execute(
+            select(
+                func.count(InterviewReportModel.id),
+                func.count(InterviewReportModel.total_score),
+                func.avg(InterviewReportModel.total_score),
+            ).where(*filters)
+        )
+        total_reports, scored_reports, average_score = totals.one()
+        recent_result = await self.session.execute(
+            select(InterviewReportModel.total_score)
+            .where(*filters, InterviewReportModel.total_score.is_not(None))
+            .order_by(InterviewReportModel.created_at.desc())
+            .limit(5)
+        )
+        recent_scores = [int(score) for score in recent_result.scalars().all()]
+        return {
+            "total_reports": int(total_reports or 0),
+            "scored_reports": int(scored_reports or 0),
+            "average_score": round(float(average_score), 1) if average_score is not None else None,
+            "recent_average": round(sum(recent_scores) / len(recent_scores), 1) if recent_scores else None,
+            "latest_score": recent_scores[0] if recent_scores else None,
+        }
 
 
 def _report_to_dict(model: InterviewReportModel) -> dict:

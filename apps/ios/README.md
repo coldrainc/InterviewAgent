@@ -15,6 +15,9 @@ iOS 端使用 Swift + SwiftUI。当前目录已经补齐最小 Xcode 工程，�
 3. 选择 iPhone 模拟器运行 `InterviewAgent` target。
 4. 本地默认 API：`http://127.0.0.1:8020`，配置在 `InterviewAgent/Info.plist` 的 `InterviewApiBaseURL`。
 
+Archive 前把 `InterviewApiBaseURL` 改为单服务器部署的公网 HTTPS API 地址，
+例如 `https://interview.example.com/api`；真机不能访问开发机的 `127.0.0.1`。
+
 ## Xcode 配置
 
 - iOS Deployment Target：17.0+

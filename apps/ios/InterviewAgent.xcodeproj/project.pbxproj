@@ -20,6 +20,13 @@
 		IA0000110000000000000011 /* ResumeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000012 /* ResumeView.swift */; };
 		IA0000110000000000000012 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000013 /* HistoryView.swift */; };
 		IA0000110000000000000013 /* PracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000014 /* PracticeView.swift */; };
+		IA0000110000000000000014 /* ProductModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000015 /* ProductModels.swift */; };
+		IA0000110000000000000015 /* ProductWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000016 /* ProductWorkspaceStore.swift */; };
+		IA0000110000000000000016 /* AuthGateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000017 /* AuthGateView.swift */; };
+		IA0000110000000000000017 /* TodayWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000018 /* TodayWorkspaceView.swift */; };
+		IA0000110000000000000018 /* InterviewWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000019 /* InterviewWorkspaceView.swift */; };
+		IA0000110000000000000019 /* ReviewWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000020 /* ReviewWorkspaceView.swift */; };
+		IA0000110000000000000020 /* MyWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IA0000210000000000000021 /* MyWorkspaceView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +44,13 @@
 		IA0000210000000000000012 /* ResumeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumeView.swift; sourceTree = "<group>"; };
 		IA0000210000000000000013 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		IA0000210000000000000014 /* PracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000015 /* ProductModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductModels.swift; sourceTree = "<group>"; };
+		IA0000210000000000000016 /* ProductWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductWorkspaceStore.swift; sourceTree = "<group>"; };
+		IA0000210000000000000017 /* AuthGateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthGateView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000018 /* TodayWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWorkspaceView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000019 /* InterviewWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterviewWorkspaceView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000020 /* ReviewWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewWorkspaceView.swift; sourceTree = "<group>"; };
+		IA0000210000000000000021 /* MyWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyWorkspaceView.swift; sourceTree = "<group>"; };
 		IA0000310000000000000001 /* InterviewAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InterviewAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -88,6 +102,13 @@
 				IA0000210000000000000005 /* ChatView.swift */,
 				IA0000210000000000000009 /* AccountView.swift */,
 				IA0000210000000000000014 /* PracticeView.swift */,
+				IA0000210000000000000015 /* ProductModels.swift */,
+				IA0000210000000000000016 /* ProductWorkspaceStore.swift */,
+				IA0000210000000000000017 /* AuthGateView.swift */,
+				IA0000210000000000000018 /* TodayWorkspaceView.swift */,
+				IA0000210000000000000019 /* InterviewWorkspaceView.swift */,
+				IA0000210000000000000020 /* ReviewWorkspaceView.swift */,
+				IA0000210000000000000021 /* MyWorkspaceView.swift */,
 				IA0000210000000000000012 /* ResumeView.swift */,
 				IA0000210000000000000013 /* HistoryView.swift */,
 				IA0000210000000000000010 /* SharedComponents.swift */,
@@ -173,6 +194,13 @@
 				IA0000110000000000000005 /* ChatView.swift in Sources */,
 				IA0000110000000000000008 /* AccountView.swift in Sources */,
 				IA0000110000000000000013 /* PracticeView.swift in Sources */,
+				IA0000110000000000000014 /* ProductModels.swift in Sources */,
+				IA0000110000000000000015 /* ProductWorkspaceStore.swift in Sources */,
+				IA0000110000000000000016 /* AuthGateView.swift in Sources */,
+				IA0000110000000000000017 /* TodayWorkspaceView.swift in Sources */,
+				IA0000110000000000000018 /* InterviewWorkspaceView.swift in Sources */,
+				IA0000110000000000000019 /* ReviewWorkspaceView.swift in Sources */,
+				IA0000110000000000000020 /* MyWorkspaceView.swift in Sources */,
 				IA0000110000000000000011 /* ResumeView.swift in Sources */,
 				IA0000110000000000000012 /* HistoryView.swift in Sources */,
 				IA0000110000000000000009 /* SharedComponents.swift in Sources */,

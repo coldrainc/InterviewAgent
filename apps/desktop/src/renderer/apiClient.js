@@ -1,4 +1,9 @@
 import { parseQuestionBankFile } from "./utils/questionBankParser";
+import { createInterviewerClient, createTrainingClient } from "./api/interviewTrainingClients";
+import { createLearningClient, createStudyClient } from "./api/learningClients";
+import { createPrivacyClient } from "./api/privacyClient";
+import { createAdminClient } from "./api/adminClient";
+import { createReviewSiteClient } from "./api/reviewSiteClient";
 
 const DEFAULT_API_BASE_URL = "/api";
 const TOKEN_STORAGE_KEY = "interview-agent-api-token";
@@ -8,10 +13,15 @@ const REQUEST_TIMEOUT_MS = 15000;
 const LONG_REQUEST_TIMEOUT_MS = 180000;
 const UPLOAD_TIMEOUT_MS = 60000;
 const MAX_CONCURRENT_REQUESTS = 2;
+const CLIENT_VERSION = import.meta.env.VITE_APP_VERSION || "0.1.0";
 const JSON_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 let activeRequests = 0;
 const requestQueue = [];
 let refreshInFlight = null;
+
+function clientPlatform() {
+  return electronBridge() ? "desktop" : "web";
+}
 
 function apiBaseUrl() {
   return (import.meta.env.VITE_INTERVIEW_AGENT_API_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -75,6 +85,38 @@ function setStoredAuth(response = {}) {
   }
 }
 
+function normalizePassword(value) {
+  return String(value || "").trim();
+}
+
+async function buildPasswordAuthPayload(payload = {}, { includePassword = false } = {}) {
+  const email = String(payload.email || "").trim().toLowerCase();
+  const password = normalizePassword(payload.password);
+  const { password: _password, ...rest } = payload;
+  const derived = await deriveClientPassword(email, password);
+  if (derived) {
+    const next = {
+      ...rest,
+      email,
+      password_derived: derived,
+      password_scheme: "client_sha256_v1"
+    };
+    if (includePassword) next.password = password;
+    return next;
+  }
+  return { ...rest, email, password };
+}
+
+async function deriveClientPassword(email, password) {
+  const subtle = typeof crypto !== "undefined" ? crypto.subtle : null;
+  if (!subtle || !password) return "";
+  const input = new TextEncoder().encode(`interview-agent:password:v1:${email}\u0000${password}`);
+  const digest = await subtle.digest("SHA-256", input);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function requestId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -82,11 +124,15 @@ function requestId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function buildHeaders({ hasJsonBody = false, auth = true } = {}) {
+function buildHeaders({ hasJsonBody = false, auth = true, extra = {} } = {}) {
   const token = getStoredToken();
+  const clientRequestId = requestId();
   const headers = {
     Accept: "application/json",
-    "X-Request-ID": requestId()
+    "X-Request-ID": clientRequestId,
+    "X-Client-Request-Id": clientRequestId,
+    "X-Client-Platform": clientPlatform(),
+    "X-Client-Version": CLIENT_VERSION
   };
   if (hasJsonBody) {
     headers["Content-Type"] = "application/json";
@@ -94,7 +140,7 @@ function buildHeaders({ hasJsonBody = false, auth = true } = {}) {
   if (auth && token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  return headers;
+  return { ...headers, ...extra };
 }
 
 function normalizeRoute(route) {
@@ -124,10 +170,16 @@ function unwrapApiResponse(payload, response) {
       return payload.data;
     }
     const message = payload.message || payload.error || `HTTP ${response.status}`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.code = payload.error;
+    error.details = payload.details;
+    error.status = response.status;
+    throw error;
   }
   if (!response.ok) {
-    throw new Error(payload?.detail || `HTTP ${response.status}`);
+    const error = new Error(payload?.detail || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
@@ -161,7 +213,7 @@ async function requestJson(route, options = {}, attempt = 0) {
 async function apiJson(route, options = {}) {
   const bridge = electronBridge();
   if (bridge?.apiRequest) {
-    return bridge.apiRequest(route, { method: options.method, body: options.body });
+    return bridge.apiRequest(route, { method: options.method, body: options.body, headers: options.headers });
   }
   return requestJson(route, options);
 }
@@ -198,7 +250,11 @@ async function executeJsonRequest(route, options = {}, attempt = 0) {
     const response = await fetch(url, {
       method,
       body: options.body,
-      headers: buildHeaders({ hasJsonBody, auth: options.auth !== false }),
+      headers: buildHeaders({
+        hasJsonBody,
+        auth: options.auth !== false,
+        extra: options.headers || {}
+      }),
       mode: "cors",
       credentials: "omit",
       cache: "no-store",
@@ -252,11 +308,11 @@ async function refreshAccessToken() {
   refreshInFlight = (async () => {
     const response = await fetch(`${apiBaseUrl()}/auth/refresh`, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Request-ID": requestId()
-      },
+      headers: buildHeaders({
+        hasJsonBody: true,
+        auth: false,
+        extra: { Accept: "application/json" }
+      }),
       mode: "cors",
       credentials: "omit",
       cache: "no-store",
@@ -509,7 +565,7 @@ const browserClient = {
   listModels: () => requestJson("/metadata/models"),
   getPracticeLearningPlan: () => requestJson("/practice/learning-plan"),
   listPracticeCategories: () => requestJson("/practice/categories"),
-  listJobs: () => requestJson("/jobs"),
+  listJobs: ({ limit = 20, offset = 0 } = {}) => requestJson(`/jobs?limit=${limit}&offset=${offset}`),
   getJob: (jobId) => requestJson(`/jobs/${encodeURIComponent(jobId)}`),
   createJob: (payload) =>
     requestJson("/jobs", {
@@ -527,8 +583,8 @@ const browserClient = {
       method: "POST",
       body: JSON.stringify(payload || {})
     }),
-  listEvalRuns: () => requestJson("/eval-runs"),
-  listAgentTraces: () => requestJson("/ops/traces"),
+  listEvalRuns: ({ limit = 20, offset = 0 } = {}) => requestJson(`/eval-runs?limit=${limit}&offset=${offset}`),
+  listAgentTraces: ({ limit = 20, offset = 0 } = {}) => requestJson(`/ops/traces?limit=${limit}&offset=${offset}`),
   getAgentTrace: (traceId) => requestJson(`/ops/traces/${encodeURIComponent(traceId)}`),
   getOpsMetrics: () => requestJson("/ops/metrics"),
   listPracticeQuestions: (filters = {}) => {
@@ -556,25 +612,40 @@ const browserClient = {
   seedCivilServiceQuestions: () => requestJson("/civil-service/questions/seed", { method: "POST" }),
   importCivilServiceQuestionBank: importQuestionBankFromBrowser,
   async register(payload) {
+    const body = await buildPasswordAuthPayload({ ...payload, platform: clientPlatform() });
     const response = await requestJson("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ ...payload, platform: "web" })
+      body: JSON.stringify(body)
     });
     setStoredAuth(response);
     return response;
   },
   async login(payload) {
-    const response = await requestJson("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ ...payload, platform: "web" })
-    });
+    const body = await buildPasswordAuthPayload({ ...payload, platform: clientPlatform() });
+    let response;
+    try {
+      response = await requestJson("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+    } catch (error) {
+      if (!body.password_derived || error?.status !== 401) throw error;
+      const legacyBody = await buildPasswordAuthPayload(
+        { ...payload, platform: clientPlatform() },
+        { includePassword: true }
+      );
+      response = await requestJson("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(legacyBody)
+      });
+    }
     setStoredAuth(response);
     return response;
   },
   async devLogin(payload) {
     const response = await requestJson("/auth/dev-login", {
       method: "POST",
-      body: JSON.stringify({ ...payload, platform: "web" })
+      body: JSON.stringify({ ...payload, platform: clientPlatform() })
     });
     setStoredAuth(response);
     return response;
@@ -595,6 +666,7 @@ const browserClient = {
   },
   getAccount: () => requestJson("/account"),
   getSettings: () => requestJson("/settings"),
+  listBillingPlans: () => requestJson("/billing/plans"),
   updateSettings: (payload) =>
     requestJson("/settings", {
       method: "PUT",
@@ -617,16 +689,18 @@ const browserClient = {
       method: "POST",
       body: JSON.stringify(payload || {})
     }),
+  createReviewSiteTestData: () =>
+    requestJson("/admin/test-data/review-site", { method: "POST" }),
   createPaymentOrder: (payload) =>
     requestJson("/payments/orders", {
       method: "POST",
       body: JSON.stringify(payload || {})
     }),
   getPaymentOrder: (orderId) => requestJson(`/payments/orders/${encodeURIComponent(orderId)}`),
-  listResumes: () => requestJson("/resumes"),
+  listResumes: ({ limit = 20, offset = 0 } = {}) => requestJson(`/resumes?limit=${limit}&offset=${offset}`),
   getResume: (resumeId) => requestJson(`/resumes/${resumeId}`),
   deleteResume: (resumeId) => requestJson(`/resumes/${resumeId}`, { method: "DELETE" }),
-  listSessions: () => requestJson("/sessions"),
+  listSessions: ({ limit = 20, offset = 0 } = {}) => requestJson(`/sessions?limit=${limit}&offset=${offset}`),
   getSession: (sessionId) => requestJson(`/sessions/${sessionId}`),
   deleteSession: (sessionId) => requestJson(`/sessions/${sessionId}`, { method: "DELETE" }),
   rewindSession: (sessionId, payload) =>
@@ -662,233 +736,28 @@ const browserClient = {
     )
 };
 
-browserClient.reviewSite = {
-  listPlans: async () => {
-    try {
-      const data = await requestJson("/review-site/plans");
-      return Array.isArray(data) ? data : [];
-    } catch (_error) {
-      return [];
-    }
-  },
-  createPlan: async (payload) => {
-    try {
-      const data = await requestJson("/review-site/plans", {
-        method: "POST",
-        body: JSON.stringify(payload || {})
-      });
-      return data || {};
-    } catch (_error) {
-      return {};
-    }
-  },
-  getPlan: async (planId) => {
-    try {
-      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}`);
-      return data || { plan: {}, phases: [], days: [], progresses: [], intro_scripts: [], star_cards: [], a4_memory: [] };
-    } catch (_error) {
-      return { plan: {}, phases: [], days: [], progresses: [], intro_scripts: [], star_cards: [], a4_memory: [] };
-    }
-  },
-  patchPlan: async (planId, payload) => {
-    try {
-      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload || {})
-      });
-      return data || {};
-    } catch (_error) {
-      return {};
-    }
-  },
-  archivePlan: async (planId) => {
-    try {
-      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/archive`, {
-        method: "POST"
-      });
-      return data || {};
-    } catch (_error) {
-      return {};
-    }
-  },
-  patchProgress: async (taskId, payload) => {
-    try {
-      const data = await requestJson(`/review-site/progress/task/${encodeURIComponent(taskId)}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload || {})
-      });
-      return data || {};
-    } catch (_error) {
-      return null;
-    }
-  },
-  listIntroScripts: async (planId) => {
-    try {
-      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/intro-scripts`);
-      return Array.isArray(data) ? data : [];
-    } catch (_error) {
-      return [];
-    }
-  },
-  listStarCards: async (planId) => {
-    try {
-      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/star-cards`);
-      return Array.isArray(data) ? data : [];
-    } catch (_error) {
-      return [];
-    }
-  },
-  listA4Memory: async (planId) => {
-    try {
-      const data = await requestJson(`/review-site/plans/${encodeURIComponent(planId)}/a4-memory`);
-      return Array.isArray(data) ? data : [];
-    } catch (_error) {
-      return [];
-    }
-  },
-  listPracticeQuestions: async (filters = {}) => {
-    try {
-      const params = new URLSearchParams();
-      if (filters.category) params.set("category", filters.category);
-      if (filters.subject) params.set("subject", filters.subject);
-      if (filters.question_type) params.set("question_type", filters.question_type);
-      if (filters.difficulty) params.set("difficulty", filters.difficulty);
-      if (filters.keyword) params.set("keyword", filters.keyword);
-      params.set("limit", filters.limit || 30);
-      params.set("offset", filters.offset || 0);
-      const data = await requestJson(`/review-site/practice-questions?${params.toString()}`);
-      return data || { items: [], total: 0, limit: 30, offset: 0 };
-    } catch (_error) {
-      return { items: [], total: 0, limit: 30, offset: 0 };
-    }
-  },
-  markQuestion: async (questionId, payload) => {
-    try {
-      const data = await requestJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/mark`, {
-        method: "POST",
-        body: JSON.stringify(payload || {})
-      });
-      return data || {};
-    } catch (_error) {
-      return null;
-    }
-  },
-  listWrongBook: async () => {
-    try {
-      const data = await requestJson("/review-site/wrong-book");
-      return Array.isArray(data) ? data : [];
-    } catch (_error) {
-      return [];
-    }
-  },
-  runImport: async (payload) => {
-    try {
-      const data = await requestJson("/review-site/import", {
-        method: "POST",
-        timeoutMs: LONG_REQUEST_TIMEOUT_MS,
-        body: JSON.stringify(payload || {})
-      });
-      return data || {};
-    } catch (_error) {
-      return {};
-    }
-  },
-  generatePlan: async (payload) => {
-    try {
-      const data = await apiJson("/review-site/planner/generate", {
-        method: "POST",
-        timeoutMs: LONG_REQUEST_TIMEOUT_MS,
-        body: JSON.stringify(payload || {})
-      });
-      return data || {};
-    } catch (_error) {
-      return {};
-    }
-  },
-  // ---- Task 6 新增：天/任务/素材 CRUD ----
-  createDay: (planId, payload) =>
-    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/days`, {
-      method: "POST",
-      body: JSON.stringify(payload || {})
-    }),
-  updateDay: (dayId, payload) =>
-    apiJson(`/review-site/days/${encodeURIComponent(dayId)}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload || {})
-    }),
-  deleteDay: (dayId) =>
-    apiJson(`/review-site/days/${encodeURIComponent(dayId)}`, { method: "DELETE" }),
-  createTask: (dayId, payload) =>
-    apiJson(`/review-site/days/${encodeURIComponent(dayId)}/tasks`, {
-      method: "POST",
-      body: JSON.stringify(payload || {})
-    }),
-  updateTask: (taskId, payload) =>
-    apiJson(`/review-site/tasks/${encodeURIComponent(taskId)}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload || {})
-    }),
-  deleteTask: (taskId) =>
-    apiJson(`/review-site/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" }),
-  upsertMaterial: (planId, kind, payload) =>
-    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/materials/${encodeURIComponent(kind)}`, {
-      method: "POST",
-      body: JSON.stringify(payload || {})
-    }),
-  updateMaterial: (kind, itemId, payload) =>
-    apiJson(`/review-site/materials/${encodeURIComponent(kind)}/${encodeURIComponent(itemId)}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload || {})
-    }),
-  deleteMaterial: (kind, itemId) =>
-    apiJson(`/review-site/materials/${encodeURIComponent(kind)}/${encodeURIComponent(itemId)}`, {
-      method: "DELETE"
-    }),
-  // ---- 打卡 ----
-  getToday: (planId) => apiJson(`/review-site/plans/${encodeURIComponent(planId)}/today`),
-  checkin: (planId, payload) =>
-    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/checkin`, {
-      method: "POST",
-      body: JSON.stringify(payload || {})
-    }),
-  listCheckins: (params = {}) => {
-    const search = new URLSearchParams();
-    if (params.planId) search.set("plan_id", params.planId);
-    if (params.dateFrom) search.set("date_from", params.dateFrom);
-    if (params.dateTo) search.set("date_to", params.dateTo);
-    const suffix = search.toString() ? `?${search.toString()}` : "";
-    return apiJson(`/review-site/checkins${suffix}`);
-  },
-  // ---- 刷题作答 v2 ----
-  submitAttempt: (questionId, payload) =>
-    apiJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/attempt`, {
-      method: "POST",
-      timeoutMs: LONG_REQUEST_TIMEOUT_MS,
-      body: JSON.stringify(payload || {})
-    }),
-  listAttempts: (questionId, limit = 20) =>
-    apiJson(`/review-site/practice-questions/${encodeURIComponent(questionId)}/attempts?limit=${limit}`)
-};
-
-// 学习闭环 v2：驾驶舱 / 成就 / 报告
-browserClient.study = {
-  dashboard: () => apiJson("/study/dashboard"),
-  achievements: () => apiJson("/study/achievements"),
-  listReports: (limit = 20) => apiJson(`/interview-reports?limit=${limit}`),
-  getReport: (sessionId) => apiJson(`/interview-reports/${encodeURIComponent(sessionId)}`),
-  addReportTasks: (planId, sessionId) =>
-    apiJson(`/review-site/plans/${encodeURIComponent(planId)}/report-tasks`, {
-      method: "POST",
-      body: JSON.stringify({ session_id: sessionId })
-    })
-};
+browserClient.reviewSite = createReviewSiteClient({
+  requestJson,
+  apiJson,
+  longRequestTimeoutMs: LONG_REQUEST_TIMEOUT_MS
+});
+browserClient.study = createStudyClient(apiJson);
+browserClient.learning = createLearningClient({ apiJson, requestId });
+browserClient.interviewer = createInterviewerClient(apiJson);
+browserClient.training = createTrainingClient(apiJson);
+browserClient.privacy = createPrivacyClient(apiJson);
+browserClient.admin = createAdminClient(apiJson);
 
 export function getInterviewAgentClient() {
   const bridge = electronBridge();
   if (!bridge) return browserClient;
   return {
-    ...bridge,
     ...browserClient,
+    ...bridge,
+    reviewSite: {
+      ...browserClient.reviewSite,
+      ...(bridge.reviewSite || {})
+    },
     // SSE 流式必须走主进程 IPC（file:// 下 fetch 流不可用）
     streamMessage: bridge.streamMessage || browserClient.streamMessage,
     hasToken: () => true
